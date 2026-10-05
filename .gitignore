@@ -1,0 +1,29 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 环境变量与密钥（LLM API key 等，绝不能进仓库）
+.env
+.env.*
+!.env.example
+
+# 构建产物
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# 日志
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+.cache/
