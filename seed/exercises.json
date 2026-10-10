@@ -1,0 +1,151 @@
+{
+  "$schema_version": "1.0",
+  "$source": "docs/06-mvp-and-tech/动作-肌群映射表.md v1.4 —— §1.2 分区表 / §3.1 表A / §3.2 表B / §3.3 表C",
+  "$generated": "2026-10-09",
+  "$counts": {
+    "muscle_regions": 19,
+    "exercises": 63,
+    "region_fallbacks": 5
+  },
+  "$notes": [
+    "肌群权重不在本文件内 —— 按 ADR-014，主动肌 1.0 / 协同肌 0.5 是确定性代码里的配置项，不写进数据。",
+    "coarse 字段是 free-exercise-db 的 17 区粗档，供 ADR-013 的『退档不重做』路径使用（退 17 区只需改读这一列）。",
+    "primary_muscles / secondary_muscles 已统一到本表 19 区 id（映射表里写成『traps（中下）』这类口语的，已归到 back_mid）。",
+    "exercise_id 为 null 的情形（用户只说了部位、说不出动作）走 region_fallbacks —— 数据层不归并，展示层才补偿。",
+    "本文件不含任何教学内容、要领或视频，符合 PRD §4.2 Won't『完整动作库』的边界。",
+    "2026-10-10 作者裁定：『仰卧臂屈伸』不再是 pullover 的别名，唯一指向 skull_crusher（其标准中文名），冲突已消，相应 ambiguous 条目已删。"
+  ],
+
+  "muscle_regions": [
+    { "id": "chest",       "name_zh": "胸大肌",             "name_en": "chest",              "face": "front", "coarse": "chest" },
+    { "id": "delt_ant",    "name_zh": "三角肌前束",         "name_en": "anterior deltoid",   "face": "front", "coarse": "shoulders" },
+    { "id": "delt_lat",    "name_zh": "三角肌中束",         "name_en": "lateral deltoid",    "face": "front", "coarse": "shoulders" },
+    { "id": "biceps",      "name_zh": "肱二头肌",           "name_en": "biceps",             "face": "front", "coarse": "biceps" },
+    { "id": "forearm",     "name_zh": "前臂",               "name_en": "forearms",           "face": "front", "coarse": "forearms" },
+    { "id": "abs",         "name_zh": "腹直肌",             "name_en": "rectus abdominis",   "face": "front", "coarse": "abdominals" },
+    { "id": "obliques",    "name_zh": "腹斜肌",             "name_en": "obliques",           "face": "front", "coarse": "abdominals" },
+    { "id": "quads",       "name_zh": "股四头肌",           "name_en": "quadriceps",         "face": "front", "coarse": "quadriceps" },
+    { "id": "adductors",   "name_zh": "内收肌群",           "name_en": "adductors",          "face": "front", "coarse": "adductors" },
+    { "id": "traps_upper", "name_zh": "斜方肌上部",         "name_en": "upper trapezius",    "face": "back",  "coarse": "traps" },
+    { "id": "back_mid",    "name_zh": "中背（斜方肌中下束 + 菱形肌）", "name_en": "middle back / rhomboids", "face": "back", "coarse": "middle back" },
+    { "id": "lats",        "name_zh": "背阔肌",             "name_en": "latissimus dorsi",   "face": "back",  "coarse": "lats" },
+    { "id": "delt_post",   "name_zh": "三角肌后束",         "name_en": "posterior deltoid",  "face": "back",  "coarse": "shoulders" },
+    { "id": "triceps",     "name_zh": "肱三头肌",           "name_en": "triceps",            "face": "back",  "coarse": "triceps" },
+    { "id": "lower_back",  "name_zh": "竖脊肌（下背）",     "name_en": "erector spinae",     "face": "back",  "coarse": "lower back" },
+    { "id": "glutes",      "name_zh": "臀大肌",             "name_en": "gluteus maximus",    "face": "back",  "coarse": "glutes" },
+    { "id": "abductors",   "name_zh": "外展肌群（臀中肌）", "name_en": "gluteus medius",     "face": "back",  "coarse": "abductors" },
+    { "id": "hamstrings",  "name_zh": "腘绳肌",             "name_en": "hamstrings",         "face": "back",  "coarse": "hamstrings" },
+    { "id": "calves",      "name_zh": "小腿（腓肠肌 + 比目鱼肌）", "name_en": "calves",      "face": "back",  "coarse": "calves" }
+  ],
+
+  "exercises": [
+    { "id": "bench_press",              "name_zh": "杠铃卧推",     "aliases": ["卧推", "平板卧推", "平板推胸", "胸推"], "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["chest"],            "secondary_muscles": ["delt_ant", "triceps"],                     "coarse": ["chest"] },
+    { "id": "incline_bench_press",      "name_zh": "上斜杠铃卧推", "aliases": ["上斜卧推", "上斜推胸"],                 "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["chest"],            "secondary_muscles": ["delt_ant", "triceps"],                     "coarse": ["chest"] },
+    { "id": "decline_bench_press",      "name_zh": "下斜杠铃卧推", "aliases": ["下斜卧推"],                             "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["chest"],            "secondary_muscles": ["triceps"],                                 "coarse": ["chest"] },
+    { "id": "dumbbell_bench_press",     "name_zh": "哑铃卧推",     "aliases": ["平板哑铃卧推"],                         "equipment": ["哑铃"], "mechanic": "推", "primary_muscles": ["chest"],            "secondary_muscles": ["delt_ant", "triceps"],                     "coarse": ["chest"] },
+    { "id": "incline_dumbbell_press",   "name_zh": "上斜哑铃推胸", "aliases": ["上斜哑铃卧推"],                         "equipment": ["哑铃"], "mechanic": "推", "primary_muscles": ["chest", "delt_ant"], "secondary_muscles": ["triceps"],                                "coarse": ["chest", "shoulders"] },
+    { "id": "chest_press_machine",      "name_zh": "坐姿器械推胸", "aliases": ["器械推胸", "坐姿推胸器", "悍马推胸"],   "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["chest"],            "secondary_muscles": ["delt_ant", "triceps"],                     "coarse": ["chest"] },
+    { "id": "push_up",                  "name_zh": "俯卧撑",       "aliases": ["伏地挺身"],                             "equipment": ["自重"], "mechanic": "推", "primary_muscles": ["chest"],            "secondary_muscles": ["delt_ant", "triceps"],                     "coarse": ["chest"] },
+
+    { "id": "dumbbell_fly",             "name_zh": "哑铃飞鸟",     "aliases": ["飞鸟", "平躺飞鸟", "哑铃飞鸟夹胸"],     "equipment": ["哑铃"], "mechanic": "推", "primary_muscles": ["chest"],            "secondary_muscles": ["delt_ant"],                                "coarse": ["chest"] },
+    { "id": "pec_deck",                 "name_zh": "蝴蝶机夹胸",   "aliases": ["蝴蝶机", "夹胸", "器械飞鸟"],           "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["chest"],            "secondary_muscles": [],                                          "coarse": ["chest"] },
+    { "id": "cable_crossover",          "name_zh": "龙门架夹胸",   "aliases": ["绳索夹胸", "龙门架飞鸟", "十字夹胸"],   "equipment": ["龙门架"], "mechanic": "推", "primary_muscles": ["chest"],          "secondary_muscles": ["delt_ant"],                                "coarse": ["chest"] },
+    { "id": "dip",                      "name_zh": "双杠臂屈伸",   "aliases": ["双杠", "臂屈伸", "撑双杠"],             "equipment": ["自重"], "mechanic": "推", "primary_muscles": ["chest", "triceps"],  "secondary_muscles": ["delt_ant"],                                "coarse": ["chest", "triceps"], "$candidate_split": "fedb 拆为 Dips-Chest / Dips-Triceps 两条（躯干前倾=练胸，直立=练三头）；本表暂用一个 id，见映射表 §4.3" },
+
+    { "id": "pull_up",                  "name_zh": "引体向上",     "aliases": ["正手引体", "引体"],                     "equipment": ["自重"], "mechanic": "拉", "primary_muscles": ["lats", "back_mid"],  "secondary_muscles": ["biceps", "delt_post", "forearm"],          "coarse": ["lats", "middle back"] },
+    { "id": "chin_up",                  "name_zh": "反手引体向上", "aliases": ["反手引体"],                             "equipment": ["自重"], "mechanic": "拉", "primary_muscles": ["lats"],             "secondary_muscles": ["biceps", "forearm", "back_mid"],           "coarse": ["lats", "biceps"], "$note": "中文健身圈常把反手引体当练二头，与 ExRx / fedb 两源都不符；本表从两源（biceps 为协同）" },
+    { "id": "lat_pulldown",             "name_zh": "高位下拉",     "aliases": ["下拉", "背部下拉", "滑轮下拉"],         "equipment": ["器械"], "mechanic": "拉", "primary_muscles": ["lats"],             "secondary_muscles": ["back_mid", "biceps"],                      "coarse": ["lats"] },
+    { "id": "seated_cable_row",         "name_zh": "坐姿绳索划船", "aliases": ["坐姿划船", "器械划船", "划船机"],       "equipment": ["龙门架", "器械"], "mechanic": "拉", "primary_muscles": ["back_mid", "lats"], "secondary_muscles": ["biceps", "delt_post"],             "coarse": ["middle back", "lats"] },
+    { "id": "shrug",                    "name_zh": "耸肩",         "aliases": ["哑铃耸肩", "杠铃耸肩"],                 "equipment": ["哑铃", "杠铃"], "mechanic": "拉", "primary_muscles": ["traps_upper"], "secondary_muscles": [],                                   "coarse": ["traps"] },
+    { "id": "face_pull",                "name_zh": "面拉",         "aliases": ["绳索面拉", "绳索拉面"],                 "equipment": ["龙门架"], "mechanic": "拉", "primary_muscles": ["delt_post"],       "secondary_muscles": ["back_mid", "traps_upper"],                 "coarse": ["shoulders", "middle back"] },
+    { "id": "straight_arm_pulldown",    "name_zh": "直臂下压",     "aliases": ["直臂下拉"],                             "equipment": ["龙门架"], "mechanic": "拉", "primary_muscles": ["lats"],           "secondary_muscles": [],                                          "coarse": ["lats"] },
+
+    { "id": "barbell_row",              "name_zh": "杠铃俯身划船", "aliases": ["杠铃划船", "俯身划船", "潘德雷划船"],   "equipment": ["杠铃"], "mechanic": "拉", "primary_muscles": ["back_mid", "lats"],  "secondary_muscles": ["delt_post", "biceps", "forearm"],          "coarse": ["middle back", "lats"] },
+    { "id": "dumbbell_row",             "name_zh": "单臂哑铃划船", "aliases": ["哑铃划船", "单臂划船"],                 "equipment": ["哑铃"], "mechanic": "拉", "primary_muscles": ["lats", "back_mid"],  "secondary_muscles": ["biceps", "delt_post"],                     "coarse": ["lats", "middle back"] },
+    { "id": "t_bar_row",                "name_zh": "T 杠划船",     "aliases": ["T 杆划船", "地雷管划船"],               "equipment": ["杠铃"], "mechanic": "拉", "primary_muscles": ["back_mid", "lats"],  "secondary_muscles": ["biceps", "forearm"],                       "coarse": ["middle back", "lats"] },
+    { "id": "pullover",                 "name_zh": "哑铃上拉",     "aliases": ["直臂上拉"],                            "equipment": ["哑铃"], "mechanic": "拉", "primary_muscles": ["chest"],            "secondary_muscles": ["lats", "triceps"],                         "coarse": ["chest", "lats"] },
+
+    { "id": "overhead_press",           "name_zh": "站姿杠铃推举", "aliases": ["肩推", "杠铃推举", "过顶推举", "军式推举"], "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["delt_ant", "delt_lat"], "secondary_muscles": ["triceps", "traps_upper"],              "coarse": ["shoulders", "traps"] },
+    { "id": "dumbbell_shoulder_press",  "name_zh": "哑铃推肩",     "aliases": ["哑铃肩推", "坐姿推肩"],                 "equipment": ["哑铃"], "mechanic": "推", "primary_muscles": ["delt_ant", "delt_lat"], "secondary_muscles": ["triceps"],                            "coarse": ["shoulders"] },
+    { "id": "arnold_press",             "name_zh": "阿诺德推举",   "aliases": ["阿诺德推肩"],                           "equipment": ["哑铃"], "mechanic": "推", "primary_muscles": ["delt_ant", "delt_lat"], "secondary_muscles": ["triceps"],                            "coarse": ["shoulders"] },
+    { "id": "lateral_raise",            "name_zh": "侧平举",       "aliases": ["哑铃侧平举", "中束平举"],               "equipment": ["哑铃", "龙门架", "器械"], "mechanic": "拉", "primary_muscles": ["delt_lat"], "secondary_muscles": ["delt_ant", "back_mid"],   "coarse": ["shoulders", "traps"], "$note": "『飞鸟』在部分健身房口语里也指本动作（三义之一），见 alias_rules.ambiguous" },
+    { "id": "front_raise",              "name_zh": "前平举",       "aliases": ["哑铃前平举", "绳索前平举"],             "equipment": ["哑铃", "龙门架"], "mechanic": "拉", "primary_muscles": ["delt_ant"], "secondary_muscles": [],                                    "coarse": ["shoulders"] },
+    { "id": "rear_delt_fly",            "name_zh": "俯身飞鸟",     "aliases": ["反向飞鸟", "俯身侧平举", "蝴蝶机反向"], "equipment": ["哑铃", "器械"], "mechanic": "拉", "primary_muscles": ["delt_post"], "secondary_muscles": ["back_mid"],                          "coarse": ["shoulders", "middle back"] },
+    { "id": "upright_row",              "name_zh": "直立划船",     "aliases": ["立正划船"],                             "equipment": ["杠铃", "龙门架"], "mechanic": "拉", "primary_muscles": ["delt_lat", "traps_upper"], "secondary_muscles": ["delt_ant"],              "coarse": ["shoulders", "traps"], "$note": "该动作有肩峰撞击争议（映射表仅作提示，未取源）" },
+
+    { "id": "barbell_curl",             "name_zh": "杠铃弯举",     "aliases": ["二头弯举", "弯举"],                     "equipment": ["杠铃"], "mechanic": "拉", "primary_muscles": ["biceps"],           "secondary_muscles": ["forearm"],                                 "coarse": ["biceps"] },
+    { "id": "dumbbell_curl",            "name_zh": "哑铃弯举",     "aliases": ["哑铃交替弯举"],                         "equipment": ["哑铃"], "mechanic": "拉", "primary_muscles": ["biceps"],           "secondary_muscles": ["forearm"],                                 "coarse": ["biceps"] },
+    { "id": "hammer_curl",              "name_zh": "锤式弯举",     "aliases": ["哑铃锤式弯举"],                         "equipment": ["哑铃"], "mechanic": "拉", "primary_muscles": ["biceps"],           "secondary_muscles": ["forearm"],                                 "coarse": ["biceps", "forearms"], "$note": "forearm 保留为 🟡 参考 —— fedb 记 Primary=biceps、Secondary 为空" },
+    { "id": "preacher_curl",            "name_zh": "牧师凳弯举",   "aliases": ["斜托弯举", "传教士弯举"],               "equipment": ["杠铃", "哑铃"], "mechanic": "拉", "primary_muscles": ["biceps"],    "secondary_muscles": [],                                          "coarse": ["biceps"] },
+    { "id": "triceps_pushdown",         "name_zh": "绳索下压",     "aliases": ["三头下压", "肱三下压器"],               "equipment": ["龙门架", "器械"], "mechanic": "推", "primary_muscles": ["triceps"],  "secondary_muscles": [],                                          "coarse": ["triceps"] },
+    { "id": "skull_crusher",            "name_zh": "仰卧臂屈伸",   "aliases": ["碎颅者", "法式卧推"],                   "equipment": ["杠铃", "哑铃"], "mechanic": "推", "primary_muscles": ["triceps"],   "secondary_muscles": [],                                          "coarse": ["triceps"] },
+    { "id": "overhead_triceps_extension","name_zh": "颈后臂屈伸",  "aliases": ["过头臂屈伸", "绳索过头臂屈伸"],         "equipment": ["哑铃", "龙门架"], "mechanic": "推", "primary_muscles": ["triceps"], "secondary_muscles": [],                                          "coarse": ["triceps"] },
+    { "id": "close_grip_bench_press",   "name_zh": "窄距卧推",     "aliases": ["窄握卧推"],                             "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["triceps", "chest"],  "secondary_muscles": ["delt_ant"],                                "coarse": ["triceps", "chest"] },
+    { "id": "wrist_curl",               "name_zh": "腕弯举",       "aliases": ["正握腕弯举", "反握腕弯举"],             "equipment": ["哑铃", "杠铃"], "mechanic": "拉", "primary_muscles": ["forearm"],  "secondary_muscles": [],                                          "coarse": ["forearms"] },
+
+    { "id": "back_squat",               "name_zh": "杠铃深蹲",     "aliases": ["深蹲", "颈后深蹲"],                     "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes", "adductors", "hamstrings"],       "coarse": ["quadriceps", "glutes", "adductors", "hamstrings"] },
+    { "id": "front_squat",              "name_zh": "前蹲",         "aliases": ["颈前深蹲"],                             "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes"],                                  "coarse": ["quadriceps", "glutes"] },
+    { "id": "goblet_squat",             "name_zh": "高脚杯深蹲",   "aliases": ["壶铃深蹲"],                             "equipment": ["哑铃", "壶铃"], "mechanic": "推", "primary_muscles": ["quads"],    "secondary_muscles": ["glutes"],                                  "coarse": ["quadriceps", "glutes"] },
+    { "id": "hack_squat",               "name_zh": "哈克深蹲",     "aliases": ["哈克机", "倒蹬"],                       "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes"],                                  "coarse": ["quadriceps", "glutes"], "$conflict": "别名『倒蹬』与 leg_press 冲突（两家来源分别指哈克与腿举），见 alias_rules.ambiguous" },
+    { "id": "leg_press",                "name_zh": "腿举",         "aliases": ["倒蹬", "腿部推举", "蹬腿"],             "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes", "hamstrings"],                    "coarse": ["quadriceps", "glutes"] },
+    { "id": "leg_extension",            "name_zh": "腿屈伸",       "aliases": ["腿部伸展", "腿屈伸机"],                 "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": [],                                          "coarse": ["quadriceps"] },
+    { "id": "leg_curl",                 "name_zh": "腿弯举",       "aliases": ["俯卧腿弯举", "坐姿腿弯举", "腿部弯举"], "equipment": ["器械"], "mechanic": "拉", "primary_muscles": ["hamstrings"],       "secondary_muscles": ["calves"],                                  "coarse": ["hamstrings"] },
+    { "id": "lunge",                    "name_zh": "弓步",         "aliases": ["弓箭步", "箭步蹲", "弓步蹲", "跨步蹲"], "equipment": ["哑铃", "杠铃", "自重"], "mechanic": "推", "primary_muscles": ["quads", "glutes"], "secondary_muscles": ["hamstrings", "adductors"],           "coarse": ["quadriceps", "glutes", "hamstrings"] },
+    { "id": "bulgarian_split_squat",    "name_zh": "保加利亚分腿蹲","aliases": ["保加利亚蹲", "后脚抬高分腿蹲", "RFESS"], "equipment": ["哑铃", "自重"], "mechanic": "推", "primary_muscles": ["quads", "glutes"], "secondary_muscles": ["hamstrings"],                        "coarse": ["quadriceps", "glutes"] },
+
+    { "id": "hip_thrust",               "name_zh": "臀推",         "aliases": ["杠铃臀推", "臀冲"],                     "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["glutes"],           "secondary_muscles": ["hamstrings", "calves"],                    "coarse": ["glutes", "hamstrings"] },
+    { "id": "glute_bridge",             "name_zh": "臀桥",         "aliases": ["杠铃臀桥"],                             "equipment": ["杠铃", "自重"], "mechanic": "推", "primary_muscles": ["glutes"],    "secondary_muscles": ["hamstrings", "calves"],                    "coarse": ["glutes", "hamstrings"], "$note": "与臀推肌群相同，差异在肩是否离地；口语常混用" },
+    { "id": "rdl",                      "name_zh": "罗马尼亚硬拉", "aliases": ["RDL", "直腿硬拉"],                      "equipment": ["杠铃"], "mechanic": "拉", "primary_muscles": ["hamstrings", "glutes"], "secondary_muscles": ["lower_back", "adductors"],              "coarse": ["hamstrings", "glutes", "lower back"], "$note": "ExRx 站内两页 Target/Synergist 互换（真分歧），本表取双主动肌" },
+    { "id": "deadlift",                 "name_zh": "硬拉",         "aliases": ["传统硬拉", "起杠"],                     "equipment": ["杠铃"], "mechanic": "拉", "primary_muscles": ["glutes", "hamstrings"], "secondary_muscles": ["lower_back", "lats", "back_mid", "forearm", "quads"], "coarse": ["glutes", "hamstrings", "lower back", "lats"], "$note": "fedb 记 lower back 为 Primary —— 与 ExRx 及本表规则相反，是真分歧" },
+    { "id": "back_extension",           "name_zh": "山羊挺身",     "aliases": ["罗马椅挺身", "背部伸展", "山羊式"],     "equipment": ["自重"], "mechanic": "拉", "primary_muscles": ["lower_back", "glutes"], "secondary_muscles": ["hamstrings"],                          "coarse": ["lower back", "glutes"] },
+    { "id": "good_morning",             "name_zh": "俯身挺背",     "aliases": ["早安式", "早安鞠躬"],                   "equipment": ["杠铃"], "mechanic": "拉", "primary_muscles": ["hamstrings", "lower_back"], "secondary_muscles": ["glutes"],                          "coarse": ["hamstrings", "lower back"] },
+    { "id": "sumo_deadlift",            "name_zh": "相扑硬拉",     "aliases": ["相扑式硬拉", "宽站距硬拉"],             "equipment": ["杠铃"], "mechanic": "拉", "primary_muscles": ["glutes", "hamstrings"], "secondary_muscles": ["adductors", "quads", "lower_back"],   "coarse": ["glutes", "hamstrings", "adductors", "lower back"], "$note": "把 adductors / quads 提为协同是 🟡 推断（相扑站距的力学）" },
+    { "id": "trap_bar_deadlift",        "name_zh": "六角杠硬拉",   "aliases": ["环形杠硬拉", "Trap bar DL"],            "equipment": ["六角杠"], "mechanic": "拉", "primary_muscles": ["quads", "glutes", "hamstrings"], "secondary_muscles": ["lower_back"],               "coarse": ["quadriceps", "glutes", "hamstrings"] },
+
+    { "id": "calf_raise",               "name_zh": "提踵",         "aliases": ["小腿举踵", "站姿提踵", "坐姿提踵"],     "equipment": ["器械", "自重"], "mechanic": "推", "primary_muscles": ["calves"],   "secondary_muscles": [],                                          "coarse": ["calves"] },
+    { "id": "hip_abduction",            "name_zh": "髋外展",       "aliases": ["夹腿机扩腿", "臀外展", "外展机"],       "equipment": ["器械"], "mechanic": null, "primary_muscles": ["abductors"],       "secondary_muscles": ["glutes"],                                  "coarse": ["abductors", "glutes"] },
+    { "id": "hip_adduction",            "name_zh": "髋内收",       "aliases": ["夹腿机夹腿", "内收机"],                 "equipment": ["器械"], "mechanic": null, "primary_muscles": ["adductors"],       "secondary_muscles": [],                                          "coarse": ["adductors"] },
+
+    { "id": "plank",                    "name_zh": "平板支撑",     "aliases": ["棒式", "平板"],                         "equipment": ["自重"], "mechanic": "静态", "primary_muscles": ["abs"],            "secondary_muscles": ["obliques"],                                "coarse": ["abdominals"] },
+    { "id": "crunch",                   "name_zh": "卷腹",         "aliases": ["仰卧卷腹"],                             "equipment": ["自重"], "mechanic": "推", "primary_muscles": ["abs"],              "secondary_muscles": [],                                          "coarse": ["abdominals"] },
+    { "id": "hanging_leg_raise",        "name_zh": "悬垂举腿",     "aliases": ["举腿", "吊杠举腿"],                     "equipment": ["自重"], "mechanic": null, "primary_muscles": ["abs"],             "secondary_muscles": ["obliques"],                                "coarse": ["abdominals"] },
+    { "id": "russian_twist",            "name_zh": "俄罗斯转体",   "aliases": ["转体", "负重转体"],                     "equipment": ["自重", "负重"], "mechanic": null, "primary_muscles": ["obliques", "abs"], "secondary_muscles": [],                                      "coarse": ["abdominals"] },
+    { "id": "ab_wheel",                 "name_zh": "健腹轮",       "aliases": ["滚腹轮", "腹肌轮"],                     "equipment": ["器械"], "mechanic": null, "primary_muscles": ["abs"],             "secondary_muscles": ["obliques", "lats"],                        "coarse": ["abdominals"], "$note": "ExRx 把同类动作列为分类有争议（可能肩伸/背主导）" }
+  ],
+
+  "region_fallbacks": [
+    { "id": "region_chest",    "covers": ["chest", "delt_ant", "triceps"],                            "triggers": ["练胸", "推类"] },
+    { "id": "region_back",     "covers": ["lats", "back_mid", "biceps", "delt_post"],                 "triggers": ["划船", "练背", "拉类"] },
+    { "id": "region_shoulder", "covers": ["delt_ant", "delt_lat", "delt_post", "traps_upper"],        "triggers": ["推肩", "练肩"] },
+    { "id": "region_leg",      "covers": ["quads", "glutes", "hamstrings", "adductors", "calves"],    "triggers": ["蹲腿", "练腿"] },
+    { "id": "region_arm",      "covers": ["biceps", "triceps", "forearm"],                            "triggers": ["练手臂", "练二头", "练三头"] }
+  ],
+
+  "alias_rules": {
+    "$note": "来自映射表 §3.2 表 B。resolvable = 可直接定到 exercise_id；ambiguous = 必须走兜底或追问。",
+    "resolvable": [
+      { "alias": "卧推",                 "resolves_to": "bench_press" },
+      { "alias": "平板卧推",             "resolves_to": "bench_press" },
+      { "alias": "胸推",                 "resolves_to": "bench_press" },
+      { "alias": "深蹲",                 "resolves_to": "back_squat", "$guard": "后面不能带『前/哈克/保加利亚』" },
+      { "alias": "硬拉",                 "resolves_to": "deadlift",   "$guard": "不能带『罗马尼亚/直腿/相扑/六角杠』" },
+      { "alias": "起杠",                 "resolves_to": "deadlift" },
+      { "alias": "弯举",                 "resolves_to": "barbell_curl", "$guard": "不能带『锤式/牧师凳』；此为 🟡 推断的默认归并" },
+      { "alias": "三头下压",             "resolves_to": "triceps_pushdown" },
+      { "alias": "下压",                 "resolves_to": "triceps_pushdown" },
+      { "alias": "提踵",                 "resolves_to": "calf_raise" },
+      { "alias": "举踵",                 "resolves_to": "calf_raise" },
+      { "alias": "下拉",                 "resolves_to": "lat_pulldown" },
+      { "alias": "面拉",                 "resolves_to": "face_pull" }
+    ],
+    "ambiguous": [
+      { "alias": "划船",     "candidates": ["barbell_row", "seated_cable_row", "dumbbell_row", "t_bar_row"], "fallback": "region_back", "$evidence": "PRD §6 原文已举此例" },
+      { "alias": "蹲腿",     "candidates": ["region_leg"], "fallback": "region_leg", "$note": "不是动作，是部位" },
+      { "alias": "练腿",     "candidates": ["region_leg"], "fallback": "region_leg" },
+      { "alias": "推肩",     "candidates": ["overhead_press", "dumbbell_shoulder_press"], "fallback": "region_shoulder", "$note": "器械/哑铃/史密斯不确定时可归 overhead_press，拿不准则兜底" },
+      { "alias": "肩推",     "candidates": ["overhead_press", "dumbbell_shoulder_press"], "fallback": "region_shoulder" },
+      { "alias": "飞鸟",     "candidates": ["dumbbell_fly", "pec_deck", "lateral_raise"], "fallback": null, "$evidence": "🔴 本表发现的最脏歧义：同一个词在健身房指三种东西（哑铃飞鸟/蝴蝶机夹胸/侧平举）" },
+      { "alias": "倒蹬",     "candidates": ["hack_squat", "leg_press"], "fallback": null, "$evidence": "🟡 两家来源直接冲突：器械导购页指哈克，中文维基指腿举" }
+    ]
+  }
+}
