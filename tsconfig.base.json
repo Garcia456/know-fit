@@ -1,0 +1,19 @@
+{
+  // 各包 extends 本文件，不复制三份 tsconfig（ADR-017 / dev-001 §1.1）。
+  // module / moduleResolution 由各包自定：web 用 bundler，api 用 NodeNext。
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true
+  }
+}

@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────
+# know-fit 执行闸门（ADR-020 决定三）
+#
+# 它验的是「它真的跑得起来吗」—— 三层闸门里唯一在代码坏掉时
+# **必须非零退出**的那一个。
+# ⚠️ 与 init.sh 的契约正好相反（init.sh 应当永远 exit 0），故两者不可合并。
+#
+# 闸门三层各答一问，不可互相替代：
+#   init.sh            → 环境齐不齐
+#   check-docs.mjs     → 定义写全没
+#   check-dev.sh（本文件）→ 它真的跑得起来吗   ← dev 类 feature 完成证据的落点
+#
+# 用法：   bash scripts/check-dev.sh
+# 退出码： 0 = 全过 ； 非 0 = 有失败
+#
+# ⚠️ 它会起容器（pnpm db:up）与 dev server（pnpm dev）—— 需 Docker Desktop 已启动。
+# ─────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+WEB_URL="http://localhost:5173/"
+HEALTH_URL="http://localhost:5173/api/health"
+DEV_PID=""
+FAILED=0
+
+bold() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; FAILED=1; }
+hint() { printf '    \033[33m%s\033[0m\n' "$1"; }
+
+# 跨平台杀进程树（Windows 上 pnpm 会拉起子进程，只 kill 父进程会留孤儿）
+kill_tree() {
+  local pid="$1"
+  [ -z "$pid" ] && return 0
+  if command -v taskkill >/dev/null 2>&1; then
+    taskkill //F //T //PID "$pid" >/dev/null 2>&1 || true
+  else
+    pkill -P "$pid" >/dev/null 2>&1 || true
+    kill "$pid" >/dev/null 2>&1 || true
+  fi
+}
+
+cleanup() {
+  if [ -n "$DEV_PID" ]; then
+    bold "收尾：停掉 dev server"
+    kill_tree "$DEV_PID"
+  fi
+}
+trap cleanup EXIT
+
+wait_for_http() { # url  label  tries
+  local url="$1" label="$2" tries="${3:-40}" i
+  for ((i = 1; i <= tries; i++)); do
+    if curl -fsS -o /dev/null "$url" 2>/dev/null; then
+      ok "$label 可达（$url）"
+      return 0
+    fi
+    sleep 1
+  done
+  bad "$label 不可达（$url，等了 ${tries}s）"
+  return 1
+}
+
+# ── 1/3 代码正确性闸门：typecheck + lint + test ───────────────────────
+bold "1/3  pnpm verify （typecheck && lint && test）"
+if pnpm verify; then
+  ok "pnpm verify 通过"
+else
+  bad "pnpm verify 失败"
+fi
+
+# ── 2/3 数据库：起库 → 应用迁移 → 断言 vector 扩展与 HNSW 索引 ─────────
+# ⚠️ migrate 不能省：迁移 0000_enable_vector.sql 才是 `CREATE EXTENSION vector`
+#    的执行者 —— 空卷上不跑它，db:check 必然断言失败（「克隆即跑」会断在这）。
+bold "2/3  数据库（pnpm db:up && pnpm db:migrate && pnpm db:check）"
+if pnpm db:up; then
+  ok "容器已起"
+  if pnpm db:migrate; then
+    ok "迁移已应用（vector 扩展 + smoke 表）"
+    if pnpm db:check; then
+      ok "数据库检查通过"
+    else
+      bad "pnpm db:check 失败"
+    fi
+  else
+    bad "pnpm db:migrate 失败"
+    hint "drizzle.config.ts 的 DATABASE_URL 对吗？"
+  fi
+else
+  bad "pnpm db:up 失败"
+  hint "Docker Desktop 启动了吗？"
+fi
+
+# ── 3/3 前后端能起：pnpm dev + 探活 ───────────────────────────────────
+bold "3/3  pnpm dev 起前后端，并探活"
+if command -v curl >/dev/null 2>&1; then
+  # 端口若已被占用，先记一笔（避免把「上一个 dev server」误当成这次起成功了）
+  if curl -fsS -o /dev/null "$HEALTH_URL" 2>/dev/null; then
+    hint "注意：端口上已有服务在响应 —— 本步骤可能探到的不是本次启动的进程"
+  fi
+
+  pnpm dev >/tmp/knowfit-dev.log 2>&1 &
+  DEV_PID=$!
+
+  wait_for_http "$WEB_URL"   "web 首页 GET /" 40
+  wait_for_http "$HEALTH_URL" "api 健康检查 GET /api/health" 20
+else
+  bad "找不到 curl —— 无法探活"
+fi
+
+# ── 结论 ─────────────────────────────────────────────────────────────
+if [ "$FAILED" -ne 0 ]; then
+  printf '\n\033[31m执行闸门未通过。\033[0m 这不是「差一点点」—— 代码现在跑不起来。\n'
+  [ -f /tmp/knowfit-dev.log ] && { echo '--- dev server 日志尾部 ---'; tail -n 30 /tmp/knowfit-dev.log; }
+  exit 1
+fi
+printf '\n\033[32m执行闸门全部通过。\033[0m\n'
+printf '  ⚠️ 但注意：ADR-008 的护栏只落了 R-A / R-B —— R-C（运行期遍历响应体断言）挂 dev-005，仍敞开。\n'

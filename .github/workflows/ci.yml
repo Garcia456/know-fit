@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────────────────
+# know-fit CI（ADR-021：现在就建；仓库为 private）
+#
+# 🔴 与本地同源：本工作流调用的 `pnpm verify` 与 scripts/check-dev.sh
+#    用的是同一个 script —— CI 不另写一套命令（ADR-021）。
+#
+# 🔴 dev-001 阶段 CI 不起数据库（ADR-019 补注四）：
+#    三类测试没有一条连库；且在 Ubuntu runner 上跑 db:check
+#    恰证明不了作者的 Windows 机器能跑。
+#    ⚠️ 触发条件：dev-003（Drizzle 迁移）落地时必须补 services: pgvector，
+#       并把迁移纳入 pnpm test。
+# ─────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 读根 package.json 的 packageManager 字段决定 pnpm 版本
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 与根 package.json 的 engines.node 同值（ADR-019 补注五）
+          node-version: '22.x'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify (typecheck && lint && test)
+        run: pnpm verify

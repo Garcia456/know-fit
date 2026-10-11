@@ -1,0 +1,43 @@
+# ─────────────────────────────────────────────────────────────
+# know-fit 本地数据库（ADR-019 决策 A）
+#
+# 🔴 镜像 tag 钉死，不得用 latest：
+#    决策 A 明文——HNSW 的默认参数随 pgvector 版本变，
+#    用浮动 tag 会让「检索行为突然变了」变成无法复现的 bug。
+#    0.8.7 在 CVE-2026-3172（影响 0.6.0–0.8.1，修于 0.8.2）的修复线以上。
+# ─────────────────────────────────────────────────────────────
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-bookworm
+    container_name: knowfit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: knowfit
+      POSTGRES_PASSWORD: knowfit
+      POSTGRES_DB: knowfit
+      # 🔴 PG 18 起，官方镜像的 PGDATA 变为 /var/lib/postgresql/18/docker，
+      #    卷的挂载点必须上移到父目录 /var/lib/postgresql（见下方 volumes）。
+      #    沿 PG17 及以前的 /var/lib/postgresql/data 会在容器初始化时直接失败。
+      PGDATA: /var/lib/postgresql/18/docker
+    ports:
+      - "5432:5432"
+    volumes:
+      - knowfit-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knowfit -d knowfit"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    # 🔴 ADR-019 补注一的告警（pgvector 官方 README 明文）：
+    #    若调大 maintenance_work_mem，shm_size 不得小于该值 ——
+    #    否则并行建 HNSW 索引会直接报错。
+    shm_size: 256mb
+
+volumes:
+  knowfit-pgdata:
+
+# 🔴 升 tag 时若跨 PostgreSQL 大版本 → 必须重建向量索引并重跑 dev-005 的检索测试
+#    （ADR-019 决策 A 的连带约束）。
+# 🔴 触发条件：dev-003 落地时，CI 必须补一个 services: 的 pgvector 容器
+#    （ADR-019 补注四）。

@@ -1,0 +1,11 @@
+# ADR-017：单仓 + pnpm workspaces。
+# docs/ 不工作空间化 —— 它是交付物（认识成果），不是一个可安装的包。
+packages:
+  - 'apps/*'
+
+# pnpm 11 起默认**拦截依赖的 postinstall 脚本**（供应链安全），
+# 放行清单用 allowBuilds（取代了旧的 onlyBuiltDependencies / ignoredBuiltDependencies）。
+# esbuild 需要它落平台二进制（vite / vitest 的构建内核）——
+# 这是本项目唯一需要放行 build script 的依赖。
+allowBuilds:
+  esbuild: true

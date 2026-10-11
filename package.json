@@ -1,0 +1,32 @@
+{
+  "name": "know-fit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "健身 / 运动人群的 AI Agent —— 对话录入训练与饮食，建议锚定头部博主视频且可点回原片",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "test": "pnpm -r test",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @know-fit/api db:migrate",
+    "db:check": "node --env-file-if-exists=.env scripts/db-check.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/pg": "8.23.1",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "pg": "8.23.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1"
+  }
+}
