@@ -3,10 +3,14 @@ import { loadSeed } from '../seed/load.js';
 /**
  * raw_name → exercise_id —— 纯确定性，LLM 不参与。
  *
- * 数据源是 seed 的 alias_rules，只读它声明的两类：
- *   resolvable（附 $guard）与 ambiguous（附 candidates + fallback）。
- * ⚠️ 不读 exercise.aliases 数组 —— 那里面「飞鸟」同时挂在 dumbbell_fly 上，
- *    与 ambiguous 列表打架；按分级表，alias 数组不参与匹配。
+ * 分两层，层间**不是**先后尝试，而是权威性高低：
+ *   一层（权威）：seed 的 name_zh 与 alias_rules 的 resolvable / ambiguous。
+ *                 人工定过，冲突时它说了算。
+ *   二层（补充）：exercise.aliases 的精确命中。
+ *                 动作库会长，别名写在动作自己身上，加动作时顺手就加了。
+ * ⚠️ 层间撞键时一层静默胜出 —— 「飞鸟」在 alias_rules 里判歧义（给 fallback），
+ *    就不认 exercise.aliases 里挂在 dumbbell_fly 上的「飞鸟」。
+ *    同一层内撞键仍是二义，当场抛。
  * ⚠️ 区域兜底表 region_fallbacks 在这里不用 —— 它属展示层补偿。
  */
 
@@ -32,10 +36,15 @@ export interface NormalizationResult {
   level: MatchLevel;
 }
 
-type Indexed =
-  | { text: string; kind: 'name'; exerciseId: string; nameZh: string }
-  | { text: string; kind: 'resolvable'; exerciseId: string; nameZh: string; blockedOn: string[] }
-  | { text: string; kind: 'ambiguous'; fallback: string | null };
+/** 1 = 权威层（name_zh / alias_rules），2 = 补充层（exercise.aliases） */
+type Tier = 1 | 2;
+
+type Indexed = { text: string; tier: Tier } & (
+  | { kind: 'name'; exerciseId: string; nameZh: string }
+  | { kind: 'resolvable'; exerciseId: string; nameZh: string; blockedOn: string[] }
+  | { kind: 'alias'; exerciseId: string; nameZh: string; blockedOn: string[] }
+  | { kind: 'ambiguous'; fallback: string | null }
+);
 
 export interface ExerciseIndex {
   exact: Map<string, Indexed>;
@@ -63,6 +72,13 @@ export function buildIndex(): ExerciseIndex {
       return;
     }
 
+    // 层间撞键：权威层说了算，另一层静默让位（不是二义，不抛）
+    if (prev.tier < entry.tier) return;
+    if (entry.tier < prev.tier) {
+      exact.set(entry.text, entry);
+      return;
+    }
+
     // 歧义 vs 确定 = 真正的二义，当场炸
     if (prev.kind === 'ambiguous' || entry.kind === 'ambiguous') {
       throw new Error(
@@ -77,11 +93,12 @@ export function buildIndex(): ExerciseIndex {
     }
     // 合并时**必须保住 guard** —— 丢了它，「直腿硬拉」就会被吞成 deadlift
     const blockedOn = [
-      ...(prev.kind === 'resolvable' ? prev.blockedOn : []),
-      ...(entry.kind === 'resolvable' ? entry.blockedOn : []),
+      ...(prev.kind === 'resolvable' || prev.kind === 'alias' ? prev.blockedOn : []),
+      ...(entry.kind === 'resolvable' || entry.kind === 'alias' ? entry.blockedOn : []),
     ];
     exact.set(entry.text, {
       text: entry.text,
+      tier: entry.tier,
       kind: 'resolvable',
       exerciseId: entry.exerciseId,
       nameZh: entry.nameZh,
@@ -90,7 +107,13 @@ export function buildIndex(): ExerciseIndex {
   };
 
   for (const ex of seed.exercises) {
-    put({ text: normalizeKey(ex.name_zh), kind: 'name', exerciseId: ex.id, nameZh: ex.name_zh });
+    put({
+      text: normalizeKey(ex.name_zh),
+      tier: 1,
+      kind: 'name',
+      exerciseId: ex.id,
+      nameZh: ex.name_zh,
+    });
   }
 
   const rules = seed.alias_rules as
@@ -103,6 +126,7 @@ export function buildIndex(): ExerciseIndex {
   for (const r of rules?.resolvable ?? []) {
     put({
       text: normalizeKey(r.alias),
+      tier: 1,
       kind: 'resolvable',
       exerciseId: r.resolves_to,
       nameZh: nameZhById.get(r.resolves_to) ?? r.resolves_to,
@@ -110,7 +134,21 @@ export function buildIndex(): ExerciseIndex {
     });
   }
   for (const r of rules?.ambiguous ?? []) {
-    put({ text: normalizeKey(r.alias), kind: 'ambiguous', fallback: r.fallback ?? null });
+    put({ text: normalizeKey(r.alias), tier: 1, kind: 'ambiguous', fallback: r.fallback ?? null });
+  }
+
+  // 补充层：别名写在动作自己身上，动作库长了这里自动跟上
+  for (const ex of seed.exercises) {
+    for (const alias of ex.aliases) {
+      put({
+        text: normalizeKey(alias),
+        tier: 2,
+        kind: 'alias',
+        exerciseId: ex.id,
+        nameZh: ex.name_zh,
+        blockedOn: GUARD_BLOCKERS[alias] ?? [],
+      });
+    }
   }
 
   const byLength = [...exact.values()].sort((a, b) => b.text.length - a.text.length);
@@ -124,7 +162,10 @@ function index(): ExerciseIndex {
 }
 
 function blocked(entry: Indexed, rawKey: string): boolean {
-  return entry.kind === 'resolvable' && entry.blockedOn.some((b) => rawKey.includes(b));
+  return (
+    (entry.kind === 'resolvable' || entry.kind === 'alias') &&
+    entry.blockedOn.some((b) => rawKey.includes(b))
+  );
 }
 
 function toResult(entry: Indexed, level: MatchLevel, rawKey: string): NormalizationResult {
