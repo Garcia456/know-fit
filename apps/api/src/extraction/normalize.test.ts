@@ -23,6 +23,10 @@ describe('1 级：精确命中 name_zh 或 resolvable.alias', () => {
     const r = normalizeExerciseName('深蹲');
     expect(r).toMatchObject({ exercise_id: 'back_squat', level: 1 });
   });
+
+  it('resolvable 别名「倒蹬」→ leg_press（作者裁定：口语指腿举）', () => {
+    expect(normalizeExerciseName('倒蹬')).toMatchObject({ exercise_id: 'leg_press', level: 1 });
+  });
 });
 
 describe('2 级：命中 ambiguous → 不强行归并', () => {
@@ -34,10 +38,6 @@ describe('2 级：命中 ambiguous → 不强行归并', () => {
   it('「飞鸟」→ 同样不归并，且它的 fallback 本身是 null', () => {
     const r = normalizeExerciseName('飞鸟');
     expect(r).toMatchObject({ exercise_id: null, level: 2, region_fallback: null });
-  });
-
-  it('「倒蹬」→ 不归并（不猜是哈克深蹲还是腿举）', () => {
-    expect(normalizeExerciseName('倒蹬')).toMatchObject({ exercise_id: null, level: 2 });
   });
 });
 

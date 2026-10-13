@@ -86,7 +86,7 @@
     { "id": "back_squat",               "name_zh": "杠铃深蹲",     "aliases": ["深蹲", "颈后深蹲"],                     "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes", "adductors", "hamstrings"],       "coarse": ["quadriceps", "glutes", "adductors", "hamstrings"] },
     { "id": "front_squat",              "name_zh": "前蹲",         "aliases": ["颈前深蹲"],                             "equipment": ["杠铃"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes"],                                  "coarse": ["quadriceps", "glutes"] },
     { "id": "goblet_squat",             "name_zh": "高脚杯深蹲",   "aliases": ["壶铃深蹲"],                             "equipment": ["哑铃", "壶铃"], "mechanic": "推", "primary_muscles": ["quads"],    "secondary_muscles": ["glutes"],                                  "coarse": ["quadriceps", "glutes"] },
-    { "id": "hack_squat",               "name_zh": "哈克深蹲",     "aliases": ["哈克机", "倒蹬"],                       "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes"],                                  "coarse": ["quadriceps", "glutes"], "$conflict": "别名『倒蹬』与 leg_press 冲突（两家来源分别指哈克与腿举），见 alias_rules.ambiguous" },
+    { "id": "hack_squat",               "name_zh": "哈克深蹲",     "aliases": ["哈克机"],                       "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes"],                                  "coarse": ["quadriceps", "glutes"] },
     { "id": "leg_press",                "name_zh": "腿举",         "aliases": ["倒蹬", "腿部推举", "蹬腿"],             "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": ["glutes", "hamstrings"],                    "coarse": ["quadriceps", "glutes"] },
     { "id": "leg_extension",            "name_zh": "腿屈伸",       "aliases": ["腿部伸展", "腿屈伸机"],                 "equipment": ["器械"], "mechanic": "推", "primary_muscles": ["quads"],            "secondary_muscles": [],                                          "coarse": ["quadriceps"] },
     { "id": "leg_curl",                 "name_zh": "腿弯举",       "aliases": ["俯卧腿弯举", "坐姿腿弯举", "腿部弯举"], "equipment": ["器械"], "mechanic": "拉", "primary_muscles": ["hamstrings"],       "secondary_muscles": ["calves"],                                  "coarse": ["hamstrings"] },
@@ -136,7 +136,8 @@
       { "alias": "提踵",                 "resolves_to": "calf_raise" },
       { "alias": "举踵",                 "resolves_to": "calf_raise" },
       { "alias": "下拉",                 "resolves_to": "lat_pulldown" },
-      { "alias": "面拉",                 "resolves_to": "face_pull" }
+      { "alias": "面拉",                 "resolves_to": "face_pull" },
+      { "alias": "倒蹬",                 "resolves_to": "leg_press", "$note": "作者裁定：口语指腿举（原列在 ambiguous）" }
     ],
     "ambiguous": [
       { "alias": "划船",     "candidates": ["barbell_row", "seated_cable_row", "dumbbell_row", "t_bar_row"], "fallback": "region_back", "$evidence": "PRD §6 原文已举此例" },
@@ -144,8 +145,7 @@
       { "alias": "练腿",     "candidates": ["region_leg"], "fallback": "region_leg" },
       { "alias": "推肩",     "candidates": ["overhead_press", "dumbbell_shoulder_press"], "fallback": "region_shoulder", "$note": "器械/哑铃/史密斯不确定时可归 overhead_press，拿不准则兜底" },
       { "alias": "肩推",     "candidates": ["overhead_press", "dumbbell_shoulder_press"], "fallback": "region_shoulder" },
-      { "alias": "飞鸟",     "candidates": ["dumbbell_fly", "pec_deck", "lateral_raise"], "fallback": null, "$evidence": "🔴 本表发现的最脏歧义：同一个词在健身房指三种东西（哑铃飞鸟/蝴蝶机夹胸/侧平举）" },
-      { "alias": "倒蹬",     "candidates": ["hack_squat", "leg_press"], "fallback": null, "$evidence": "🟡 两家来源直接冲突：器械导购页指哈克，中文维基指腿举" }
+      { "alias": "飞鸟",     "candidates": ["dumbbell_fly", "pec_deck", "lateral_raise"], "fallback": null, "$evidence": "🔴 本表发现的最脏歧义：同一个词在健身房指三种东西（哑铃飞鸟/蝴蝶机夹胸/侧平举）" }
     ]
   }
 }
