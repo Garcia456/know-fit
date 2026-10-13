@@ -1,18 +1,18 @@
 # ─────────────────────────────────────────────────────────────────────
-# know-fit CI（ADR-021：现在就建；仓库为 private）
+# know-fit CI
 #
 # 🔴 与本地同源：本工作流跑的就是 `bash scripts/check-dev.sh` ——
-#    CI 不另写一套命令（ADR-021）。唯一的差别是数据库的来源：
+#    CI 不另写一套命令。唯一的差别是数据库的来源：
 #    本地是 `pnpm db:up`（compose），CI 是下面的 services: 容器，
 #    故 CI 侧设 SKIP_DB_UP=1 让脚本跳过 db:up。
 #
 # 🔴 CI 里不许有任何 key、不许有 `secrets.*`：
 #    check-dev.sh 显式以 LLM_PROVIDER=fake 起服务，全链路不联网。
-#    真实模型的准确率只能在作者本地跑 `llm:smoke`（ADR-022 决定四）。
+#    真实模型的准确率只能在作者本地跑 `llm:smoke`。
 #
-# 🔴 数据库容器（ADR-019 补注四：dev-002 起必须补）：
+# 🔴 数据库容器：
 #    镜像 tag 与 docker-compose.yml **同一串** —— 版本漂移会让
-#    「HNSW 行为变了」变成无法复现的 bug（ADR-019 决策 A）。
+#    「HNSW 行为变了」变成无法复现的 bug。
 #    口令是本地开发用的那串（不是机密）：CI 容器一次性、随 runner 销毁。
 # ─────────────────────────────────────────────────────────────────────
 name: CI
@@ -49,7 +49,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          # 与根 package.json 的 engines.node 同值（ADR-019 补注五）
+          # 与根 package.json 的 engines.node 同值
           node-version: '22.x'
           cache: pnpm
 

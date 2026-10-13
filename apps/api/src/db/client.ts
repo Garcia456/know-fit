@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
 /**
- * 数据库连接（dev-001 最小实现）。
+ * 数据库连接。
  *
  * ⚠️ 默认连接串与 docker-compose.yml 一致 —— 这样「克隆即跑」不必先配 .env。
  *    要覆盖时设 DATABASE_URL（.env.example 里有说明）。

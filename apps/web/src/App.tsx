@@ -4,8 +4,8 @@ import { DataPage } from './pages/DataPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 /**
- * 三页路由骨架（技术方案 §五）。
- * ⚠️ 只建路由与空占位页 —— **页面内容归 dev-006**（dev-001 §二 第 9 条）。
+ * 三页路由骨架。
+ * ⚠️ 只建路由与空占位页 —— **页面内容还没做**。
  */
 export function AppRoutes() {
   return (

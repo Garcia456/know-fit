@@ -25,7 +25,7 @@ export function boundaryReply(): string {
 }
 
 /**
- * 补充提示 —— **至多 1 条**（PRD §5.2）。
+ * 补充提示 —— **至多 1 条**。
  * 它是后置的、可选的：不拦录入，用户不理也不会卡住。
  */
 export function composeNotice(exercises: WorkoutCardExercise[], missing: MissingField[]): string[] {

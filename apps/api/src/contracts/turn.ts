@@ -9,7 +9,7 @@ import {
 /**
  * 对外契约：一轮对话的回应（`POST /api/turns`）。
  *
- * 🔴 全部字段名已避开 ADR-008 护栏 R-B 的禁用词（text / content / transcript）。
+ * 🔴 全部字段名已避开全文型字段名（text / content / transcript）—— 对外契约不许承载原文全文。
  */
 
 /** 红线拒答的原因（preflight_guard 规则表的产出） */

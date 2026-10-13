@@ -2,12 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { loadSeed } from './load.js';
 
 /**
- * seed 数据断言（dev-001 §三 3.1 第 6 条的第 ① 类）。
+ * 映射表数据的断言 —— 19 个肌群分区 / 63 个动作 / 5 条兜底。
  *
- * ⚠️ 这些数字（19 / 63 / 5）不是本文档发明的 ——
- *    它们来自 `docs/06-mvp-and-tech/动作-肌群映射表.md` 的 v1.2 实数口径
- *    （映射表 v1.4 时已逐节核对过：粗档 17 / 建议档 19 区、63 动作、5 条兜底）。
- *    数字写死在这里，是为了让「数据被悄悄改小」这件事必须显式过闸门。
+ * ⚠️ 数字写死在这里，是为了让「数据被悄悄改小」这件事必须显式过闸门。
  */
 describe('seed 数据（apps/api/seed/exercises.json）', () => {
   const seed = loadSeed();
@@ -17,7 +14,7 @@ describe('seed 数据（apps/api/seed/exercises.json）', () => {
     expect(seed.muscle_regions.length).toBeGreaterThan(0);
   });
 
-  it('19 个肌群分区（ADR-013：建议档）', () => {
+  it('19 个肌群分区', () => {
     expect(seed.muscle_regions).toHaveLength(19);
   });
 

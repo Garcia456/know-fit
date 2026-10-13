@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * know-fit 端到端往返（dev-002 §三 3.1）
+ * know-fit 端到端往返
  *
  * 一句话：**经由 HTTP 说一句训练，看它有没有变成一条训练记录。**
  *
@@ -78,7 +78,7 @@ if (body) {
     } else {
       bad(`卡片动作数 ${card.exercises.length}、组数 ${sets.length} —— 应为 3 / 12`);
     }
-    // 歧义动作不强行归并（PRD §8.1）
+    // 歧义动作不强行归并
     const fly = card.exercises.find((e) => e.raw_name === '飞鸟');
     if (fly && fly.exercise_id === null) ok('「飞鸟」exercise_id 为 null（不强行归并）');
     else bad(`「飞鸟」的 exercise_id 应为 null，实为 ${JSON.stringify(fly?.exercise_id)}`);

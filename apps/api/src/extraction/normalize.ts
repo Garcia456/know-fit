@@ -6,11 +6,14 @@ import { loadSeed } from '../seed/load.js';
  * 数据源是 seed 的 alias_rules，只读它声明的两类：
  *   resolvable（附 $guard）与 ambiguous（附 candidates + fallback）。
  * ⚠️ 不读 exercise.aliases 数组 —— 那里面「飞鸟」同时挂在 dumbbell_fly 上，
- *    与 ambiguous 列表打架；按定义 §1.3 的分级表，alias 数组不参与匹配。
- * ⚠️ 区域兜底表 region_fallbacks 在 dev-002 里不用（它属展示层补偿）。
+ *    与 ambiguous 列表打架；按分级表，alias 数组不参与匹配。
+ * ⚠️ 区域兜底表 region_fallbacks 在这里不用 —— 它属展示层补偿。
  */
 
-/** seed 的 $guard 是中文散文，这里落成关键词表 */
+/**
+ * 别名的「撤销条件」：原文里出现这些限定词时，撤销对短别名的命中。
+ * 没有它，「前蹲」「哈克深蹲」「保加利亚深蹲」都会被「深蹲」吃掉。
+ */
 const GUARD_BLOCKERS: Record<string, string[]> = {
   深蹲: ['前', '哈克', '保加利亚'],
   硬拉: ['罗马尼亚', '直腿', '相扑', '六角杠'],
@@ -19,9 +22,8 @@ const GUARD_BLOCKERS: Record<string, string[]> = {
 
 export type MatchLevel =
   | 1 // 精确命中 name_zh 或 resolvable.alias
-  | 2 // 被 $guard 挡下后降级命中
-  | 3 // 歧义 → 不强行归并
-  | 4; // 未命中
+  | 2 // 歧义 → 不强行归并
+  | 3; // 未命中
 
 export interface NormalizationResult {
   exercise_id: string | null;
@@ -127,12 +129,11 @@ function blocked(entry: Indexed, rawKey: string): boolean {
 
 function toResult(entry: Indexed, level: MatchLevel, rawKey: string): NormalizationResult {
   if (entry.kind === 'ambiguous') {
-    return { exercise_id: null, name_zh: null, region_fallback: entry.fallback, level: 3 };
+    return { exercise_id: null, name_zh: null, region_fallback: entry.fallback, level: 2 };
   }
-  const guardTripped = blocked(entry, rawKey);
-  if (guardTripped) {
+  if (blocked(entry, rawKey)) {
     // 被 guard 挡下的条目不该 resolve —— 走到这里说明调用方漏了一次检查
-    return { exercise_id: null, name_zh: null, region_fallback: null, level: 4 };
+    return { exercise_id: null, name_zh: null, region_fallback: null, level: 3 };
   }
   return {
     exercise_id: entry.exerciseId,
@@ -146,23 +147,22 @@ function toResult(entry: Indexed, level: MatchLevel, rawKey: string): Normalizat
 export function normalizeExerciseName(rawName: string): NormalizationResult {
   const key = normalizeKey(rawName);
   const idx = index();
-  if (!key) return { exercise_id: null, name_zh: null, region_fallback: null, level: 4 };
+  if (!key) return { exercise_id: null, name_zh: null, region_fallback: null, level: 3 };
 
   // 1. 精确：name_zh / resolvable（guard 没被踩）
   const hit = idx.exact.get(key);
   if (hit && !blocked(hit, key)) return toResult(hit, 1, key);
 
   // 2. 精确但歧义 → 不强行归并
-  if (hit && hit.kind === 'ambiguous') return toResult(hit, 3, key);
+  if (hit && hit.kind === 'ambiguous') return toResult(hit, 2, key);
 
-  // 3. 包含匹配（长名优先）；被 guard 挡下过的算「降级命中」
-  const guardTripped = hit !== undefined; // 走到这里且 hit 存在 ⇒ 它被 guard 挡下了
+  // 3. 包含匹配（长名优先）
   for (const entry of idx.byLength) {
     if (!key.includes(entry.text)) continue;
     if (blocked(entry, key)) continue;
-    if (entry.kind === 'ambiguous') return toResult(entry, 3, key);
-    return toResult(entry, guardTripped ? 2 : 1, key);
+    if (entry.kind === 'ambiguous') return toResult(entry, 2, key);
+    return toResult(entry, 1, key);
   }
 
-  return { exercise_id: null, name_zh: null, region_fallback: null, level: 4 };
+  return { exercise_id: null, name_zh: null, region_fallback: null, level: 3 };
 }

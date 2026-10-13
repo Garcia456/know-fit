@@ -6,7 +6,8 @@ import type { TrainingBand } from '../graph/state.js';
 import { getDb } from './pool.js';
 
 /**
- * 训练侧的读写 —— 🔴 本文件在服务层，只有它能 import `db/schema`（ADR-008 护栏 R-A）。
+ * 训练侧的读写。
+ * 🔴 服务层是唯一可以直接 import `db/schema` 的地方 —— 路由层与图都不许。
  */
 
 export interface LogTurnInput {

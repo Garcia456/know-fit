@@ -1,4 +1,4 @@
-/** 对外契约：健康检查响应（apps/api/src/contracts/ —— ADR-008 护栏 R-B 的管辖范围） */
+/** 对外契约：健康检查响应（本目录下的文件都不许出现全文型字段名） */
 export interface HealthResponse {
   status: 'ok';
   service: string;

@@ -12,9 +12,9 @@ import { boundaryReply, composeNotice, refusalReply } from './replies.js';
 import { TurnState } from './state.js';
 
 /**
- * 录入主图 —— dev-002 把 PRD §2.1 这张图从桩变成真的。
+ * 录入主图 —— 一句话进来，走到落库与卡片。
  *
- * 三个出口（reject / boundary / chat）+ 录入链路；**评估子图不在这里**（dev-005），
+ * 三个出口（拒答 / 非目标用户 / 闲聊）+ 录入链路；**评估链路不在这里**，
  * 因此「纯求评估」与「混合意图的后半段」都停在落库为止。
  */
 export function buildTurnGraph(deps: TurnDeps) {
@@ -26,7 +26,7 @@ export function buildTurnGraph(deps: TurnDeps) {
       .addNode('preflight_guard', (state) => {
         const hit = checkGuard(state.message);
         if (hit) return { guard_verdict: hit.verdict };
-        // 档案里写着「不足 3 个月」也走边界出口（ADR-003 的落点）
+        // 档案里写着「不足 3 个月」也走非目标用户出口
         if (state.training_years_band === 'lt_3m') return { guard_verdict: 'non_target_user' as const };
         return { guard_verdict: 'pass' as const };
       })
@@ -53,7 +53,7 @@ export function buildTurnGraph(deps: TurnDeps) {
 
       .addNode('persist_record', async (state) => {
         const extracted = state.extracted;
-        // 饮食只手握契约：不落库（ADR-022 决定三）
+        // 饮食只手握契约：不落库
         if (!extracted || extracted.kind === 'meal') return {};
 
         const date = resolveDate(extracted.day_hint, now());
@@ -133,7 +133,7 @@ export function buildTurnGraph(deps: TurnDeps) {
         }
 
         const ref = state.record_ref;
-        // ⚠️ 不含数据钩子：钩子是一个算好的判定，属 dev-003
+        // ⚠️ 不含数据钩子：钩子是一个算好的判定，等算量那块接上
         if (!ref || ref.type !== 'workout') return {};
 
         const card: WorkoutCard = {
@@ -176,12 +176,12 @@ export function buildTurnGraph(deps: TurnDeps) {
         if (state.intent === 'chat') return 'chat_node';
         if (state.intent === 'boundary') return 'boundary_node';
         if (state.intent === 'reject') return 'reject_node';
-        // 纯求评估：dev-002 没有评估链路，到此为止（卡片在服务层补一条说明）
+        // 纯求评估：还没有评估链路，到此为止（卡片在服务层补一条说明）
         return END;
       })
       .addEdge('extract_record', 'persist_record')
       .addEdge('persist_record', 'compose_card')
-      // 混合意图那条边在 dev-002 走到「只落库、不评估」为止
+      // 混合意图那条边走到「只落库、不评估」为止
       .addEdge('compose_card', END)
       .addEdge('chat_node', END)
       .addEdge('reject_node', END)

@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-/** apps/api/seed/exercises.json —— ADR-020 决定一（seed 归 api 包） */
+/** 动作与肌群映射表的路径（随 api 包一起走） */
 export const SEED_PATH = join(HERE, '..', '..', 'seed', 'exercises.json');
 
 const MuscleRegionSchema = z.object({
@@ -63,7 +63,7 @@ export type Exercise = z.infer<typeof ExerciseSchema>;
  *   2. 引用完整性 —— 所有 primary/secondary muscle 与 fallback.covers
  *      必须是 muscle_regions 里已定义的 id（**无未知 muscle id**）。
  *
- * 第 2 层是 dev-001 §三 3.1 第 6 条要求的断言口径 ——
+ * 第 2 层是必须有的 ——
  * 一个拼错的 muscle id 不会让 JSON 坏掉，但会让热力图少亮一块，
  * 且那种 bug 极难从界面上看出来。
  */

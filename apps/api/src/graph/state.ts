@@ -4,8 +4,8 @@ import { TurnCardSchema, WorkoutCardExerciseSchema } from '../contracts/turn.js'
 import { GuardVerdictSchema } from './guard.js';
 
 /**
- * 图的 State（feat-006 §2.2 的 dev-002 子集）。
- * 评估侧那几项（metrics / citations / hook）不在这里 —— 它们随 dev-003 / dev-005 进来。
+ * 图的 State。
+ * 评估侧那几项（metrics / citations / hook）不在这里 —— 等评估链路进来再补。
  */
 
 /** v1 单用户 —— 迁移里种下的那个固定 id */

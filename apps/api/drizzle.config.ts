@@ -1,7 +1,7 @@
 import { defineConfig } from 'drizzle-kit';
 
 /**
- * drizzle-kit 配置（dev-001）。
+ * drizzle-kit 配置。
  *
  * ⚠️ `url` 的默认值与 docker-compose.yml / src/db/client.ts 一致 ——
  *    drizzle-kit 在 apps/api 目录下跑，看不到仓库根的 .env，

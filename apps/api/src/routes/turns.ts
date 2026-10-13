@@ -8,8 +8,7 @@ import { handleTurn } from '../services/turn.js';
  * ⚠️ 对外路径是 `/api/turns`：vite dev server 把 `/api` 前缀重写掉后才到 API
  *    （与 `/api/health` → `/health` 同一个约定）。
  *
- * 🔴 本文件位于 `src/routes/**` —— ADR-008 护栏 R-A 的管辖范围：
- *    **不许 import `../db/schema.js`**，一律经服务层取裁剪过的字段。
+ * 🔴 本文件在路由层 —— **不许 import `../db/schema.js`**，一律经服务层取裁剪过的字段。
  */
 export async function turnRoutes(app: FastifyInstance): Promise<void> {
   app.post('/turns', async (request, reply): Promise<TurnResponse | undefined> => {

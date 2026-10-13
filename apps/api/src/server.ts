@@ -17,7 +17,7 @@ export async function buildServer() {
 async function main(): Promise<void> {
   const app = await buildServer();
 
-  // 数据库可达性检查 —— dev-001 §1.3 要求「连接失败要有可读的报错（不是栈溢出）」。
+  // 数据库可达性检查 —— 连不上要给人看得懂的报错，不是一串栈。
   // ⚠️ 连不上不退出：/health 不依赖库，而库的问题由 pnpm db:check 单独报。
   const pool = getPool();
   try {

@@ -5,15 +5,16 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 /**
- * know-fit 的 ESLint 配置（flat config，ESLint 10 / ADR-019 决策 C）。
+ * know-fit 的 ESLint 配置（flat config）。
  *
- * 本文件最重要的一段不是风格规则，而是 **ADR-008 的护栏 R-A / R-B**（见文件末尾）——
- * 那是「选 ESLint 而不是 Biome / 只上 tsc」的**唯一不可替代用途**
- * （决策 C 明文：若这两条没落，本次选 ESLint 的理由不成立）。
+ * 本文件最重要的一段不是风格规则，而是**两条硬约束**（见文件末尾）：
+ *   R-A —— 路由层不许直接读库；
+ *   R-B —— 对外契约不许出现全文型字段名。
+ * 这两条没有别的工具能替 —— 它们也是「上 ESLint 而不只上 tsc」的理由。
  *
- * ⚠️ 落了 R-A / R-B **≠** ADR-008 的约束被保住：
- *    真正的证据是运行期的 R-C（遍历所有 API 响应体、断言不含 chunk 全文），
- *    **它挂 dev-005**，在那之前一直敞开。
+ * ⚠️ 这两条绿了 **≠** 「原文不会漏出去」被保住：
+ *    真正的证据是运行期那条（遍历 API 响应体、断言不含成段的原文），
+ *    **它还没做**，在那之前这条一直敞开。
  */
 export default tseslint.config(
   {
@@ -57,9 +58,9 @@ export default tseslint.config(
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 🔴 ADR-008 护栏 R-A：routes 层禁止直接 import Drizzle schema
-  //    「全文漏出去」的三条通道之一 —— 路由直接读库，
-  //    读回来的整行（含未来 knowledge_chunk.text）可能被顺手序列化出去。
+  // 🔴 R-A：路由层禁止直接 import Drizzle schema
+  //    「原文漏出去」的三条通道之一 —— 路由直接读库，
+  //    读回来的整行可能被顺手序列化出去。
   // ─────────────────────────────────────────────────────────────
   {
     files: ['apps/api/src/routes/**/*.ts'],
@@ -71,7 +72,7 @@ export default tseslint.config(
             {
               group: ['**/db/schema', '**/db/schema.js', '**/db/schema.ts'],
               message:
-                'ADR-008 护栏 R-A：routes 层禁止 import Drizzle schema 模块 —— 直接读库是全文漏出的通道之一。请经 service 层取已裁剪的字段。',
+                '路由层禁止 import Drizzle schema 模块 —— 直接读库是原文漏出的通道之一。请经服务层取已裁剪的字段。',
             },
           ],
         },
@@ -80,11 +81,11 @@ export default tseslint.config(
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 🔴 ADR-008 护栏 R-B：对外契约不得出现全文型字段名
+  // 🔴 R-B：对外契约不得出现全文型字段名
   //    ⚠️ 选择器里那两组长得很像，但各管一边：
   //       TSPropertySignature / PropertyDefinition / TSMethodSignature → 手写的 interface / class
   //       Property                                                      → zod 对象字面量
-  //    少了 Property，契约一改成 zod 写法护栏就静默失效（dev-002 实测踩到）。
+  //    少了 Property，契约一改成 zod 写法护栏就静默失效（实测踩到过一次）。
   // ─────────────────────────────────────────────────────────────
   {
     files: ['apps/api/src/contracts/**/*.ts'],
@@ -95,7 +96,7 @@ export default tseslint.config(
           selector:
             'TSPropertySignature[key.name=/^(text|content|transcript)$/], PropertyDefinition[key.name=/^(text|content|transcript)$/], TSMethodSignature[key.name=/^(text|content|transcript)$/], Property[key.name=/^(text|content|transcript)$/]',
           message:
-            'ADR-008 护栏 R-B：对外契约禁止出现全文型字段名（text / content / transcript）—— 唯一的强制手段是「API 层绝不下发 knowledge_chunk.text」。',
+            '对外契约禁止出现全文型字段名（text / content / transcript）—— 接口层绝不下发知识库原文。',
         },
       ],
     },

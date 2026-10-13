@@ -141,7 +141,7 @@ describe('三个出口：不落库', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('纯求评估 → 到此为止（评估链路是 dev-005）', async () => {
+  it('纯求评估 → 到此为止（评估链路还没接）', async () => {
     const { graph, calls } = build();
     const state = await graph.invoke({ message: '帮我看看最近怎么样' });
     expect(state.intent).toBe('assess');

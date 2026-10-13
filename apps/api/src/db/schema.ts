@@ -1,6 +1,6 @@
 import { boolean, date, integer, pgTable, real, text, timestamp, uuid, vector } from 'drizzle-orm/pg-core';
 
-/** smoke 表 —— 证明 vector 扩展与 HNSW 索引建得起来。dev-001 的产物，不要删。 */
+/** 探针表 —— 证明 vector 扩展与 HNSW 索引建得起来。不要删。 */
 export const smoke = pgTable('smoke', {
   id: integer('id').primaryKey(),
   note: text('note'),

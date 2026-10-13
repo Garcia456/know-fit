@@ -2,7 +2,7 @@
  * 本地真实调用 smoke —— 🔴 需要仓库根 .env 里填好 OPENAI_*，**不进 CI**。
  *
  *   1. 探结构化输出通道（jsonSchema / functionCalling / jsonMode）—— 定下用哪个；
- *   2. 黄金集（定义 §1.7）上跑真实抽取，报解析准确率；
+ *   2. 黄金集上跑真实抽取，报解析准确率；
  *   3. 顺带报意图分类准确率。
  *
  * 跑法：pnpm --filter @know-fit/api llm:smoke
@@ -90,7 +90,7 @@ async function main(): Promise<void> {
   const passed = await probeChannels();
   const chosen = passed[0];
   if (!chosen) {
-    console.error('🔴 三个通道都不通 —— 回 ADR-011 复议模型档位（定义 §3.2）');
+    console.error('🔴 三个通道都不通 —— 这个端点当前不支持结构化输出，得换模型或换端点');
     process.exit(1);
   }
   console.log(

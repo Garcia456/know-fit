@@ -1,7 +1,7 @@
 import type { Extraction, Exercise, Intent } from '../contracts/extraction.js';
 
 /**
- * 黄金集（定义 §1.7）—— 输入原文 → 期望结构。
+ * 黄金集 —— 输入原文 → 期望结构。
  *
  * ⚠️ fixture 测的是**管道**（抽取 → 规范化 → 落库 → 卡片走没走通）。
  * **准确率数字只能来自真实模型**（`llm:smoke`）—— 拿 fixture 算准确率是循环论证。
@@ -87,7 +87,7 @@ export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
     ],
   },
 
-  // 歧义动作 → exercise_id 落 null（不缺，是 PRD §8.1 不强行归并的正式落点）
+  // 歧义动作 → exercise_id 落 null（不缺，是不强行归并的正式落点）
   '飞鸟 15kg 三组十二次': {
     kind: 'workout',
     day_hint: null,
@@ -105,7 +105,7 @@ export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
     exercises: [],
   },
 
-  // 多意图 → dev-002 只落库（评估是 dev-005）
+  // 多意图 → 只落库（评估还没接）
   '卧推 70kg×8 四组，帮我看下够不够': {
     kind: 'workout',
     day_hint: null,

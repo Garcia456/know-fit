@@ -7,8 +7,7 @@ import type { HealthResponse } from '../contracts/health.js';
  * ⚠️ 它**不读数据库** —— 这是刻意的：探活该回答「进程活着吗」，
  *    而「数据库通不通」由 `pnpm db:check` 单独回答（区分两种故障）。
  *
- * 🔴 本文件位于 `src/routes/**` —— ADR-008 护栏 R-A 的管辖范围：
- *    **不许 import `../db/schema.js`**。
+ * 🔴 本文件在路由层 —— **不许 import `../db/schema.js`**，取数一律走服务层。
  */
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/health', async (): Promise<HealthResponse> => ({
