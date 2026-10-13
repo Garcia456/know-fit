@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildTurnGraph } from './turn.js';
 import type { PersistWorkoutInput } from './deps.js';
 import { createFakeClient } from '../llm/fake.js';
+import { buildVolumeHook } from '../metrics/hook.js';
 
 /**
  * 主图的条件边与三个出口 —— 替身 LLM + 桩落库，**不连库**。
@@ -99,6 +100,32 @@ describe('记录链路：走通 → 落库 → 出卡片', () => {
     expect(state.intent).toBe('mixed');
     expect(calls).toHaveLength(1);
     expect(state.card?.kind).toBe('workout');
+  });
+});
+
+describe('数据钩子：记录完成后带一个算好的判定', () => {
+  it('注入了 computeHook → 卡片带钩子（数是算好的，措辞归展示层）', async () => {
+    const s = stub();
+    const graph = buildTurnGraph({
+      llm: createFakeClient(),
+      persistWorkout: s.persistWorkout,
+      computeHook: async (input) =>
+        buildVolumeHook({ current: 2500, baseline: null, split_label: input.split_label }),
+      now: () => NOW,
+    });
+    const state = await graph.invoke({ message: COMPLETE });
+    const card = state.card;
+    if (card?.kind !== 'workout') throw new Error('卡片类型不对');
+    expect(card.hook?.metric).toBe('volume');
+    expect(card.hook?.current).toBe(2500);
+  });
+
+  it('不注入 → 卡片不带钩子（图本身不读库）', async () => {
+    const { graph } = build();
+    const state = await graph.invoke({ message: COMPLETE });
+    const card = state.card;
+    if (card?.kind !== 'workout') throw new Error('卡片类型不对');
+    expect(card.hook).toBeNull();
   });
 });
 

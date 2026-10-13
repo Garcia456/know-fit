@@ -13,6 +13,10 @@
  *   直接调图只能证明「图对」，证明不了「路由挂上了、代理转对了、应答契约对得上」——
  *   这三样恰恰是「本地跑得起来」最容易断的地方。
  *
+ * 两块：
+ *   A. 录入往返 —— 3 动作 12 组（dev-002）
+ *   B. 容量与数据钩子 —— 容量现算、热身滤掉、环比基线（dev-003）
+ *
  * 🔴 不含任何 key：本脚本假定 server 跑在 LLM_PROVIDER=fake 上 ——
  *    check-dev.sh 会显式设它；**手工跑时请自己确认**（脚本无法从应答里看出 provider，
  *    /health 目前不报这个字段）。
@@ -27,6 +31,12 @@ const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const url = process.env.DATABASE_URL ?? 'postgres://knowfit:knowfit@localhost:5432/knowfit';
 // 黄金集里那句「一句话验收」，3 动作 12 组
 const MESSAGE = '卧推 70kg×8 四组，飞鸟 15kg×12 三组，深蹲 100kg×5 五组';
+// dev-003：已知容量 + 带热身（正式 5×100×5 = 2500，两组 40kg×10 热身不算）
+const WARMUP_MSG = '推日：卧推先热身两组 40kg×10，然后 100kg×5 五组';
+// dev-003：同 split 的又一条 —— 环比基线拿上一条当「上一次」（2000 对 2500 → −20%）
+const NEXT_MSG = '推日：卧推 80kg×5 五组';
+// 基线只认同一个 split —— fixtures 里这两条的 split_label 就是这个标记（理由见 fixtures.ts）
+const MARK_SPLIT = '推-e2e';
 
 let failed = false;
 const ok = (m) => console.log(`  \x1b[32m✓\x1b[0m ${m}`);
@@ -37,26 +47,36 @@ const bad = (m) => {
 
 console.log('\n=== know-fit 端到端往返 ===\n');
 
-let body;
-try {
-  const res = await fetch(`${BASE}/api/turns`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ message: MESSAGE }),
-  });
-  if (!res.ok) {
-    bad(`POST ${BASE}/api/turns → HTTP ${res.status}`);
-    console.error(`     ${(await res.text()).slice(0, 500)}`);
-  } else {
-    body = await res.json();
-    ok(`POST /api/turns → 200`);
+/** 发一轮，返回 body；失败返回 null */
+async function post(message) {
+  try {
+    const res = await fetch(`${BASE}/api/turns`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    if (!res.ok) {
+      bad(`POST ${BASE}/api/turns → HTTP ${res.status}`);
+      console.error(`     ${(await res.text()).slice(0, 500)}`);
+      return null;
+    }
+    ok(`POST /api/turns → 200（${message.slice(0, 12)}…）`);
+    return await res.json();
+  } catch (e) {
+    bad(`请求发不出去：${e.message}`);
+    bad('  dev server 起了吗？（pnpm dev）');
+    return null;
   }
-} catch (e) {
-  bad(`请求发不出去：${e.message}`);
-  bad('  dev server 起了吗？（pnpm dev）');
 }
 
+const created = []; // 本次落下的 session_id —— 收尾全删
+
+// ── A. 录入往返（dev-002）────────────────────────────────────────────
+console.log('\n— A. 录入往返 —');
+
+const body = await post(MESSAGE);
 const sessionId = body?.card?.kind === 'workout' ? body.card.session_id : null;
+if (sessionId) created.push(sessionId);
 
 if (body) {
   if (typeof body.turn_id === 'string' && /^[0-9a-f-]{36}$/.test(body.turn_id)) {
@@ -83,6 +103,70 @@ if (body) {
     if (fly && fly.exercise_id === null) ok('「飞鸟」exercise_id 为 null（不强行归并）');
     else bad(`「飞鸟」的 exercise_id 应为 null，实为 ${JSON.stringify(fly?.exercise_id)}`);
   }
+}
+
+// ── B. 容量与数据钩子（dev-003）──────────────────────────────────────
+console.log('\n— B. 容量与数据钩子 —');
+
+// B1：先落一条带热身的已知记录 —— 钩子必须出现，且容量只算正式组
+const first = await post(WARMUP_MSG);
+const firstId = first?.card?.kind === 'workout' ? first.card.session_id : null;
+if (firstId) created.push(firstId);
+
+if (first?.card?.kind === 'workout') {
+  const h = first.card.hook;
+  if (!h) {
+    bad('卡片没带数据钩子 —— 记录完成后必须带');
+  } else {
+    if (h.metric === 'volume' && h.current === 2500) {
+      ok(`钩子带的是算好的容量：2500kg（两组 40kg×10 热身已滤掉）`);
+    } else {
+      bad(`钩子容量应为 2500，实为 ${h.current}（metric ${h.metric}）`);
+    }
+    // 库里没有更早的同 split 记录 —— 钩子仍出现，只是不带数字
+    if (h.baseline === null && h.delta_pct === null) {
+      ok('无历史：钩子照样出现，只是不带基线数字');
+    } else {
+      bad(`无历史时基线应为 null，实为 baseline=${h.baseline} delta=${h.delta_pct}`);
+    }
+  }
+} else if (first) {
+  bad(`WARMUP_MSG 的卡片应为 workout，实为 ${JSON.stringify(first.card?.kind)}`);
+}
+
+// B1b：容量读路由 —— 现算的容量与肌群分摊
+if (firstId) {
+  try {
+    const res = await fetch(`${BASE}/api/sessions/${firstId}/volume`);
+    const v = res.ok ? await res.json() : null;
+    if (v?.total_volume_kg === 2500 && v?.working_sets === 5 && v?.warmup_sets === 2) {
+      ok(`GET /api/sessions/:id/volume → 2500kg（正式 5 组 / 热身 2 组）`);
+    } else {
+      bad(`容量读路由返回 ${JSON.stringify(v)} —— 应为 2500 / 5 / 2`);
+    }
+    if (v?.by_muscle?.chest === 2500) ok('肌群分摊：胸 2500（主动肌 1.0）');
+    else bad(`胸的训练量应为 2500，实为 ${v?.by_muscle?.chest}`);
+  } catch (e) {
+    bad(`容量读路由请求失败：${e.message}`);
+  }
+}
+
+// B2：同一 split 再落一条 —— 环比基线取上一条，算出 −20%
+const second = await post(NEXT_MSG);
+const secondId = second?.card?.kind === 'workout' ? second.card.session_id : null;
+if (secondId) created.push(secondId);
+
+if (second?.card?.kind === 'workout') {
+  const h = second.card.hook;
+  if (h?.current === 2000 && h?.baseline === 2500 && h?.delta_pct === -20) {
+    ok(`环比：2000 对上一次 2500 → ${h.delta_pct}%（${h.baseline_kind}）`);
+  } else {
+    bad(`环比应为 2000 / 2500 / −20，实为 ${h?.current} / ${h?.baseline} / ${h?.delta_pct}`);
+  }
+  if (h?.scope?.split_label === MARK_SPLIT) ok(`基线口径落在同一个 split（${MARK_SPLIT}）`);
+  else bad(`钩子的 split 应为 ${MARK_SPLIT}，实为 ${JSON.stringify(h?.scope?.split_label)}`);
+} else if (second) {
+  bad(`NEXT_MSG 的卡片应为 workout，实为 ${JSON.stringify(second.card?.kind)}`);
 }
 
 // ── 库里真有这条记录吗（读回用裸 SQL，不借 ORM） ─────────────────────
@@ -121,10 +205,20 @@ try {
     else bad('conversation_turn 没有指向这条记录');
   }
 
+  // 容量那条的组：库里应是 7 组（2 热身 + 5 正式），现算时才滤热身
+  if (firstId) {
+    const n = await client.query(
+      'SELECT count(*)::int AS n FROM set_entry e JOIN exercise_entry x ON x.id = e.exercise_entry_id WHERE x.session_id = $1',
+      [firstId],
+    );
+    if (n.rows[0].n === 7) ok('库里 7 条 set_entry（2 热身 + 5 正式，热身是查询时才滤）');
+    else bad(`容量那条应有 7 条 set_entry，实为 ${n.rows[0].n}`);
+  }
+
   // 收尾：本次产生的行全删（测试不该在开发库里留痕）
-  if (sessionId) {
-    await client.query('DELETE FROM conversation_turn WHERE linked_record_id = $1', [sessionId]);
-    await client.query('DELETE FROM workout_session WHERE id = $1', [sessionId]);
+  for (const id of created) {
+    await client.query('DELETE FROM conversation_turn WHERE linked_record_id = $1', [id]);
+    await client.query('DELETE FROM workout_session WHERE id = $1', [id]);
   }
 } finally {
   await client.end();

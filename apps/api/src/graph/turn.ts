@@ -118,7 +118,7 @@ export function buildTurnGraph(deps: TurnDeps) {
         };
       })
 
-      .addNode('compose_card', (state) => {
+      .addNode('compose_card', async (state) => {
         const extracted = state.extracted;
 
         if (extracted?.kind === 'meal') {
@@ -133,18 +133,32 @@ export function buildTurnGraph(deps: TurnDeps) {
         }
 
         const ref = state.record_ref;
-        // ⚠️ 不含数据钩子：钩子是一个算好的判定，等算量那块接上
         if (!ref || ref.type !== 'workout') return {};
+
+        const date = state.session_date ?? resolveDate(extracted?.day_hint ?? null, now());
+        const split_label = extracted?.split_label ?? null;
+
+        // 数据钩子：算好的容量环比判定。措辞在展示层拼，这里只给数
+        const hook = deps.computeHook
+          ? await deps.computeHook({
+              user_id: state.user_id,
+              session_id: ref.id,
+              session_date: date,
+              split_label,
+              exercises: state.card_exercises,
+            })
+          : null;
 
         const card: WorkoutCard = {
           kind: 'workout',
           session_id: ref.id,
-          date: state.session_date ?? resolveDate(extracted?.day_hint ?? null, now()),
-          split_label: extracted?.split_label ?? null,
+          date,
+          split_label,
           status: state.record_status ?? 'incomplete',
           missing_fields: state.missing_fields,
           exercises: state.card_exercises,
           note: extracted?.note ?? null,
+          hook,
         };
         return { card, notices: composeNotice(state.card_exercises, state.missing_fields) };
       })

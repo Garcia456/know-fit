@@ -5,6 +5,7 @@ import {
   MissingFieldSchema,
   RecordStatusSchema,
 } from './extraction.js';
+import { VolumeHookSchema } from './metrics.js';
 
 /**
  * 对外契约：一轮对话的回应（`POST /api/turns`）。
@@ -45,6 +46,8 @@ export const WorkoutCardSchema = z.object({
   missing_fields: z.array(MissingFieldSchema),
   exercises: z.array(WorkoutCardExerciseSchema),
   note: z.string().nullable(),
+  /** 数据钩子 —— 记录完成后带的判定（已算好的数）。算不出基线时也出现，只是不带数字 */
+  hook: VolumeHookSchema.nullable(),
 });
 
 /** 饮食卡片 —— 只回抽取结果，不落库（MVP 只要契约） */

@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { pathToFileURL } from 'node:url';
 import { databaseUrl } from './db/client.js';
 import { healthRoutes } from './routes/health.js';
+import { metricsRoutes } from './routes/metrics.js';
 import { turnRoutes } from './routes/turns.js';
 import { closeDb, getPool } from './services/pool.js';
 
@@ -11,6 +12,7 @@ export async function buildServer() {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
   await app.register(healthRoutes);
   await app.register(turnRoutes);
+  await app.register(metricsRoutes);
   return app;
 }
 

@@ -4,6 +4,7 @@ import { SINGLE_USER_ID, TurnState } from '../graph/state.js';
 import { createLlmClient } from '../llm/index.js';
 import type { LlmClient } from '../llm/client.js';
 import { loadTrainingBand, logTurn, persistWorkout } from './record.js';
+import { volumeHookFor } from './metrics.js';
 
 /**
  * 一轮对话的入口 —— 路由只调它，它来组装图与依赖。
@@ -17,7 +18,7 @@ export interface TurnInput {
 let cached: ReturnType<typeof buildTurnGraph> | null = null;
 
 function turnGraph(llm: LlmClient) {
-  cached ??= buildTurnGraph({ llm, persistWorkout, now: () => new Date() });
+  cached ??= buildTurnGraph({ llm, persistWorkout, computeHook: volumeHookFor, now: () => new Date() });
   return cached;
 }
 

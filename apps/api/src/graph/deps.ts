@@ -1,5 +1,6 @@
 import type { MissingField, RecordStatus } from '../contracts/extraction.js';
-import type { WorkoutCardSet } from '../contracts/turn.js';
+import type { VolumeHook } from '../contracts/metrics.js';
+import type { WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
 import type { LlmClient } from '../llm/client.js';
 
 /** 落库原料 —— 规范化后的动作 + 已换算的组 */
@@ -22,6 +23,14 @@ export interface PersistWorkoutInput {
   exercises: PersistExerciseInput[];
 }
 
+export interface HookInput {
+  user_id: string;
+  session_id: string;
+  session_date: string;
+  split_label: string | null;
+  exercises: WorkoutCardExercise[];
+}
+
 export interface TurnDeps {
   llm: LlmClient;
   /**
@@ -29,5 +38,10 @@ export interface TurnDeps {
    * 好处：图可以不连库地测（条件边、卡片），而写库实现留在服务层。
    */
   persistWorkout: (input: PersistWorkoutInput) => Promise<{ session_id: string }>;
+  /**
+   * 数据钩子也由调用方注入 —— 它要读历史记录算环比，同样不归图管。
+   * 不注入时卡片不带钩子。
+   */
+  computeHook?: (input: HookInput) => Promise<VolumeHook>;
   now?: () => Date;
 }

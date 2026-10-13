@@ -87,6 +87,36 @@ export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
     ],
   },
 
+  // 容量：已知数值 + 带热身 —— 只算正式组（5×100×5 = 2500；两组 40kg×10 热身要滤掉）
+  // ⚠️ 「推-e2e」是**标记 split**：e2e 要靠「没有更早的同 split 记录」验无基线那条，
+  //    用真实存在过的 split 名会被开发库里的旧记录搅乱（smoke 不看 split_label）。
+  '推日：卧推先热身两组 40kg×10，然后 100kg×5 五组': {
+    kind: 'workout',
+    day_hint: '昨天',
+    split_label: '推-e2e',
+    note: null,
+    exercises: [
+      {
+        raw_name: '卧推',
+        name_confidence: 'high',
+        mentioned_sets: [
+          { weight_kg: 40, weight_unit: 'kg', reps: 10, set_type: 'warmup', is_inferred: false },
+          { weight_kg: 40, weight_unit: 'kg', reps: 10, set_type: 'warmup', is_inferred: false },
+          ...working(5, 100, 'kg', 5),
+        ],
+      },
+    ],
+  },
+
+  // 同一个标记 split 的又一条 —— 环比基线拿它当「上一次」（2000 对 2500 → −20%）
+  '推日：卧推 80kg×5 五组': {
+    kind: 'workout',
+    day_hint: '今天',
+    split_label: '推-e2e',
+    note: null,
+    exercises: [{ raw_name: '卧推', name_confidence: 'high', mentioned_sets: working(5, 80, 'kg', 5) }],
+  },
+
   // 歧义动作 → exercise_id 落 null（不缺，是不强行归并的正式落点）
   '飞鸟 15kg 三组十二次': {
     kind: 'workout',
@@ -129,6 +159,8 @@ export const GOLDEN_INTENTS: Record<string, Intent> = {
   '今天练了背': 'record',
   '卧推 155 磅 五组五次': 'record',
   '卧推先热身两组 40kg，然后 100kg 五组': 'record',
+  '推日：卧推先热身两组 40kg×10，然后 100kg×5 五组': 'record',
+  '推日：卧推 80kg×5 五组': 'record',
   '飞鸟 15kg 三组十二次': 'record',
   '昨天练了胸': 'record',
   '午饭吃了两碗米饭': 'record',
