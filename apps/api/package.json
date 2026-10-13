@@ -7,11 +7,14 @@
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "llm:smoke": "node --env-file-if-exists=../../.env --import tsx src/llm/smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@langchain/core": "1.2.17",
     "@langchain/langgraph": "1.4.21",
+    "@langchain/openai": "1.6.2",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.5",
     "pg": "8.23.1",

@@ -1,13 +1,16 @@
 import Fastify from 'fastify';
 import { pathToFileURL } from 'node:url';
-import { createPool, databaseUrl } from './db/client.js';
+import { databaseUrl } from './db/client.js';
 import { healthRoutes } from './routes/health.js';
+import { turnRoutes } from './routes/turns.js';
+import { closeDb, getPool } from './services/pool.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 
 export async function buildServer() {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
   await app.register(healthRoutes);
+  await app.register(turnRoutes);
   return app;
 }
 
@@ -16,7 +19,7 @@ async function main(): Promise<void> {
 
   // 数据库可达性检查 —— dev-001 §1.3 要求「连接失败要有可读的报错（不是栈溢出）」。
   // ⚠️ 连不上不退出：/health 不依赖库，而库的问题由 pnpm db:check 单独报。
-  const pool = createPool();
+  const pool = getPool();
   try {
     await pool.query('SELECT 1');
     app.log.info('数据库已连接');
@@ -30,7 +33,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     await app.close();
-    await pool.end().catch(() => {});
+    await closeDb();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

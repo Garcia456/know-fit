@@ -81,6 +81,10 @@ export default tseslint.config(
 
   // ─────────────────────────────────────────────────────────────
   // 🔴 ADR-008 护栏 R-B：对外契约不得出现全文型字段名
+  //    ⚠️ 选择器里那两组长得很像，但各管一边：
+  //       TSPropertySignature / PropertyDefinition / TSMethodSignature → 手写的 interface / class
+  //       Property                                                      → zod 对象字面量
+  //    少了 Property，契约一改成 zod 写法护栏就静默失效（dev-002 实测踩到）。
   // ─────────────────────────────────────────────────────────────
   {
     files: ['apps/api/src/contracts/**/*.ts'],
@@ -89,7 +93,7 @@ export default tseslint.config(
         'error',
         {
           selector:
-            'TSPropertySignature[key.name=/^(text|content|transcript)$/], PropertyDefinition[key.name=/^(text|content|transcript)$/], TSMethodSignature[key.name=/^(text|content|transcript)$/]',
+            'TSPropertySignature[key.name=/^(text|content|transcript)$/], PropertyDefinition[key.name=/^(text|content|transcript)$/], TSMethodSignature[key.name=/^(text|content|transcript)$/], Property[key.name=/^(text|content|transcript)$/]',
           message:
             'ADR-008 护栏 R-B：对外契约禁止出现全文型字段名（text / content / transcript）—— 唯一的强制手段是「API 层绝不下发 knowledge_chunk.text」。',
         },

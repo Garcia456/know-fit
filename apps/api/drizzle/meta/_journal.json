@@ -15,6 +15,13 @@
       "when": 1791709547691,
       "tag": "0001_smoke_table",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791855982337,
+      "tag": "0002_record_tables",
+      "breakpoints": true
     }
   ]
 }

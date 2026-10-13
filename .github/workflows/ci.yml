@@ -1,14 +1,19 @@
 # ─────────────────────────────────────────────────────────────────────
 # know-fit CI（ADR-021：现在就建；仓库为 private）
 #
-# 🔴 与本地同源：本工作流调用的 `pnpm verify` 与 scripts/check-dev.sh
-#    用的是同一个 script —— CI 不另写一套命令（ADR-021）。
+# 🔴 与本地同源：本工作流跑的就是 `bash scripts/check-dev.sh` ——
+#    CI 不另写一套命令（ADR-021）。唯一的差别是数据库的来源：
+#    本地是 `pnpm db:up`（compose），CI 是下面的 services: 容器，
+#    故 CI 侧设 SKIP_DB_UP=1 让脚本跳过 db:up。
 #
-# 🔴 dev-001 阶段 CI 不起数据库（ADR-019 补注四）：
-#    三类测试没有一条连库；且在 Ubuntu runner 上跑 db:check
-#    恰证明不了作者的 Windows 机器能跑。
-#    ⚠️ 触发条件：dev-003（Drizzle 迁移）落地时必须补 services: pgvector，
-#       并把迁移纳入 pnpm test。
+# 🔴 CI 里不许有任何 key、不许有 `secrets.*`：
+#    check-dev.sh 显式以 LLM_PROVIDER=fake 起服务，全链路不联网。
+#    真实模型的准确率只能在作者本地跑 `llm:smoke`（ADR-022 决定四）。
+#
+# 🔴 数据库容器（ADR-019 补注四：dev-002 起必须补）：
+#    镜像 tag 与 docker-compose.yml **同一串** —— 版本漂移会让
+#    「HNSW 行为变了」变成无法复现的 bug（ADR-019 决策 A）。
+#    口令是本地开发用的那串（不是机密）：CI 容器一次性、随 runner 销毁。
 # ─────────────────────────────────────────────────────────────────────
 name: CI
 
@@ -18,15 +23,31 @@ on:
   pull_request:
 
 jobs:
-  verify:
+  gate:
     runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: pgvector/pgvector:0.8.7-pg18-bookworm
+        env:
+          POSTGRES_USER: knowfit
+          POSTGRES_PASSWORD: knowfit
+          POSTGRES_DB: knowfit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U knowfit -d knowfit"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 读根 package.json 的 packageManager 字段决定 pnpm 版本
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # 与根 package.json 的 engines.node 同值（ADR-019 补注五）
           node-version: '22.x'
@@ -35,5 +56,19 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Verify (typecheck && lint && test)
-        run: pnpm verify
+      # 执行闸门：db（外部提供）→ verify → 探活 → 端到端往返
+      # 失败时把 dev server 日志一起打出来，否则「探活失败」没法定因
+      - name: Gate (scripts/check-dev.sh)
+        env:
+          SKIP_DB_UP: '1'
+        run: bash scripts/check-dev.sh
+
+      - name: Dev server log (on failure)
+        if: failure()
+        run: |
+          if [ -f /tmp/knowfit-dev.log ]; then
+            echo '--- dev server log ---'
+            tail -n 100 /tmp/knowfit-dev.log
+          else
+            echo '（没有 dev server 日志 —— 故障发生在起服务之前）'
+          fi

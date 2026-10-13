@@ -15,6 +15,7 @@
 # 退出码： 0 = 全过 ； 非 0 = 有失败
 #
 # ⚠️ 它会起容器（pnpm db:up）与 dev server（pnpm dev）—— 需 Docker Desktop 已启动。
+#    设 SKIP_DB_UP=1 可跳过 db:up（CI 里库由 services: 容器提供）。
 # ─────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
@@ -64,22 +65,31 @@ wait_for_http() { # url  label  tries
   return 1
 }
 
-# ── 1/3 代码正确性闸门：typecheck + lint + test ───────────────────────
-bold "1/3  pnpm verify （typecheck && lint && test）"
-if pnpm verify; then
-  ok "pnpm verify 通过"
-else
-  bad "pnpm verify 失败"
-fi
-
-# ── 2/3 数据库：起库 → 应用迁移 → 断言 vector 扩展与 HNSW 索引 ─────────
+# ── 1/4 数据库：起库 → 应用迁移 → 断言扩展、索引与记录表 ───────────────
 # ⚠️ migrate 不能省：迁移 0000_enable_vector.sql 才是 `CREATE EXTENSION vector`
 #    的执行者 —— 空卷上不跑它，db:check 必然断言失败（「克隆即跑」会断在这）。
-bold "2/3  数据库（pnpm db:up && pnpm db:migrate && pnpm db:check）"
-if pnpm db:up; then
-  ok "容器已起"
+# ⚠️ 顺序：必须在 pnpm verify **之前** —— dev-002 起有测试要连真库
+#    （落库往返 / 端到端）；先 verify 会在干净克隆上假失败。
+#
+# SKIP_DB_UP=1 → 跳过 `pnpm db:up`：CI 里数据库由 services: 容器提供，
+#   此时在 runner 上再 `docker compose up` 会撞端口。CI 与本地跑的是**同一个脚本**。
+bold "1/4  数据库（pnpm db:up && pnpm db:migrate && pnpm db:check）"
+DB_READY=1
+if [ "${SKIP_DB_UP:-}" = "1" ]; then
+  ok "SKIP_DB_UP=1 —— 容器由外部提供（CI 的 services:）"
+else
+  if pnpm db:up; then
+    ok "容器已起"
+  else
+    bad "pnpm db:up 失败"
+    hint "Docker Desktop 启动了吗？"
+    DB_READY=0
+  fi
+fi
+
+if [ "$DB_READY" = "1" ]; then
   if pnpm db:migrate; then
-    ok "迁移已应用（vector 扩展 + smoke 表）"
+    ok "迁移已应用（vector 扩展 + smoke 表 + 6 张记录表）"
     if pnpm db:check; then
       ok "数据库检查通过"
     else
@@ -89,26 +99,49 @@ if pnpm db:up; then
     bad "pnpm db:migrate 失败"
     hint "drizzle.config.ts 的 DATABASE_URL 对吗？"
   fi
-else
-  bad "pnpm db:up 失败"
-  hint "Docker Desktop 启动了吗？"
 fi
 
-# ── 3/3 前后端能起：pnpm dev + 探活 ───────────────────────────────────
-bold "3/3  pnpm dev 起前后端，并探活"
+# ── 2/4 代码正确性闸门：typecheck + lint + test ───────────────────────
+bold "2/4  pnpm verify （typecheck && lint && test）"
+if pnpm verify; then
+  ok "pnpm verify 通过"
+else
+  bad "pnpm verify 失败"
+fi
+
+# ── 3/4 前后端能起：pnpm dev + 探活 ───────────────────────────────────
+bold "3/4  pnpm dev 起前后端，并探活"
 if command -v curl >/dev/null 2>&1; then
   # 端口若已被占用，先记一笔（避免把「上一个 dev server」误当成这次起成功了）
   if curl -fsS -o /dev/null "$HEALTH_URL" 2>/dev/null; then
     hint "注意：端口上已有服务在响应 —— 本步骤可能探到的不是本次启动的进程"
   fi
 
-  pnpm dev >/tmp/knowfit-dev.log 2>&1 &
+  # 🔴 LLM_PROVIDER=fake 显式写死：闸门绝不联网、绝不需要 key。
+  #    （dev server 不读 .env，默认也是 fake —— 这里显式设是为了防外部环境变量把它翻过去。）
+  LLM_PROVIDER=fake pnpm dev >/tmp/knowfit-dev.log 2>&1 &
   DEV_PID=$!
 
   wait_for_http "$WEB_URL"   "web 首页 GET /" 40
   wait_for_http "$HEALTH_URL" "api 健康检查 GET /api/health" 20
 else
   bad "找不到 curl —— 无法探活"
+fi
+
+# ── 4/4 端到端往返：说一句训练 → 变成一条记录 ──────────────────────────
+# 这一步与 3/4 分开，是因为它答的是另一个问题：
+#   「进程活着」≠「路真的通」。路由挂没挂上、代理转对没转对、应答契约对不对得上，
+#   只有真发一次请求才知道。
+bold "4/4  端到端往返（POST /api/turns → 库里真有这条记录）"
+if [ "$FAILED" -eq 0 ]; then
+  if node scripts/e2e-turn.mjs; then
+    ok "端到端往返通过"
+  else
+    bad "端到端往返失败"
+    hint "dev server 起了吗？vite 代理的 /api 重写对了吗？"
+  fi
+else
+  hint "跳过：前面的步骤已经失败（dev server 未必起着）"
 fi
 
 # ── 结论 ─────────────────────────────────────────────────────────────
@@ -118,4 +151,6 @@ if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
 printf '\n\033[32m执行闸门全部通过。\033[0m\n'
+printf '  ⚠️ 本闸门跑在 LLM_PROVIDER=fake 上 —— 它证明的是「管道通」，\n'
+printf '     **不是**「模型抽得准」；准确率只能来自本地 llm:smoke（要作者自己的 key）。\n'
 printf '  ⚠️ 但注意：ADR-008 的护栏只落了 R-A / R-B —— R-C（运行期遍历响应体断言）挂 dev-005，仍敞开。\n'

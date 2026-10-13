@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
@@ -74,11 +75,43 @@ describe('ADR-008 护栏 R-B：对外契约禁止全文型字段名', () => {
     }
   });
 
+  it('负例：zod 对象字面量里的 text 也必须被拦住', async () => {
+    // 手写 interface 与 zod 对象是两种 AST 节点；契约一改用 zod，
+    // 只认 interface 的选择器就静默失效 —— 这条就是盯着这个缺口。
+    const messages = await lintSnippet(
+      [
+        "import { z } from 'zod';",
+        'export const Bad = z.object({ id: z.number(), text: z.string() });',
+        '',
+      ].join('\n'),
+      'apps/api/src/contracts/__violation.ts',
+    );
+    expect(
+      messages.some((m) => m.ruleId === 'no-restricted-syntax'),
+      'R-B 没拦住 zod 契约里的 text 字段',
+    ).toBe(true);
+  });
+
   it('正例：普通契约字段不报 R-B（护栏没有误伤）', async () => {
     const messages = await lintSnippet(
       ["export interface Good { status: 'ok'; service: string; }", ''].join('\n'),
       'apps/api/src/contracts/__ok.ts',
     );
     expect(messages.filter((m) => m.ruleId === 'no-restricted-syntax')).toHaveLength(0);
+  });
+
+  it('正例：真实的抽取与轮次契约文件本身不含违规字段名', async () => {
+    // ⚠️ 上面两条正例都是**合成的**片段 —— 它们证不了真文件干净。
+    //    这条直接 lint 真文件，是「护栏没被绕过」的唯一硬证据。
+    for (const name of ['extraction.ts', 'turn.ts']) {
+      const messages = await lintSnippet(
+        await readFile(join(HERE, 'contracts', name), 'utf8'),
+        `apps/api/src/contracts/${name}`,
+      );
+      expect(
+        messages.filter((m) => m.ruleId === 'no-restricted-syntax'),
+        `contracts/${name} 撞了 R-B`,
+      ).toHaveLength(0);
+    }
   });
 });

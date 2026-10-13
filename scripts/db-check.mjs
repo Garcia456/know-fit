@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * know-fit 数据库可达性断言（dev-001 §三 3.1 第 3 条）
+ * know-fit 数据库可达性断言（dev-001 §三 3.1 第 3 条 / dev-002 §三）
  *
- * 断言两件事：
+ * 断言四件事：
  *   1. `vector` 扩展已安装（查 pg_extension 的 extversion 有值）
  *   2. 能建 `vector(1024)` 列 + HNSW（cosine）索引 —— 建完即回滚
+ *   3. dev-002 的 6 张记录表都建出来了（迁移跑没跑）
+ *   4. v1 单用户的固定锚点行还在（没有它，任何落库都会撞外键）
  *
  * 为什么第 2 条不能省：第 1 条只证明「扩展装上了」，
  * 而项目真正依赖的是 HNSW 索引能不能建（ADR-019 决策 A 的关键判据：
@@ -66,6 +68,37 @@ try {
       bad(`建 HNSW 索引失败：${e.message}`);
       bad('  若报 shared memory 相关错误 → 调大 docker-compose.yml 的 shm_size');
     }
+  }
+
+  // 3. dev-002 的 6 张表 —— 迁移没跑时这条最先炸，比路由报错好读
+  const TABLES = [
+    'user',
+    'user_profile',
+    'workout_session',
+    'exercise_entry',
+    'set_entry',
+    'conversation_turn',
+  ];
+  const found = await client.query(
+    "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = ANY($1)",
+    [TABLES],
+  );
+  const have = new Set(found.rows.map((r) => r.tablename));
+  const missing = TABLES.filter((t) => !have.has(t));
+  if (missing.length > 0) {
+    bad(`缺表：${missing.join('、')} —— 迁移没跑：pnpm db:migrate`);
+  } else {
+    ok(`dev-002 的 6 张记录表都在`);
+  }
+
+  // 4. 单用户锚点 —— v1 没有注册流程，缺了它所有落库都会撞外键
+  const anchor = await client.query(
+    "SELECT id FROM \"user\" WHERE id = '00000000-0000-4000-8000-000000000001'",
+  );
+  if (anchor.rowCount === 0) {
+    bad('单用户锚点行不在 —— 0002 迁移末尾那两行手写 INSERT 丢了吗？');
+  } else {
+    ok('单用户锚点行在');
   }
 } finally {
   await client.end();
