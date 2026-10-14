@@ -2,11 +2,12 @@
 /**
  * know-fit 数据库可达性断言
  *
- * 断言四件事：
+ * 断言五件事：
  *   1. `vector` 扩展已安装（查 pg_extension 的 extversion 有值）
  *   2. 能建 `vector(1024)` 列 + HNSW（cosine）索引 —— 建完即回滚
  *   3. 录入链路的 6 张记录表都建出来了（迁移跑没跑）
  *   4. v1 单用户的固定锚点行还在（没有它，任何落库都会撞外键）
+ *   5. 知识库那张表建出来了（采集与转写往这里落）
  *
  * 为什么第 2 条不能省：第 1 条只证明「扩展装上了」，
  * 而项目真正依赖的是 HNSW 索引能不能建 ——
@@ -99,6 +100,16 @@ try {
     bad('单用户锚点行不在 —— 0002 迁移末尾那两行手写 INSERT 丢了吗？');
   } else {
     ok('单用户锚点行在');
+  }
+
+  // 5. 知识库表 —— 采集管线落库的目标；缺了它 kb:ingest 会在落库那一刻才炸
+  const kb = await client.query(
+    "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'knowledge_source'",
+  );
+  if (kb.rows[0].n === 0) {
+    bad('knowledge_source 表不在 —— 0003 迁移没跑：pnpm db:migrate');
+  } else {
+    ok(`知识库表 knowledge_source 在（${kb.rows[0].n} 列）`);
   }
 } finally {
   await client.end();

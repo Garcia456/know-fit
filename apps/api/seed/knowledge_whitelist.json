@@ -1,0 +1,5 @@
+{
+  "$schema_version": "1",
+  "_说明": "采集只认这份清单 —— 没有「发现」这个动作。格式：videos[].platform_video_key / creator / title / original_url / topic_domain。topic_domain 是这条视频归的知识域（例：训练动作 / 训练量 / 饮食）。填完跑 pnpm kb:smoke 复核转写是不是口播。",
+  "videos": []
+}

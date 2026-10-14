@@ -1,4 +1,4 @@
-import { boolean, date, integer, pgTable, real, text, timestamp, uuid, vector } from 'drizzle-orm/pg-core';
+import { boolean, date, integer, jsonb, pgTable, real, text, timestamp, uuid, vector } from 'drizzle-orm/pg-core';
 
 /** 探针表 —— 证明 vector 扩展与 HNSW 索引建得起来。不要删。 */
 export const smoke = pgTable('smoke', {
@@ -74,4 +74,37 @@ export const setEntry = pgTable('set_entry', {
   reps: integer('reps'),
   setType: text('set_type').notNull(), // 'warmup' | 'working'
   isInferred: boolean('is_inferred').notNull().default(false), // 系统推测的值
+});
+
+/**
+ * 知识源 —— 每一条采集来的视频一行。
+ *
+ * `transcript_segments` 存的是**转写全文**（分段 + 时间戳）：
+ * 🔴 它只进库、供内部检索用；**任何对外契约都不携带它**
+ *    （护栏 R-B 拦字段名，运行期那条仍挂 dev-005）。
+ * `is_indexable = false` 是下架开关：置 false 时连同转写一起清掉。
+ * `content_hash` 是下架时按内容定位的锚，转写清掉后仍保留。
+ */
+export const knowledgeSource = pgTable('knowledge_source', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  creator: text('creator').notNull(),
+  platform: text('platform').notNull(), // v1 只有 'douyin'
+  videoId: text('video_id').notNull(),
+  title: text('title').notNull(),
+  originalUrl: text('original_url').notNull(),
+  durationSec: integer('duration_sec'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  complianceStatus: text('compliance_status').notNull(), // 'ok' | 'retired'
+
+  platformVideoKey: text('platform_video_key').notNull().unique(),
+  subtitleSource: text('subtitle_source').notNull(), // v1 只有 'asr'
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull(),
+  robotsCheckedAt: timestamp('robots_checked_at', { withTimezone: true }).notNull(),
+  robotsAllowed: boolean('robots_allowed'), // null = 检查过但结论不适用
+  isIndexable: boolean('is_indexable').notNull().default(true),
+  topicDomain: text('topic_domain'),
+
+  transcriptSegments: jsonb('transcript_segments'),
+  contentHash: text('content_hash'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

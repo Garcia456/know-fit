@@ -103,7 +103,7 @@ describe('护栏：对外契约禁止全文型字段名', () => {
   it('正例：真实的抽取与轮次契约文件本身不含违规字段名', async () => {
     // ⚠️ 上面两条正例都是**合成的**片段 —— 它们证不了真文件干净。
     //    这条直接 lint 真文件，是「护栏没被绕过」的唯一硬证据。
-    for (const name of ['extraction.ts', 'turn.ts', 'metrics.ts']) {
+    for (const name of ['extraction.ts', 'turn.ts', 'metrics.ts', 'knowledge.ts']) {
       const messages = await lintSnippet(
         await readFile(join(HERE, 'contracts', name), 'utf8'),
         `apps/api/src/contracts/${name}`,

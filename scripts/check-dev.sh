@@ -132,7 +132,12 @@ fi
 # 这一步与 3/4 分开，是因为它答的是另一个问题：
 #   「进程活着」≠「路真的通」。路由挂没挂上、代理转对没转对、应答契约对不对得上，
 #   只有真发一次请求才知道。
-bold "4/4  端到端往返（POST /api/turns → 库里真有这条记录）"
+#
+# 本步两块：
+#   A. 录入往返（dev-002/003）—— POST /api/turns → 库里真有这条记录
+#   B. 采集转写（dev-004）—— 真跑一遍 kb:ingest → 库里真有知识源、
+#      正文没漏出去、下架通道通。走**替身 provider**（不联网、不加载模型）。
+bold "4/4  端到端往返（POST /api/turns + 采集转写管线）"
 if [ "$FAILED" -eq 0 ]; then
   if node scripts/e2e-turn.mjs; then
     ok "端到端往返通过"
@@ -140,8 +145,18 @@ if [ "$FAILED" -eq 0 ]; then
     bad "端到端往返失败"
     hint "dev server 起了吗？vite 代理的 /api 重写对了吗？"
   fi
+
+  # 采集转写（dev-004）—— 走替身 provider：不联网、不加载模型。
+  # 它证的是「管道通」；「抖音解析对 / 转写准」只在作者本机（kb:smoke）。
+  # 不依赖 dev server，只依赖库。
+  if node scripts/kb-check.mjs; then
+    ok "采集转写管线通过"
+  else
+    bad "采集转写管线失败"
+    hint "库起了吗？迁移（pnpm db:migrate）跑了吗？"
+  fi
 else
-  hint "跳过：前面的步骤已经失败（dev server 未必起着）"
+  hint "跳过：前面的步骤已经失败（dev server / 库未必起着）"
 fi
 
 # ── 结论 ─────────────────────────────────────────────────────────────
@@ -153,5 +168,7 @@ fi
 printf '\n\033[32m执行闸门全部通过。\033[0m\n'
 printf '  ⚠️ 本闸门跑在 LLM_PROVIDER=fake 上 —— 它证明的是「管道通」，\n'
 printf '     **不是**「模型抽得准」；准确率只能来自本地 llm:smoke（要作者自己的 key）。\n'
+printf '  ⚠️ 采集转写那步同样跑在替身上 —— 它证明「管道通」，\n'
+printf '     **不是**「抖音解析对 / 转写准」；那两件事只能来自作者本机 kb:smoke。\n'
 printf '  ⚠️ 但注意：护栏只落了「路由层不读库」与「契约无全文型字段名」两条 ——\n'
-printf '     「运行期断言响应体里不漏原文」那条还没做，仍敞开。\n'
+printf '     「运行期断言响应体里不漏原文」那条还没做，仍敞开（挂 dev-005）。\n'

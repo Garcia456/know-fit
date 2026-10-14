@@ -8,6 +8,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "llm:smoke": "node --env-file-if-exists=../../.env --import tsx src/llm/smoke.ts",
+    "kb:ingest": "node --env-file-if-exists=../../.env --import tsx src/kb/ingest.ts",
+    "kb:smoke": "node --env-file-if-exists=../../.env --import tsx src/kb/smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

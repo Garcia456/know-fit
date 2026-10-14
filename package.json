@@ -17,7 +17,9 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @know-fit/api db:migrate",
-    "db:check": "node --env-file-if-exists=.env scripts/db-check.mjs"
+    "db:check": "node --env-file-if-exists=.env scripts/db-check.mjs",
+    "kb:ingest": "pnpm --filter @know-fit/api kb:ingest",
+    "kb:smoke": "pnpm --filter @know-fit/api kb:smoke"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

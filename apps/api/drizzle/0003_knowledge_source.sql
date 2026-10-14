@@ -1,0 +1,22 @@
+CREATE TABLE "knowledge_source" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"creator" text NOT NULL,
+	"platform" text NOT NULL,
+	"video_id" text NOT NULL,
+	"title" text NOT NULL,
+	"original_url" text NOT NULL,
+	"duration_sec" integer,
+	"published_at" timestamp with time zone,
+	"compliance_status" text NOT NULL,
+	"platform_video_key" text NOT NULL,
+	"subtitle_source" text NOT NULL,
+	"fetched_at" timestamp with time zone NOT NULL,
+	"robots_checked_at" timestamp with time zone NOT NULL,
+	"robots_allowed" boolean,
+	"is_indexable" boolean DEFAULT true NOT NULL,
+	"topic_domain" text,
+	"transcript_segments" jsonb,
+	"content_hash" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "knowledge_source_platform_video_key_unique" UNIQUE("platform_video_key")
+);
