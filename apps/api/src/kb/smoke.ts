@@ -5,9 +5,9 @@
  *   pnpm kb:smoke
  *
  * 需要三样东西都在本机备好：
- *   1. 自建解析服务起着（KB_PARSER_BASE_URL，默认 http://127.0.0.1:8080）；
+ *   1. 自建解析服务起着（KB_PARSER_BASE_URL，默认 http://127.0.0.1:8000，还要 KB_PARSER_API_KEY）；
  *   2. 本机装了 Python + faster-whisper（见 apps/api/tools/asr_transcribe.py）；
- *   3. seed/knowledge_whitelist.json 里填了真实视频。
+ *   3. seed/knowledge_whitelist.json 里填了博主主页（或钉住的视频）。
  *
  * ⚠️ 本脚本会把**转写正文**打到终端 —— 那是它的用途：**肉眼看它是不是博主口播**。
  *    转出来若是背景音乐、或术语错到不能引用，这条视频就不能算进知识库（dev-004 §3.2）。
@@ -25,9 +25,33 @@ if (isWhitelistEmpty(whitelist)) {
   process.exit(1);
 }
 
+/**
+ * `KB_SMOKE_LIMIT=N` —— **只跑钉住的前 N 条**，用来快速验「管道通 + 是口播」。
+ * 它**不走遍历**（遍历是慢的那一半），所以 N 要跟 `videos` 对着看。
+ */
+const limitRaw = process.env.KB_SMOKE_LIMIT;
+const limit = limitRaw === undefined ? null : Number(limitRaw);
+if (limit !== null && (!Number.isInteger(limit) || limit < 1)) {
+  console.error(`KB_SMOKE_LIMIT 得是 ≥1 的整数（现在填的是「${limitRaw}」）。`);
+  process.exit(1);
+}
+const scoped =
+  limit === null
+    ? whitelist
+    : { ...whitelist, creators: [], videos: whitelist.videos.slice(0, limit) };
+if (limit !== null) {
+  if (scoped.videos.length === 0) {
+    console.error(
+      `KB_SMOKE_LIMIT=${limit} 只作用于**钉住的视频**，但 videos 是空的 —— 要么填一条，要么去掉这个变量。`,
+    );
+    process.exit(1);
+  }
+  console.log(`⚠️ KB_SMOKE_LIMIT=${limit}：只跑钉住的 ${scoped.videos.length} 条，**不走遍历**。`);
+}
+
 console.log('\n=== know-fit 本地真实采集转写 ===');
 console.log(
-  `白名单：博主 ${whitelist.creators.length} 个 + 钉住视频 ${whitelist.videos.length} 条；` +
+  `白名单：博主 ${scoped.creators.length} 个 + 钉住视频 ${scoped.videos.length} 条；` +
     `先确认解析服务起着、本机装好了 faster-whisper。\n`,
 );
 
@@ -36,7 +60,30 @@ try {
   const fetcher = createDouyinFetcher();
   const asr = createLocalAsrClient();
 
-  const { robots, sources } = await ingestAll(whitelist, { fetcher, asr });
+  // 不加这个的话，采集 + 转写整段**一个字都不打** —— 长视频（CPU 上几十分钟一条）
+  // 看起来就和卡死一样。打字是给「它在动」提供证据。
+  const startedAt = new Map<string, number>();
+  const { robots, sources } = await ingestAll(scoped, {
+    fetcher,
+    asr,
+    onProgress: (e) => {
+      if (e.stage === 'listed') {
+        console.log(`—— 博主「${e.creator}」：候选 ${e.candidates} 条 → 采 ${e.picked} 条`);
+        // 定义 §3.1 第 5 条：真跑时要能肉眼看出排除词挡了谁、有没有误杀
+        for (const t of e.excluded) console.log(`   ⛔ 排除词挡下：「${t}」`);
+      }
+      if (e.stage === 'transcribe') {
+        startedAt.set(e.platform_video_key, Date.now());
+        const dur = e.duration_sec === null ? '时长未知' : `${e.duration_sec}s`;
+        console.log(`   ⏳ 下载 + 转写 ${e.platform_video_key}「${e.title}」（${dur}）…`);
+      }
+      if (e.stage === 'done') {
+        const t0 = startedAt.get(e.platform_video_key);
+        const sec = t0 === undefined ? '—' : `${Math.round((Date.now() - t0) / 1000)}s`;
+        console.log(`   ✓ 落库 ${e.platform_video_key}：${e.segments} 段（这条用了 ${sec}）`);
+      }
+    },
+  });
 
   console.log(`robots：checked_at = ${robots.checked_at.toISOString()}，allowed = ${robots.allowed}`);
 

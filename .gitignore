@@ -13,6 +13,10 @@ build/
 .next/
 *.tsbuildinfo
 
+# Python 字节码（apps/api/tools/asr_transcribe.py 跑一次就生成）
+__pycache__/
+*.pyc
+
 # 日志
 *.log
 npm-debug.log*

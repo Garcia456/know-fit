@@ -14,6 +14,8 @@ export interface LocalAsrOptions {
   script?: string;
   model?: string;
   language?: string;
+  device?: string;
+  computeType?: string;
 }
 
 /**
@@ -25,14 +27,33 @@ export interface LocalAsrOptions {
  * CI 里跑的是同接口的替身（asr/fake.ts）。
  */
 export function createLocalAsrClient(opts: LocalAsrOptions = {}): AsrClient {
-  const python = opts.python ?? process.env.ASR_PYTHON ?? 'python';
-  const script = opts.script ?? process.env.ASR_SCRIPT ?? ASR_SCRIPT_PATH;
-  const model = opts.model ?? process.env.ASR_MODEL ?? 'small';
-  const language = opts.language ?? process.env.ASR_LANGUAGE ?? 'zh';
+  // 用 `||` 而不是 `??`：.env 里留空的可选值读出来是**空串**（不是 undefined），
+  // `??` 会把它当成有效值传下去（`--compute-type ''` 是个真的故障，不是回落到默认）。
+  const python = opts.python || process.env.ASR_PYTHON || 'python';
+  const script = opts.script || process.env.ASR_SCRIPT || ASR_SCRIPT_PATH;
+  const model = opts.model || process.env.ASR_MODEL || 'small';
+  const language = opts.language || process.env.ASR_LANGUAGE || 'zh';
+  // 默认仍是不折腾显卡的档；本机有卡就设 ASR_DEVICE=cuda（快一个量级，见 tools 里的注释）
+  const device = opts.device || process.env.ASR_DEVICE || 'cpu';
+  const computeType =
+    opts.computeType ||
+    process.env.ASR_COMPUTE_TYPE ||
+    (device === 'cuda' ? 'float16' : 'int8');
 
   return {
     async transcribe(audioPath: string) {
-      const args = [script, audioPath, '--model', model, '--language', language];
+      const args = [
+        script,
+        audioPath,
+        '--model',
+        model,
+        '--language',
+        language,
+        '--device',
+        device,
+        '--compute-type',
+        computeType,
+      ];
 
       const { stdout, stderr, code } = await new Promise<{
         stdout: string;
@@ -40,10 +61,11 @@ export function createLocalAsrClient(opts: LocalAsrOptions = {}): AsrClient {
         code: number | null;
       }>((resolve, reject) => {
         const child = spawn(python, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-        let out = '';
-        let err = '';
-        child.stdout.on('data', (c: Buffer) => (out += c.toString()));
-        child.stderr.on('data', (c: Buffer) => (err += c.toString()));
+        // 攒 Buffer、最后一次性解码 —— 逐块 toString 会在块边界切开多字节汉字（长音频必踩）
+        const outChunks: Buffer[] = [];
+        const errChunks: Buffer[] = [];
+        child.stdout.on('data', (c: Buffer) => outChunks.push(c));
+        child.stderr.on('data', (c: Buffer) => errChunks.push(c));
         child.on('error', (e) =>
           reject(
             new Error(
@@ -52,7 +74,13 @@ export function createLocalAsrClient(opts: LocalAsrOptions = {}): AsrClient {
             ),
           ),
         );
-        child.on('close', (c) => resolve({ stdout: out, stderr: err, code: c }));
+        child.on('close', (c) =>
+          resolve({
+            stdout: Buffer.concat(outChunks).toString('utf8'),
+            stderr: Buffer.concat(errChunks).toString('utf8'),
+            code: c,
+          }),
+        );
       });
 
       if (code !== 0) {

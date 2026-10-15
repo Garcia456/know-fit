@@ -19,3 +19,4 @@ export type { AsrClient } from '../kb/types.js';
 export { createFakeAsr } from './fake.js';
 export { createLocalAsrClient } from './local.js';
 export { normalizeTranscript, parseAsrOutput } from './parse.js';
+export { correctTerms, correctTranscript, TERM_FIXES } from './termMap.js';

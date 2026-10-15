@@ -25,7 +25,22 @@ import type {
 export interface IngestDeps {
   fetcher: Fetcher;
   asr: AsrClient;
+  /** 进度回调 —— 只为「终端上看得见它在动」而存在（CPU 转写一条要几分钟到几十分钟） */
+  onProgress?: (e: IngestProgress) => void;
 }
+
+/** 采集进度事件（可选，谁传谁打） */
+export type IngestProgress =
+  | {
+      stage: 'listed';
+      creator: string;
+      candidates: number;
+      picked: number;
+      /** 被**排除词**挡下的标题 —— 定义 §3.1 第 5 条要求真跑时能肉眼看有没有误杀 */
+      excluded: string[];
+    }
+  | { stage: 'transcribe'; platform_video_key: string; title: string; duration_sec: number | null }
+  | { stage: 'done'; platform_video_key: string; segments: number };
 
 const iso = (d: Date): string => d.toISOString();
 
@@ -48,14 +63,18 @@ export function selectCreatorVideos(
   maxItems: number,
   excludeTitleKeywords: string[] = [],
 ): VideoCandidate[] {
-  return candidates
-    .filter(
-      (c) =>
-        c.kind === 'video' &&
-        c.audio_url !== null &&
-        !excludeTitleKeywords.some((kw) => c.title.includes(kw)),
-    )
-    .slice(0, maxItems);
+  return candidates.filter((c) => candidateRejection(c, excludeTitleKeywords) === null).slice(0, maxItems);
+}
+
+/** 候选被刷掉的原因（`null` = 留下）。规则表就一份，选片与「挡下了哪几条」共用，不各写一遍。 */
+export function candidateRejection(
+  c: VideoCandidate,
+  excludeTitleKeywords: readonly string[],
+): 'kind' | 'no_audio' | 'keyword' | null {
+  if (c.kind !== 'video') return 'kind';
+  if (c.audio_url === null) return 'no_audio';
+  if (excludeTitleKeywords.some((kw) => c.title.includes(kw))) return 'keyword';
+  return null;
 }
 
 /** 一条已抓到的视频 → 转写 → 落库（两条路径共用，免得同一个 upsert 抄两遍） */
@@ -123,8 +142,20 @@ export async function ingestVideo(
 ): Promise<IngestedSource> {
   const video = assertWhitelisted(whitelist, key);
   const fetched = await deps.fetcher.fetch(video);
+  deps.onProgress?.({
+    stage: 'transcribe',
+    platform_video_key: fetched.platform_video_key,
+    title: fetched.title,
+    duration_sec: fetched.duration_sec,
+  });
   const transcript = await transcribeAndDrop(fetched.audio_path, deps);
-  return persist(fetched, video.topic_domain, transcript, robots);
+  const source = await persist(fetched, video.topic_domain, transcript, robots);
+  deps.onProgress?.({
+    stage: 'done',
+    platform_video_key: fetched.platform_video_key,
+    segments: transcript.segments.length,
+  });
+  return source;
 }
 
 /**
@@ -153,10 +184,26 @@ export async function ingestCreator(
     //    放到截断之前，总数会超过 `max_items`。
   ).filter((c) => !skipKeys.has(c.platform_video_key));
 
+  deps.onProgress?.({
+    stage: 'listed',
+    creator: creator.creator,
+    candidates: candidates.length,
+    picked: picked.length,
+    excluded: candidates
+      .filter((c) => candidateRejection(c, whitelist.exclude_title_keywords) === 'keyword')
+      .map((c) => c.title),
+  });
+
   const sources: IngestedSource[] = [];
   for (const c of picked) {
     // selectCreatorVideos 已保证 audio_url 在，这里只是收窄类型
     if (!c.audio_url) continue;
+    deps.onProgress?.({
+      stage: 'transcribe',
+      platform_video_key: c.platform_video_key,
+      title: c.title,
+      duration_sec: c.duration_sec,
+    });
     const audio_path = await deps.fetcher.downloadAudio(c.audio_url);
     const transcript = await transcribeAndDrop(audio_path, deps);
     sources.push(
@@ -176,6 +223,11 @@ export async function ingestCreator(
         robots,
       ),
     );
+    deps.onProgress?.({
+      stage: 'done',
+      platform_video_key: c.platform_video_key,
+      segments: transcript.segments.length,
+    });
   }
   return sources;
 }

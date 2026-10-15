@@ -46,6 +46,11 @@ describe('normalizeTranscript：归一三件事', () => {
       /一段不剩/,
     );
   });
+
+  it('归一也过同音纠错表 —— 两条转写路径都绕不过它', () => {
+    const out = normalizeTranscript(transcript([seg(0.4, 6.2, '练保加利亚敦的人越来越多')]));
+    expect(out.segments[0]!.text).toBe('练保加利亚蹲的人越来越多');
+  });
 });
 
 describe('parseAsrOutput：解析外部工具的 stdout', () => {

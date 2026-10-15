@@ -233,6 +233,18 @@ describe('ingestCreator：遍历一个白名单博主', () => {
     expect(Number(rows.rows[0].seg_count)).toBe(2);
   });
 
+  it('🔴 挡下的标题要如实报出来 —— 定义 §3.1 第 5 条靠它肉眼复查有没有误杀', async () => {
+    const listed: string[][] = [];
+    await ingestCreator(
+      FIXTURE_CREATOR_WHITELIST,
+      { ...deps(), onProgress: (e) => { if (e.stage === 'listed') listed.push(e.excluded); } },
+      FIXTURE_CREATORS[0]!.profile_url,
+      ROBOTS,
+    );
+    // 候选里只有 cand-5 命中词表（「宠粉福利 送手表」）—— 图文与无音频的不算「被排除词挡下」
+    expect(listed).toEqual([['宠粉福利 送手表']]);
+  });
+
   it('🔴 不在白名单的主页被拒 —— 且列表端根本没被碰过', async () => {
     let touched = false;
     const spy: Fetcher = {

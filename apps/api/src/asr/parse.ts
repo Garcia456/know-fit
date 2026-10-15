@@ -1,17 +1,22 @@
 import { TranscriptSchema, type Transcript, type TranscriptSegment } from '../kb/types.js';
+import { correctTranscript } from './termMap.js';
 
 /**
  * ASR 产出的解析与归一。
  *
- * 归一三件事，每一件都对应一种真实会遇到的脏数据：
+ * 归一四件事，每一件都对应一种真实会遇到的脏数据：
  *   1. **丢掉空段** —— 模型常在停顿处吐 `text: ''` 的段，留着它会把
  *      「转写分了几段」这个数字撑大，也会让 dev-004b 切出空切片；
  *   2. **按起点排序** —— 有些实现的分段不是有序的，切片前必须有序；
- *   3. **起点不能晚于终点** —— 这种段是坏的，直接抛，**别往下游传**。
+ *   3. **起点不能晚于终点** —— 这种段是坏的，直接抛，**别往下游传**；
+ *   4. **同音纠错** —— 模型听错的健身术语按确定性表改回（见 `termMap.ts`）。
  *
  * 🔴 另外一条硬判据：归一后**一段不剩就是失败**。
  *    「听不出任何内容」最常见的两个原因是取错音轨（转成了背景音乐）和模型没加载起来 ——
  *    两者都会安静地产出一条空知识源，而那正是最坏的结果。
+ *
+ * 🔴 纠错放在这里而不是各实现里：**替身与真实实现共用这一段**，
+ *    谁都不会漏过它（两条转写路径都最终走到 `normalizeTranscript`）。
  */
 
 /** ASR 工具吐出来的一段 —— 字段名按 whisper 的习惯来 */
@@ -57,7 +62,7 @@ export function normalizeTranscript(input: Transcript): Transcript {
         '这条不能入库：空知识源比没有更糟。',
     );
   }
-  return { language: input.language, segments };
+  return correctTranscript({ language: input.language, segments });
 }
 
 /** 解析 ASR 工具的 stdout。失败信息里带上原文开头 —— 否则这类错无法从现场定位 */
