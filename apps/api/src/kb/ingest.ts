@@ -20,7 +20,7 @@ import { createFakeFetcher } from './fake.js';
 import { createDouyinFetcher } from './douyin.js';
 import { ingestAll } from './pipeline.js';
 import { FIXTURE_WHITELIST } from './fixtures.js';
-import { loadWhitelist, WHITELIST_PATH } from './whitelist.js';
+import { loadWhitelist, isWhitelistEmpty, WHITELIST_PATH } from './whitelist.js';
 import type { AsrClient, Fetcher } from './types.js';
 
 const provider = process.env.KB_PROVIDER ?? 'fake';
@@ -30,8 +30,8 @@ if (provider !== 'fake' && provider !== 'real') {
 }
 
 const whitelist = provider === 'real' ? loadWhitelist() : FIXTURE_WHITELIST;
-if (whitelist.videos.length === 0) {
-  console.error(`白名单是空的（${WHITELIST_PATH}）—— 先把你选定的视频填进去。`);
+if (isWhitelistEmpty(whitelist)) {
+  console.error(`白名单是空的（${WHITELIST_PATH}）—— 先把你选定的博主主页或视频填进去。`);
   process.exit(1);
 }
 
@@ -39,7 +39,10 @@ const fetcher: Fetcher = provider === 'real' ? createDouyinFetcher() : createFak
 // ASR 由 ASR_PROVIDER 单独定 —— 「抓真实音频 + 走替身转写」是合法的组合（只验抓的那半）
 const asr: AsrClient = createAsrClient();
 
-console.log(`\n=== know-fit 知识库采集（provider = ${provider}）===\n`);
+console.log(`\n=== know-fit 知识库采集（provider = ${provider}）===`);
+console.log(
+  `白名单：博主 ${whitelist.creators.length} 个（各取近 max_items 条）+ 钉住视频 ${whitelist.videos.length} 条\n`,
+);
 
 let failed = false;
 try {

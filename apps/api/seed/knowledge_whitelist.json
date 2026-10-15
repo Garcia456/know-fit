@@ -1,5 +1,34 @@
 {
   "$schema_version": "1",
-  "_说明": "采集只认这份清单 —— 没有「发现」这个动作。格式：videos[].platform_video_key / creator / title / original_url / topic_domain。topic_domain 是这条视频归的知识域（例：训练动作 / 训练量 / 饮食）。填完跑 pnpm kb:smoke 复核转写是不是口播。",
-  "videos": []
+  "_说明": "采集只认这份清单 —— 没有「发现」这个动作。creators = 白名单博主（代码遍历其近 max_items 条作品，按 kind==video 过滤后客户端截断）；videos = 钉住某几条（遍历拿不到的，用它兜底，且它不查下面的排除词）。exclude_title_keywords = 标题里命中就跳过（挡推广片用：列表项没有「这是广告」这个字段，只能拿标题猜 —— 会误伤，词表请按你自己的判断维护）。字段：creators[].profile_url / creator / topic_domain / max_items；videos[].platform_video_key / creator / title / original_url / topic_domain。topic_domain 是归的知识域（例：训练动作 / 训练量 / 饮食）。填完跑 pnpm kb:smoke 复核转写是不是口播。",
+  "exclude_title_keywords": ["宠粉", "福利", "好物", "抽奖", "商务", "广告"],
+  "creators": [
+    {
+      "creator": "谭成义",
+      "profile_url": "https://www.douyin.com/user/MS4wLjABAAAArfpAmbNNdODGpzfznrZAXrt2JgCGFWxE25eFkQDGXOY",
+      "topic_domain": "健身",
+      "max_items": 10
+    },
+    {
+      "creator": "凯圣王",
+      "profile_url": "https://www.douyin.com/user/MS4wLjABAAAAjnKGbRiPmA8tqEn8WAWSqr89M7HQhpxsJdXdgM6bebf2c9pxX4GRBWG9I6GmppEA",
+      "topic_domain": "健身",
+      "max_items": 10
+    },
+    {
+      "creator": "大海运动表现",
+      "profile_url": "https://www.douyin.com/user/MS4wLjABAAAAYbFZYe20twERej7pDElXXHr-NK4GdpIY4bW0pZcX6lmr3RhsdxXdV6bccUniYbdu",
+      "topic_domain": "运动表现",
+      "max_items": 10
+    }
+  ],
+  "videos": [
+    {
+      "platform_video_key": "dy-0001",
+      "creator": "谭成义",
+      "title": "背部训练思路",
+      "original_url": "https://www.douyin.com/video/7696330468475857893",
+      "topic_domain": "训练动作"
+    }
+  ]
 }

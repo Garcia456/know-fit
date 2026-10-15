@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { assertWhitelisted, loadWhitelist, parseWhitelist } from './whitelist.js';
+import {
+  assertWhitelisted,
+  assertWhitelistedCreator,
+  loadWhitelist,
+  parseWhitelist,
+} from './whitelist.js';
 
 /**
  * 白名单 —— 采集的**唯一准入判定**。
  *
  * 「不在白名单的视频被拒」是这个模块存在的全部理由：采集只认显式清单，
  * 没有「发现」这个动作。没有这条，采集模块迟早长成爬虫。
+ *
+ * 博主那一层同理：入口只认清单里那几条主页，**不认「任意主页」**。
  */
 
 const VIDEO = {
@@ -16,7 +23,19 @@ const VIDEO = {
   topic_domain: '训练动作',
 };
 
+const CREATOR = {
+  creator: '某博主',
+  profile_url: 'https://www.douyin.com/user/xxxx',
+  topic_domain: '训练动作',
+  max_items: 5,
+};
+
 const wrap = (videos: unknown[]) => ({ $schema_version: '1', videos });
+const wrapCreators = (creators: unknown[], videos: unknown[] = []) => ({
+  $schema_version: '1',
+  creators,
+  videos,
+});
 
 describe('parseWhitelist：结构校验', () => {
   it('一条合法清单原样通过', () => {
@@ -56,11 +75,73 @@ describe('assertWhitelisted：唯一的准入入口', () => {
   });
 });
 
+describe('parseWhitelist：博主那一层', () => {
+  it('一条合法博主通过，字段就是遍历要用的', () => {
+    const wl = parseWhitelist(wrapCreators([CREATOR]));
+    expect(wl.creators).toHaveLength(1);
+    expect(wl.creators[0]).toMatchObject({ profile_url: CREATOR.profile_url, max_items: 5 });
+  });
+
+  it('max_items 不填 → 默认 10（近 N 条的上限，不是硬限）', () => {
+    const noMax = {
+      creator: CREATOR.creator,
+      profile_url: CREATOR.profile_url,
+      topic_domain: CREATOR.topic_domain,
+    };
+    expect(parseWhitelist(wrapCreators([noMax])).creators[0]!.max_items).toBe(10);
+  });
+
+  it('缺 profile_url 的博主被拒（遍历唯一要用的东西）', () => {
+    const broken = { ...CREATOR, profile_url: undefined };
+    expect(() => parseWhitelist(wrapCreators([broken]))).toThrow();
+  });
+
+  it('🔴 重复的 profile_url 被拒 —— 同一个博主的作品会被采两遍', () => {
+    expect(() => parseWhitelist(wrapCreators([CREATOR, { ...CREATOR }]))).toThrow(/重复/);
+  });
+
+  it('只填博主、videos 不填 → videos 是空数组，不是 undefined', () => {
+    const wl = parseWhitelist({ $schema_version: '1', creators: [CREATOR] });
+    expect(wl.videos).toEqual([]);
+  });
+
+  it('排除词不填 → 空数组（= 不过滤，不是「默认挡点什么」）', () => {
+    expect(parseWhitelist(wrapCreators([CREATOR])).exclude_title_keywords).toEqual([]);
+  });
+
+  it('空字符串的排除词被拒 —— 空串会「包含」一切，等于把整批全挡掉', () => {
+    expect(() =>
+      parseWhitelist({ $schema_version: '1', exclude_title_keywords: [''] }),
+    ).toThrow();
+  });
+});
+
+describe('assertWhitelistedCreator：遍历的准入入口', () => {
+  it('在清单里 → 返回那条博主', () => {
+    const hit = assertWhitelistedCreator(parseWhitelist(wrapCreators([CREATOR])), CREATOR.profile_url);
+    expect(hit).toMatchObject({ creator: '某博主', topic_domain: '训练动作' });
+  });
+
+  it('🔴 不在清单里的主页 → 抛，且说清「不顺着推荐 / 搜索 / 别人的主页走」', () => {
+    expect(() =>
+      assertWhitelistedCreator(parseWhitelist(wrapCreators([CREATOR])), 'https://www.douyin.com/user/别的'),
+    ).toThrow(/不在白名单里/);
+  });
+
+  it('只填了视频、没填博主 → 任何主页都拒（视频比不了主页）', () => {
+    expect(() =>
+      assertWhitelistedCreator(parseWhitelist(wrap([VIDEO])), CREATOR.profile_url),
+    ).toThrow(/不在白名单里/);
+  });
+});
+
 describe('loadWhitelist：仓库里那份真文件能被读出来', () => {
-  it('seed/knowledge_whitelist.json 结构合法（v1 发出去时 videos 是空的）', () => {
+  it('seed/knowledge_whitelist.json 结构合法（博主与视频两半都在）', () => {
     // 这条盯的是「文件本身没被手改坏」—— 采集真跑前的第一道自检
     const wl = loadWhitelist();
     expect(Array.isArray(wl.videos)).toBe(true);
+    expect(Array.isArray(wl.creators)).toBe(true);
+    expect(Array.isArray(wl.exclude_title_keywords)).toBe(true);
     expect(wl.$schema_version).toBe('1');
   });
 });

@@ -1,4 +1,4 @@
-import { FIXTURE_ROBOTS_CHECKED_AT, fixtureFetched } from './fixtures.js';
+import { FIXTURE_ROBOTS_CHECKED_AT, fixtureCandidates, fixtureFetched } from './fixtures.js';
 import type { Fetcher } from './types.js';
 
 /**
@@ -11,6 +11,16 @@ export function createFakeFetcher(): Fetcher {
   return {
     async fetch(video) {
       return fixtureFetched(video);
+    },
+
+    async listCreatorVideos(creator) {
+      return fixtureCandidates(creator);
+    },
+
+    async downloadAudio(audioUrl) {
+      // 不下载：路径由 URL 派生，保证确定性
+      const name = audioUrl.slice(audioUrl.lastIndexOf('/') + 1) || 'audio';
+      return `/tmp/knowfit-${name}`;
     },
 
     async checkRobots() {

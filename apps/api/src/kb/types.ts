@@ -33,9 +33,34 @@ export const WhitelistVideoSchema = z.object({
 });
 export type WhitelistVideo = z.infer<typeof WhitelistVideoSchema>;
 
+/**
+ * 白名单里的一个博主 —— 采集的**遍历入口**。
+ *
+ * 授权单位是**主页**（不是「任意主页」）：代码只遍历白名单里这几条，
+ * 不碰推荐流 / 搜索词 / 白名单外的博主。`profile_url` 直接交给解析服务，
+ * 它自己解 `sec_uid` —— 本模块不自己解析博主标识。
+ */
+export const CreatorSchema = z.object({
+  creator: z.string().min(1),
+  profile_url: z.string().min(1),
+  topic_domain: z.string().min(1),
+  /** 近 N 条的**上限**（平台返回条数不受控，截断在管线里做） */
+  max_items: z.number().int().positive().max(50).default(10),
+});
+export type Creator = z.infer<typeof CreatorSchema>;
+
 export const WhitelistSchema = z.object({
   $schema_version: z.string(),
-  videos: z.array(WhitelistVideoSchema),
+  creators: z.array(CreatorSchema).default([]),
+  videos: z.array(WhitelistVideoSchema).default([]),
+  /**
+   * 标题命中就把这条跳过 —— 用来挡推广片。
+   *
+   * ⚠️ 列表项里**没有「这是广告」这个字段**，只能靠标题里的字样猜，所以这是**启发式**：
+   *    词表**由作者维护**（放白名单文件里，改它不用动代码），且**会误伤** ——
+   *    正常视频也可能写「送大家一个动作细节」。守不住宁可漏一条，也不要误杀。
+   */
+  exclude_title_keywords: z.array(z.string().min(1)).default([]),
 });
 export type Whitelist = z.infer<typeof WhitelistSchema>;
 
@@ -52,6 +77,25 @@ export interface FetchedVideo {
   audio_path: string;
 }
 
+/**
+ * 遍历回来的一条候选 —— **只有元数据，音频还没下**。
+ * 先过规则（类型 / 标题 / 截断）再下音频，否则会给马上要丢掉的条目白下一遍。
+ */
+export interface VideoCandidate {
+  /** 遍历路径没有作者手填的标签，用平台的内容 id 当键 */
+  platform_video_key: string;
+  video_id: string;
+  creator: string;
+  title: string;
+  original_url: string;
+  duration_sec: number | null;
+  published_at: string | null;
+  /** 平台给的条目类型 —— 只有 `video` 才往下走（图文没有口播，只有 BGM） */
+  kind: string;
+  /** 音频 URL；拿不到就是 null —— 该条不可用 */
+  audio_url: string | null;
+}
+
 /** robots.txt 检查留痕。`allowed = null` 表示**检查过但结论不适用**。 */
 export interface RobotsCheck {
   checked_at: Date;
@@ -65,7 +109,12 @@ export interface RobotsCheck {
  * 管线若把解析写死在这里，CI 就只能跳过整条链路 —— 那等于「长在 CI 外的东西」。
  */
 export interface Fetcher {
+  /** 钉住的视频 —— 一条直达，不经遍历 */
   fetch(video: WhitelistVideo): Promise<FetchedVideo>;
+  /** 遍历一个白名单博主的作品列表 —— **只取元数据，不下音频** */
+  listCreatorVideos(creator: Creator): Promise<VideoCandidate[]>;
+  /** 把一条音频 URL 落成本地文件 */
+  downloadAudio(audioUrl: string): Promise<string>;
   checkRobots(): Promise<RobotsCheck>;
   /** 音频用完了 —— 真实实现删临时文件；替身空转 */
   discardAudio(path: string): Promise<void>;

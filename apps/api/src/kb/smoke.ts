@@ -17,16 +17,19 @@ import { loadTranscript } from '../services/knowledge.js';
 import { closeDb } from '../services/pool.js';
 import { createDouyinFetcher } from './douyin.js';
 import { ingestAll } from './pipeline.js';
-import { loadWhitelist, WHITELIST_PATH } from './whitelist.js';
+import { loadWhitelist, isWhitelistEmpty, WHITELIST_PATH } from './whitelist.js';
 
 const whitelist = loadWhitelist();
-if (whitelist.videos.length === 0) {
-  console.error(`白名单是空的（${WHITELIST_PATH}）—— 先把你选定的视频填进去。`);
+if (isWhitelistEmpty(whitelist)) {
+  console.error(`白名单是空的（${WHITELIST_PATH}）—— 先把你选定的博主主页或视频填进去。`);
   process.exit(1);
 }
 
 console.log('\n=== know-fit 本地真实采集转写 ===');
-console.log(`白名单 ${whitelist.videos.length} 条；先确认解析服务起着、本机装好了 faster-whisper。\n`);
+console.log(
+  `白名单：博主 ${whitelist.creators.length} 个 + 钉住视频 ${whitelist.videos.length} 条；` +
+    `先确认解析服务起着、本机装好了 faster-whisper。\n`,
+);
 
 let failed = false;
 try {

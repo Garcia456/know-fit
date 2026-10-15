@@ -3,8 +3,13 @@ import { createFakeAsr } from '../asr/fake.js';
 import { closeDb, getPool } from '../services/pool.js';
 import { retireSource } from '../services/knowledge.js';
 import { createFakeFetcher } from './fake.js';
-import { FIXTURE_WHITELIST } from './fixtures.js';
-import { ingestAll, ingestVideo } from './pipeline.js';
+import {
+  FIXTURE_CREATOR_WHITELIST,
+  FIXTURE_CREATORS,
+  FIXTURE_WHITELIST,
+  fixtureCandidates,
+} from './fixtures.js';
+import { ingestAll, ingestCreator, ingestVideo, selectCreatorVideos } from './pipeline.js';
 import type { Fetcher, RobotsCheck } from './types.js';
 
 /**
@@ -123,6 +128,14 @@ describe('ingestVideo：准入判定在最前面', () => {
         touched = true;
         throw new Error('不该走到解析这一步');
       },
+      async listCreatorVideos() {
+        touched = true;
+        throw new Error('不该走到遍历这一步');
+      },
+      async downloadAudio() {
+        touched = true;
+        throw new Error('不该走到下载这一步');
+      },
       checkRobots: () => createFakeFetcher().checkRobots(),
       discardAudio: async () => {},
     };
@@ -132,6 +145,163 @@ describe('ingestVideo：准入判定在最前面', () => {
     ).rejects.toThrow(/不在白名单里/);
     // 先抓再判 = 「先碰了内容再决定要不要碰」，那正是长成爬虫的第一步
     expect(touched).toBe(false);
+  });
+});
+
+describe('selectCreatorVideos：四条规则，且顺序不能反', () => {
+  const candidates = fixtureCandidates(FIXTURE_CREATORS[0]!);
+  const KW = FIXTURE_CREATOR_WHITELIST.exclude_title_keywords;
+  const keys = (cs: { platform_video_key: string }[]) => cs.map((c) => c.platform_video_key);
+
+  it('替代样本本身长成预期的样子（0 图文 / 2 无音频 / 5 推广片 / 其余可采）', () => {
+    expect(keys(candidates)).toEqual([
+      'fixture-cand-0',
+      'fixture-cand-1',
+      'fixture-cand-2',
+      'fixture-cand-3',
+      'fixture-cand-4',
+      'fixture-cand-5',
+    ]);
+  });
+
+  it('🔴 先过滤再截断：被过滤的条目**不占** max_items 的名额', () => {
+    // 第 0 条是图文（有 BGM）、第 2 条没音频；先截断的话 max_items=2 只会剩 cand-0/cand-1 → 采到 1 条
+    expect(keys(selectCreatorVideos(candidates, 2, KW))).toEqual(['fixture-cand-1', 'fixture-cand-3']);
+  });
+
+  it('kind != video 的条目被滤掉（图文的 BGM 不是口播）', () => {
+    expect(keys(selectCreatorVideos(candidates, 99, KW))).not.toContain('fixture-cand-0');
+  });
+
+  it('没有 audio_url 的条目被滤掉', () => {
+    expect(keys(selectCreatorVideos(candidates, 99, KW))).not.toContain('fixture-cand-2');
+  });
+
+  it('🔴 标题命中排除词的条目被滤掉（推广片）', () => {
+    expect(keys(selectCreatorVideos(candidates, 99, KW))).not.toContain('fixture-cand-5');
+    // 不给词表就挡不住 —— 这条同时证明「拦的是词表，不是别的什么」
+    expect(keys(selectCreatorVideos(candidates, 99, []))).toContain('fixture-cand-5');
+  });
+
+  it('排除词是「包含」判定，不是全等（推广片的标题往往更长）', () => {
+    const kw = ['宠粉'];
+    expect(keys(selectCreatorVideos(candidates, 99, kw))).not.toContain('fixture-cand-5');
+  });
+
+  it('max_items 是上限，不放大', () => {
+    expect(selectCreatorVideos(candidates, 99, KW)).toHaveLength(3);
+    expect(selectCreatorVideos(candidates, 1, KW)).toHaveLength(1);
+    expect(selectCreatorVideos(candidates, 0, KW)).toHaveLength(0);
+  });
+
+  it('空候选 → 空结果（新博主还没发视频，不是错误）', () => {
+    expect(selectCreatorVideos([], 10, KW)).toEqual([]);
+  });
+});
+
+describe('ingestCreator：遍历一个白名单博主', () => {
+  it('采回的条数 = 过规则后截到 max_items，落库字段齐全', async () => {
+    const sources = await ingestCreator(
+      FIXTURE_CREATOR_WHITELIST,
+      deps(),
+      FIXTURE_CREATORS[0]!.profile_url,
+      ROBOTS,
+    );
+    // max_items = 2 且候选里有两条不可采 → 正好 cand-1 / cand-3
+    expect(sources.map((s) => s.platform_video_key)).toEqual([
+      'fixture-cand-1',
+      'fixture-cand-3',
+    ]);
+    for (const s of sources) {
+      expect(s.platform).toBe('douyin');
+      expect(s.topic_domain).toBe('训练动作');
+      expect(s.subtitle_source).toBe('asr');
+      expect(s.is_indexable).toBe(true);
+      expect(s.segment_count).toBe(2);
+    }
+
+    const rows = await getPool().query(
+      `SELECT platform_video_key, topic_domain, jsonb_array_length(transcript_segments) AS seg_count
+         FROM knowledge_source WHERE platform_video_key LIKE 'fixture-cand-%'
+        ORDER BY platform_video_key`,
+    );
+    expect(rows.rowCount).toBe(2);
+    expect(rows.rows.map((r) => r.platform_video_key)).toEqual([
+      'fixture-cand-1',
+      'fixture-cand-3',
+    ]);
+    expect(Number(rows.rows[0].seg_count)).toBe(2);
+  });
+
+  it('🔴 不在白名单的主页被拒 —— 且列表端根本没被碰过', async () => {
+    let touched = false;
+    const spy: Fetcher = {
+      async fetch() {
+        throw new Error('不该走到解析这一步');
+      },
+      async listCreatorVideos() {
+        touched = true;
+        throw new Error('不该走到遍历这一步');
+      },
+      async downloadAudio() {
+        throw new Error('不该走到下载这一步');
+      },
+      checkRobots: () => createFakeFetcher().checkRobots(),
+      discardAudio: async () => {},
+    };
+
+    await expect(
+      ingestCreator(
+        FIXTURE_CREATOR_WHITELIST,
+        { fetcher: spy, asr: createFakeAsr() },
+        'https://www.douyin.com/user/别的主页',
+        ROBOTS,
+      ),
+    ).rejects.toThrow(/不在白名单里/);
+    expect(touched).toBe(false);
+  });
+
+  it('ingestAll 先遍历博主、再采钉住的视频（两半相加）', async () => {
+    const { sources } = await ingestAll({
+      $schema_version: '1',
+      creators: FIXTURE_CREATORS,
+      videos: [FIXTURE_WHITELIST.videos[0]!],
+      exclude_title_keywords: FIXTURE_CREATOR_WHITELIST.exclude_title_keywords,
+    }, deps());
+    expect(sources.map((s) => s.platform_video_key)).toEqual([
+      'fixture-cand-1',
+      'fixture-cand-3',
+      'fixture-0001',
+    ]);
+  });
+
+  it('🔴 去重：同一条既在遍历结果里、又被钉住 → 只采一次，**钉住的赢**', async () => {
+    // 遍历本会取到 cand-1；把它同时钉住 —— 若不去重，它会下两次音频、转写两次
+    const { sources } = await ingestAll(
+      {
+        $schema_version: '1',
+        creators: FIXTURE_CREATORS,
+        videos: [
+          {
+            platform_video_key: 'fixture-cand-1',
+            creator: '替身博主甲',
+            title: '钉住的替身候选',
+            original_url: 'https://www.douyin.com/video/fixture-cand-1',
+            topic_domain: '钉住域',
+          },
+        ],
+        exclude_title_keywords: FIXTURE_CREATOR_WHITELIST.exclude_title_keywords,
+      },
+      deps(),
+    );
+    expect(sources.map((s) => s.platform_video_key)).toEqual(['fixture-cand-3', 'fixture-cand-1']);
+    // 钉住的那条带自己的 topic_domain → 库里该是「钉住域」，不是遍历那半的「训练动作」
+    const rows = await getPool().query(
+      'SELECT topic_domain FROM knowledge_source WHERE platform_video_key = $1',
+      ['fixture-cand-1'],
+    );
+    expect(rows.rowCount).toBe(1);
+    expect(rows.rows[0].topic_domain).toBe('钉住域');
   });
 });
 
