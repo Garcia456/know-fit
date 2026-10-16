@@ -46,7 +46,7 @@ console.log(
 
 let failed = false;
 try {
-  const { robots, sources } = await ingestAll(whitelist, { fetcher, asr });
+  const { robots, sources, skipped } = await ingestAll(whitelist, { fetcher, asr });
 
   console.log(`robots 检查：checked_at = ${robots.checked_at.toISOString()}`);
   console.log(`  结论 allowed = ${robots.allowed === null ? 'null（检查过，结论不适用）' : robots.allowed}`);
@@ -57,6 +57,13 @@ try {
       `  ✓ ${s.platform_video_key}  「${s.title}」  转写 ${s.segment_count} 段` +
         `  subtitle_source=${s.subtitle_source}  fetched_at=${s.fetched_at}`,
     );
+  }
+
+  // 🔴 跳过即「采集不完整」→ 退出码非零（ADR-033 决定②），否则这条会被静默吞掉
+  if (skipped.length > 0) {
+    console.error(`\n⛔ 跳过 ${skipped.length} 条（空转写 / 配乐片 —— 不许入库）：`);
+    for (const s of skipped) console.error(`   ${s.platform_video_key}「${s.title}」：${s.reason}`);
+    failed = true;
   }
 
   const retireKey = process.env.KB_RETIRE;

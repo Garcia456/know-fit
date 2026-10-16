@@ -1,10 +1,12 @@
 import { upsertSource } from '../services/knowledge.js';
 import { assertWhitelisted, assertWhitelistedCreator } from './whitelist.js';
+import { EmptyTranscriptError } from './types.js';
 import type { IngestedSource } from '../contracts/knowledge.js';
 import type {
   AsrClient,
   Fetcher,
   FetchedVideo,
+  IngestSkip,
   RobotsCheck,
   Transcript,
   VideoCandidate,
@@ -38,25 +40,29 @@ export type IngestProgress =
       picked: number;
       /** 被**排除词**挡下的标题 —— 定义 §3.1 第 5 条要求真跑时能肉眼看有没有误杀 */
       excluded: string[];
+      /** 被**原声判定**（规则 ④）挡下的标题 —— 同上，这是预期内的剔除，看一眼有没有误杀真原声 */
+      music_excluded: string[];
     }
   | { stage: 'transcribe'; platform_video_key: string; title: string; duration_sec: number | null }
-  | { stage: 'done'; platform_video_key: string; segments: number };
+  | { stage: 'done'; platform_video_key: string; segments: number }
+  | { stage: 'skipped'; platform_video_key: string; title: string; reason: string };
 
 const iso = (d: Date): string => d.toISOString();
 
 /**
  * 遍历回来的候选 → 真正要采的那几条。**纯函数**，规则可单独测。
  *
- * 四条规则都来自一手实测（见定义 §一 1.2 的规则表）：
+ * 五条规则都来自一手实测（见定义 §一 1.2 的规则表）：
  *  ① **类型必须是 `video`** —— 图文的 `music.play_url` 是 BGM，转出来是歌词而不是口播；
  *  ② **音频 URL 得在** —— 解析不到就没什么可转的；
  *  ③ **标题不含排除词** —— 列表项里没有「这是广告」这个字段，只能拿标题猜（**启发式，会误伤**）；
- *  ④ **截断到 `max_items`** —— 服务端的 `count` 只是提示（实测要 5 回来 8、要 10 回来 13），截断只能在客户端做。
+ *  ④ **音频必须是「原声」** —— 博主挂授权配乐时 `music.play_url` 指的是**那首歌**（ADR-033）；
+ *  ⑤ **截断到 `max_items`** —— 服务端的 `count` 只是提示（实测要 5 回来 8、要 10 回来 13），截断只能在客户端做。
  *
  * ⚠️ 顺序是「**先过滤再截断**」：反过来的话，被过滤掉的条目会白占一个名额，
  *    拿到的条数就比 `max_items` 少 —— 那是个很难被发现的静默短缺。
- * ⚠️ 排除词只在这条路径上生效 —— **钉住的视频不查词**：那是作者显式点名的，
- *    他想采就采，代码不替他判断。
+ * ⚠️ 排除词与原声判定只在这条路径上生效 —— **钉住的视频不查**：那是作者显式点名的，
+ *    他想采就采，代码不替他判断；钉住的真是配乐片，由「空转写跳过」接住。
  */
 export function selectCreatorVideos(
   candidates: VideoCandidate[],
@@ -70,11 +76,38 @@ export function selectCreatorVideos(
 export function candidateRejection(
   c: VideoCandidate,
   excludeTitleKeywords: readonly string[],
-): 'kind' | 'no_audio' | 'keyword' | null {
+): 'kind' | 'no_audio' | 'keyword' | 'music' | null {
   if (c.kind !== 'video') return 'kind';
   if (c.audio_url === null) return 'no_audio';
   if (excludeTitleKeywords.some((kw) => c.title.includes(kw))) return 'keyword';
+  if (!isOriginalSound(c)) return 'music';
   return null;
+}
+
+/** 抖音给「原声」打的来源标签 —— 实测原声片一律长这样（`@谭成义创作的原声`） */
+const ORIGINAL_SOUND_MARK = '创作的原声';
+
+/** 音轨时长与视频时长的**比值容差** —— 平台把 `music.duration_ms` 取整到秒，短片上这点误差占得更多 */
+const DURATION_RATIO_MIN = 0.99;
+const DURATION_RATIO_MAX = 1.01;
+
+/**
+ * 这条的音频是不是**视频自己的音轨**（而不是博主挂的授权配乐）。
+ *
+ * 🔴 **两个信号取 AND，不取或**：
+ *    ① `music.title` 含「创作的原声」—— 抖音标的来源文案，**直接但会漂移**；
+ *    ② `music.duration_ms / duration_ms` 落在 0.99–1.01 —— 原声按视频截断，两者同长；是它的**代理**。
+ *
+ * ⚠️ **宁可留一条配乐片，不误杀一条真原声**：配乐片后面还有「空转写跳过」兜着，
+ *    而误杀是真丢内容。所以缺任一信号就判**不是**原声 —— 这就是「缺一即跳」的口径。
+ * ⚠️ 已知敞口：**很短的视频**（<50s）上，平台把配乐时长取整到秒的误差会挤进容差。
+ */
+export function isOriginalSound(c: VideoCandidate): boolean {
+  if (!c.music_title || !c.music_title.includes(ORIGINAL_SOUND_MARK)) return false;
+  if (c.duration_ms === null || c.music_duration_ms === null) return false;
+  if (c.duration_ms <= 0) return false;
+  const ratio = c.music_duration_ms / c.duration_ms;
+  return ratio >= DURATION_RATIO_MIN && ratio <= DURATION_RATIO_MAX;
 }
 
 /** 一条已抓到的视频 → 转写 → 落库（两条路径共用，免得同一个 upsert 抄两遍） */
@@ -124,10 +157,28 @@ async function persist(
   };
 }
 
-/** 抓一条音频、转写、删音频 —— 三条路径共用的那一段 */
-async function transcribeAndDrop(audioPath: string, deps: IngestDeps): Promise<Transcript> {
+/**
+ * 抓一条音频、转写、删音频 —— 三条路径共用的那一段。
+ *
+ * 🔴 **空转写在这里被拦住并转成「跳过」**（ADR-033 决定②）：
+ *    空源仍不许入库（空知识源比没有更糟），但**不许抛穿整批** ——
+ *    配乐片 / 纯图片 / 模型空转都是**单条的正常坏法**，一次坏片不该让后面几条根本没机会跑。
+ *    ⚠️ 只接 `EmptyTranscriptError`：**ASR 进程挂了是另一回事**（系统性问题），必须抛穿。
+ * ⚠️ 音频照旧在 `finally` 里删 —— **跳过的那条也不留音频**。
+ */
+async function transcribeAndDrop(
+  audioPath: string,
+  deps: IngestDeps,
+  ref: { platform_video_key: string; title: string },
+): Promise<Transcript | null> {
   try {
     return await deps.asr.transcribe(audioPath);
+  } catch (e) {
+    if (e instanceof EmptyTranscriptError) {
+      deps.onProgress?.({ stage: 'skipped', ...ref, reason: e.message });
+      return null;
+    }
+    throw e;
   } finally {
     await deps.fetcher.discardAudio(audioPath);
   }
@@ -139,7 +190,7 @@ export async function ingestVideo(
   deps: IngestDeps,
   key: string,
   robots: RobotsCheck,
-): Promise<IngestedSource> {
+): Promise<IngestedSource | null> {
   const video = assertWhitelisted(whitelist, key);
   const fetched = await deps.fetcher.fetch(video);
   deps.onProgress?.({
@@ -148,7 +199,11 @@ export async function ingestVideo(
     title: fetched.title,
     duration_sec: fetched.duration_sec,
   });
-  const transcript = await transcribeAndDrop(fetched.audio_path, deps);
+  const transcript = await transcribeAndDrop(fetched.audio_path, deps, {
+    platform_video_key: fetched.platform_video_key,
+    title: fetched.title,
+  });
+  if (transcript === null) return null;
   const source = await persist(fetched, video.topic_domain, transcript, robots);
   deps.onProgress?.({
     stage: 'done',
@@ -192,6 +247,9 @@ export async function ingestCreator(
     excluded: candidates
       .filter((c) => candidateRejection(c, whitelist.exclude_title_keywords) === 'keyword')
       .map((c) => c.title),
+    music_excluded: candidates
+      .filter((c) => candidateRejection(c, whitelist.exclude_title_keywords) === 'music')
+      .map((c) => c.title),
   });
 
   const sources: IngestedSource[] = [];
@@ -205,7 +263,11 @@ export async function ingestCreator(
       duration_sec: c.duration_sec,
     });
     const audio_path = await deps.fetcher.downloadAudio(c.audio_url);
-    const transcript = await transcribeAndDrop(audio_path, deps);
+    const transcript = await transcribeAndDrop(audio_path, deps, {
+      platform_video_key: c.platform_video_key,
+      title: c.title,
+    });
+    if (transcript === null) continue;
     sources.push(
       await persist(
         {
@@ -242,20 +304,39 @@ export async function ingestCreator(
  *    遍历时跳过 `videos` 里的键（那条作者显式点名、带自己的 `topic_domain`，以它为准）；
  *    博主之间也会撞（同一条被两个博主转发）→ 用 `seen` 兜住。
  *    不去重的话，同一条会被下两次音频、转写两次，且后落的那次把前一次的 `topic_domain` 覆盖掉。
+ *
+ * 🔴 `skipped` 一并返回（ADR-033 决定②）：**跳过即「采集不完整」** ——
+ *    调用方据此让**退出码非零**。不返回它的话，「跳过一条」与「本来就没这条」
+ *    在退出码上长得一模一样（静默短缺）。它从 `onProgress` 里转手收集，不另开一条回调。
  */
 export async function ingestAll(
   whitelist: Whitelist,
   deps: IngestDeps,
   keys?: string[],
-): Promise<{ robots: RobotsCheck; sources: IngestedSource[] }> {
+): Promise<{ robots: RobotsCheck; sources: IngestedSource[]; skipped: IngestSkip[] }> {
   const robots = await deps.fetcher.checkRobots();
+
+  const skipped: IngestSkip[] = [];
+  const inner: IngestDeps = {
+    ...deps,
+    onProgress: (e) => {
+      if (e.stage === 'skipped') {
+        skipped.push({
+          platform_video_key: e.platform_video_key,
+          title: e.title,
+          reason: e.reason,
+        });
+      }
+      deps.onProgress?.(e);
+    },
+  };
 
   const pinnedKeys = new Set(whitelist.videos.map((v) => v.platform_video_key));
   const seen = new Set<string>();
   const sources: IngestedSource[] = [];
 
   for (const creator of whitelist.creators) {
-    const got = await ingestCreator(whitelist, deps, creator.profile_url, robots, pinnedKeys);
+    const got = await ingestCreator(whitelist, inner, creator.profile_url, robots, pinnedKeys);
     for (const s of got) seen.add(s.platform_video_key);
     sources.push(...got);
   }
@@ -263,8 +344,9 @@ export async function ingestAll(
   const targets = keys ?? whitelist.videos.map((v) => v.platform_video_key);
   for (const key of targets) {
     if (seen.has(key)) continue;
-    sources.push(await ingestVideo(whitelist, deps, key, robots));
+    const got = await ingestVideo(whitelist, inner, key, robots);
+    if (got) sources.push(got);
   }
 
-  return { robots, sources };
+  return { robots, sources, skipped };
 }

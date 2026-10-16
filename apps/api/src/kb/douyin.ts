@@ -59,8 +59,19 @@ function findFirst(json: unknown, keys: string[]): unknown {
   return undefined;
 }
 
-/** 🔴 抓音频的唯一依据 —— 作者已一手实测 `music.play_url` 是视频原声（人声轨） */
-export function findMusicPlayUrl(json: unknown): string | null {
+/** `music` 那一块的三件事 —— 取音频看 `play_url`，判是不是原声看另两个 */
+export interface MusicInfo {
+  play_url: string | null;
+  title: string | null;
+  duration_ms: number | null;
+}
+
+/**
+ * 🔴 抓音频的唯一依据是 `music.play_url` —— 但它**只在博主用「原声」时才等于视频原声**。
+ *    挂授权配乐时它指的是**那首歌**（实测：拿到 170s 的配乐，而视频只有 89s）。
+ *    所以三个字段一起取回去，由采样管线按规则 5 判（ADR-033）。
+ */
+export function findMusicInfo(json: unknown): MusicInfo {
   const stack: unknown[] = [json];
   while (stack.length) {
     const node = stack.pop();
@@ -68,14 +79,21 @@ export function findMusicPlayUrl(json: unknown): string | null {
     const obj = node as Record<string, unknown>;
     const music = obj.music;
     if (music && typeof music === 'object') {
-      const url = (music as Record<string, unknown>).play_url;
-      if (typeof url === 'string' && url.startsWith('http')) return url;
+      const m = music as Record<string, unknown>;
+      const url = m.play_url;
+      const title = m.title;
+      const dur = m.duration_ms;
+      return {
+        play_url: typeof url === 'string' && url.startsWith('http') ? url : null,
+        title: typeof title === 'string' && title ? title : null,
+        duration_ms: typeof dur === 'number' && Number.isFinite(dur) && dur > 0 ? dur : null,
+      };
     }
     for (const v of Object.values(obj)) {
       if (v && typeof v === 'object') stack.push(v);
     }
   }
-  return null;
+  return { play_url: null, title: null, duration_ms: null };
 }
 
 /** v5 给的时长是**毫秒**且字段名带单位 —— 不猜单位 */
@@ -201,6 +219,8 @@ function parseItem(
 ): VideoCandidate {
   const videoId = findFirst(data, ['content_id', 'aweme_id', 'video_id', 'awemeId']);
   const kind = findFirst(data, ['kind']);
+  const music = findMusicInfo(data);
+  const durationMs = findFirst(data, ['duration_ms']);
   return {
     platform_video_key: typeof videoId === 'string' ? videoId : fallback.key,
     video_id: typeof videoId === 'string' ? videoId : '',
@@ -209,12 +229,14 @@ function parseItem(
     title: (findFirst(data, ['title', 'desc']) as string) ?? fallback.title,
     original_url: (findFirst(data, ['web_url']) as string) ?? fallback.original_url,
     duration_sec:
-      asSecondsFromMs(findFirst(data, ['duration_ms'])) ??
-      asSecondsLoose(findFirst(data, ['duration', 'video_duration'])),
+      asSecondsFromMs(durationMs) ?? asSecondsLoose(findFirst(data, ['duration', 'video_duration'])),
+    duration_ms: typeof durationMs === 'number' && durationMs > 0 ? durationMs : null,
     published_at: asIsoDate(findFirst(data, ['created_at', 'create_time', 'createTime'])),
     // 拿不到类型就当「不知道」—— 宁可漏一条，也不把图文的 BGM 当口播转写
     kind: typeof kind === 'string' ? kind : 'unknown',
-    audio_url: findMusicPlayUrl(data),
+    audio_url: music.play_url,
+    music_title: music.title,
+    music_duration_ms: music.duration_ms,
   };
 }
 

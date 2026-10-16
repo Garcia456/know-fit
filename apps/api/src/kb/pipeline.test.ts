@@ -9,8 +9,9 @@ import {
   FIXTURE_WHITELIST,
   fixtureCandidates,
 } from './fixtures.js';
-import { ingestAll, ingestCreator, ingestVideo, selectCreatorVideos } from './pipeline.js';
-import type { Fetcher, RobotsCheck } from './types.js';
+import { ingestAll, ingestCreator, ingestVideo, isOriginalSound, selectCreatorVideos } from './pipeline.js';
+import { EmptyTranscriptError } from './types.js';
+import type { AsrClient, Fetcher, RobotsCheck } from './types.js';
 
 /**
  * 采集 → 转写 → 落库的编排 —— 与图测试相反：这里**必须连真库**。
@@ -148,12 +149,12 @@ describe('ingestVideo：准入判定在最前面', () => {
   });
 });
 
-describe('selectCreatorVideos：四条规则，且顺序不能反', () => {
+describe('selectCreatorVideos：五条规则，且顺序不能反', () => {
   const candidates = fixtureCandidates(FIXTURE_CREATORS[0]!);
   const KW = FIXTURE_CREATOR_WHITELIST.exclude_title_keywords;
   const keys = (cs: { platform_video_key: string }[]) => cs.map((c) => c.platform_video_key);
 
-  it('替代样本本身长成预期的样子（0 图文 / 2 无音频 / 5 推广片 / 其余可采）', () => {
+  it('替代样本本身长成预期的样子（0 图文 / 2 无音频 / 5 推广片 / 6 配乐片 / 7 缺一信号 / 其余可采）', () => {
     expect(keys(candidates)).toEqual([
       'fixture-cand-0',
       'fixture-cand-1',
@@ -161,6 +162,8 @@ describe('selectCreatorVideos：四条规则，且顺序不能反', () => {
       'fixture-cand-3',
       'fixture-cand-4',
       'fixture-cand-5',
+      'fixture-cand-6',
+      'fixture-cand-7',
     ]);
   });
 
@@ -186,6 +189,33 @@ describe('selectCreatorVideos：四条规则，且顺序不能反', () => {
   it('排除词是「包含」判定，不是全等（推广片的标题往往更长）', () => {
     const kw = ['宠粉'];
     expect(keys(selectCreatorVideos(candidates, 99, kw))).not.toContain('fixture-cand-5');
+  });
+
+  it('🔴 配乐片被滤掉 —— 挂配乐时 `music.play_url` 指的是那首歌，不是视频原声', () => {
+    expect(keys(selectCreatorVideos(candidates, 99, KW))).not.toContain('fixture-cand-6');
+  });
+
+  it('🔴 原声判定两个信号取 AND：文案对、时长对不上 → 照样滤掉', () => {
+    expect(keys(selectCreatorVideos(candidates, 99, KW))).not.toContain('fixture-cand-7');
+  });
+
+  it('🔴 两个信号缺一即跳 —— 只对上一个不算原声（宁可留配乐片，不误杀真原声）', () => {
+    const base = candidates.find((c) => c.platform_video_key === 'fixture-cand-1')!;
+    // 只有时长比对上、文案不是原声标
+    expect(isOriginalSound({ ...base, music_title: 'Soul Food' })).toBe(false);
+    // 只有文案对上、时长比值离谱
+    expect(isOriginalSound({ ...base, music_duration_ms: 170000 })).toBe(false);
+    // 两个都缺（平台没给 music 那两块）→ 不采
+    expect(isOriginalSound({ ...base, music_title: null, music_duration_ms: null })).toBe(false);
+    // 两个都在 → 采
+    expect(isOriginalSound(base)).toBe(true);
+  });
+
+  it('🔴 时长比取「未取整的毫秒」:80734ms 对 80000ms 比值 0.991 该**通过**，取整成秒就掉到 0.988 误杀', () => {
+    const short = { ...candidates.find((c) => c.platform_video_key === 'fixture-cand-1')!, duration_ms: 80734 };
+    expect(isOriginalSound({ ...short, music_duration_ms: 80000 })).toBe(true);
+    // 若拿取整后的秒算（81s vs 80s = 0.988）它就会被误杀 —— 这条钉住「用毫秒」
+    expect(80000 / (short.duration_sec! * 1000)).toBeLessThan(0.99);
   });
 
   it('max_items 是上限，不放大', () => {
@@ -243,6 +273,75 @@ describe('ingestCreator：遍历一个白名单博主', () => {
     );
     // 候选里只有 cand-5 命中词表（「宠粉福利 送手表」）—— 图文与无音频的不算「被排除词挡下」
     expect(listed).toEqual([['宠粉福利 送手表']]);
+  });
+
+  it('🔴 配乐片挡下哪几条要报出来 —— 与排除词同层、同一个 `listed` 事件', async () => {
+    const music: string[][] = [];
+    await ingestCreator(
+      FIXTURE_CREATOR_WHITELIST,
+      { ...deps(), onProgress: (e) => { if (e.stage === 'listed') music.push(e.music_excluded); } },
+      FIXTURE_CREATORS[0]!.profile_url,
+      ROBOTS,
+    );
+    // cand-6（挂了配乐）与 cand-7（缺一信号）都该在这里，且各自只算一次
+    expect(music).toEqual([['替身候选 6', '替身候选 7']]);
+  });
+
+  it('🔴 空转写不中止整批：那条跳过、后面的照跑，且跳过被记进 `skipped`', async () => {
+    // 让 cand-1 那条吐空转写 —— 它是**第一条**，若还抛穿整批，cand-3 就采不到了
+    const emptyFor = '/tmp/knowfit-fixture-cand-1.mp3';
+    const flakyAsr: AsrClient = {
+      async transcribe(audioPath) {
+        if (audioPath === emptyFor)
+          throw new EmptyTranscriptError('转写归一后一段不剩 —— 要么取错了音轨，要么模型没正常工作。');
+        return createFakeAsr().transcribe(audioPath);
+      },
+    };
+
+    // 本文件前面的用例已经落过 cand-1 → 用「前后行数」判有没有新写，而不是「行数是不是 0」
+    const countCand1 = async (): Promise<number> =>
+      (
+        await getPool().query(
+          `SELECT 1 FROM knowledge_source WHERE platform_video_key = 'fixture-cand-1'`,
+        )
+      ).rowCount ?? 0;
+    const before = await countCand1();
+
+    const { sources, skipped } = await ingestAll(
+      {
+        $schema_version: '1',
+        creators: FIXTURE_CREATORS,
+        videos: [],
+        exclude_title_keywords: FIXTURE_CREATOR_WHITELIST.exclude_title_keywords,
+      },
+      { ...deps(), asr: flakyAsr },
+    );
+
+    // 坏片后面的那条照采 —— 这正是「一次坏片不许放大成整批失败」
+    expect(sources.map((s) => s.platform_video_key)).toEqual(['fixture-cand-3']);
+    // 跳过要留痕：调用方据此让退出码非零（否则「少一条」与「本来没这条」长得一样）
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]!.platform_video_key).toBe('fixture-cand-1');
+    expect(skipped[0]!.reason).toMatch(/一段不剩/);
+
+    // 空源仍然没进库 —— 行数没长
+    expect(await countCand1()).toBe(before);
+  });
+
+  it('🔴 只接「空转写」这一类错：ASR 进程挂了（系统性问题）必须抛穿，不许当跳过', async () => {
+    const brokenAsr: AsrClient = {
+      async transcribe() {
+        throw new Error('起不了 ASR 进程 —— 本机装好 faster-whisper 了吗？');
+      },
+    };
+    await expect(
+      ingestCreator(
+        FIXTURE_CREATOR_WHITELIST,
+        { ...deps(), asr: brokenAsr },
+        FIXTURE_CREATORS[0]!.profile_url,
+        ROBOTS,
+      ),
+    ).rejects.toThrow(/起不了 ASR 进程/);
   });
 
   it('🔴 不在白名单的主页被拒 —— 且列表端根本没被碰过', async () => {

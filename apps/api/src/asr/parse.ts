@@ -1,4 +1,4 @@
-import { TranscriptSchema, type Transcript, type TranscriptSegment } from '../kb/types.js';
+import { TranscriptSchema, EmptyTranscriptError, type Transcript, type TranscriptSegment } from '../kb/types.js';
 import { correctTranscript } from './termMap.js';
 
 /**
@@ -57,7 +57,7 @@ export function normalizeTranscript(input: Transcript): Transcript {
     .sort((a, b) => a.start_ts - b.start_ts);
 
   if (segments.length === 0) {
-    throw new Error(
+    throw new EmptyTranscriptError(
       '转写归一后一段不剩 —— 要么取错了音轨（转成了背景音乐），要么模型没正常工作。' +
         '这条不能入库：空知识源比没有更糟。',
     );

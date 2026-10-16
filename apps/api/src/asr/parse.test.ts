@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeTranscript, parseAsrOutput } from './parse.js';
-import type { Transcript } from '../kb/types.js';
+import { EmptyTranscriptError, type Transcript } from '../kb/types.js';
 
 /**
  * ASR 归一与解析 —— 纯函数，不碰库、不碰模型。
@@ -45,6 +45,10 @@ describe('normalizeTranscript：归一三件事', () => {
     expect(() => normalizeTranscript(transcript([seg(0, 0.4, ''), seg(0.4, 1, '  ')]))).toThrow(
       /一段不剩/,
     );
+  });
+
+  it('🔴 抛的是具名错误 —— 管线靠它把「单条坏片」与「ASR 挂了」分开（前者跳过、后者抛穿）', () => {
+    expect(() => normalizeTranscript(transcript([seg(0, 1, '')]))).toThrow(EmptyTranscriptError);
   });
 
   it('归一也过同音纠错表 —— 两条转写路径都绕不过它', () => {

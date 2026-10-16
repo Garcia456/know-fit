@@ -63,7 +63,7 @@ try {
   // 不加这个的话，采集 + 转写整段**一个字都不打** —— 长视频（CPU 上几十分钟一条）
   // 看起来就和卡死一样。打字是给「它在动」提供证据。
   const startedAt = new Map<string, number>();
-  const { robots, sources } = await ingestAll(scoped, {
+  const { robots, sources, skipped } = await ingestAll(scoped, {
     fetcher,
     asr,
     onProgress: (e) => {
@@ -71,6 +71,8 @@ try {
         console.log(`—— 博主「${e.creator}」：候选 ${e.candidates} 条 → 采 ${e.picked} 条`);
         // 定义 §3.1 第 5 条：真跑时要能肉眼看出排除词挡了谁、有没有误杀
         for (const t of e.excluded) console.log(`   ⛔ 排除词挡下：「${t}」`);
+        // 同条规则的另一半：原声判定挡了谁 —— 这是**预期内的剔除**，但也得能看出有没有误杀真原声
+        for (const t of e.music_excluded) console.log(`   🎵 配乐片挡下（非原声音轨）：「${t}」`);
       }
       if (e.stage === 'transcribe') {
         startedAt.set(e.platform_video_key, Date.now());
@@ -81,6 +83,9 @@ try {
         const t0 = startedAt.get(e.platform_video_key);
         const sec = t0 === undefined ? '—' : `${Math.round((Date.now() - t0) / 1000)}s`;
         console.log(`   ✓ 落库 ${e.platform_video_key}：${e.segments} 段（这条用了 ${sec}）`);
+      }
+      if (e.stage === 'skipped') {
+        console.log(`   ⛔ 跳过 ${e.platform_video_key}「${e.title}」：${e.reason}`);
       }
     },
   });
@@ -99,6 +104,14 @@ try {
   }
 
   console.log('\n⚠️ 复核点：上面若看着像歌词 / 与健身无关，说明取错了音轨 —— 这条不算数。');
+
+  // 🔴 跳过即「采集不完整」：退出码必须非零，否则「跑了 26 条」与「本该 30 条」长得一样
+  if (skipped.length > 0) {
+    console.log(`\n⛔ 本次跳过 ${skipped.length} 条（已落库 ${sources.length} 条）：`);
+    for (const s of skipped) console.log(`   ${s.platform_video_key}「${s.title}」：${s.reason}`);
+    console.log('   ⚠️ 跳过是预期内的（配乐片 / 纯图片 / 模型空转），但本次采集**不完整** → 退出码非零。');
+    failed = true;
+  }
 } catch (e) {
   console.error(`\n✗ ${(e as Error).message}`);
   failed = true;

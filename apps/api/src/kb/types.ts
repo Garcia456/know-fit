@@ -78,8 +78,29 @@ export interface FetchedVideo {
 }
 
 /**
+ * 归一后一段不剩 —— **这条不能入库**：空知识源比没有更糟。
+ *
+ * 🔴 做成**具名错误**而不是普通 `Error`：管线要能把它和「ASR 进程挂了」区分开 ——
+ *    前者是**单条视频的正常坏法**（配乐片 / 纯图片 / 模型空转），跳过它继续跑；
+ *    后者是**系统性问题**，必须抛穿。
+ */
+export class EmptyTranscriptError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EmptyTranscriptError';
+  }
+}
+
+/** 一条被跳过的候选 —— 跳过即「采集不完整」，调用方据此让退出码非零 */
+export interface IngestSkip {
+  platform_video_key: string;
+  title: string;
+  reason: string;
+}
+
+/**
  * 遍历回来的一条候选 —— **只有元数据，音频还没下**。
- * 先过规则（类型 / 标题 / 截断）再下音频，否则会给马上要丢掉的条目白下一遍。
+ * 先过规则（类型 / 标题 / 音轨 / 截断）再下音频，否则会给马上要丢掉的条目白下一遍。
  */
 export interface VideoCandidate {
   /** 遍历路径没有作者手填的标签，用平台的内容 id 当键 */
@@ -89,11 +110,23 @@ export interface VideoCandidate {
   title: string;
   original_url: string;
   duration_sec: number | null;
+  /**
+   * 视频原始时长（毫秒）—— 配乐片预筛要用**未取整**的值。
+   * 用秒会踩：`80734ms` 取整成 `81s` 后，与 `music` 的 `80000ms` 比值掉到 0.988（真值 0.991）→ 误杀。
+   */
+  duration_ms: number | null;
   published_at: string | null;
   /** 平台给的条目类型 —— 只有 `video` 才往下走（图文没有口播，只有 BGM） */
   kind: string;
   /** 音频 URL；拿不到就是 null —— 该条不可用 */
   audio_url: string | null;
+  /**
+   * `music.title` —— 抖音标的**来源标签**：博主用原声时是「@X创作的原声」，挂配乐时是**歌名**。
+   * ⚠️ 这是**平台文案、会漂移**，所以只作两个信号之一（见 `music_duration_ms`）。
+   */
+  music_title: string | null;
+  /** `music.duration_ms` —— 与 `duration_ms` 同量级时说明这条音轨按视频截断（= 原声） */
+  music_duration_ms: number | null;
 }
 
 /** robots.txt 检查留痕。`allowed = null` 表示**检查过但结论不适用**。 */
