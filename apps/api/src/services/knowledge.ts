@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { knowledgeSource } from '../db/schema.js';
 import type { RetireReport } from '../contracts/knowledge.js';
 import type { Transcript, TranscriptSegment } from '../kb/types.js';
+import { countChunks, deleteChunksForSource } from './chunks.js';
 import { getDb } from './pool.js';
 
 /**
@@ -113,6 +114,7 @@ export async function retireSource(sourceId: string): Promise<RetireReport> {
 
   const sourcesBefore = await countIndexable();
   const segmentsBefore = Array.isArray(before[0]?.segments) ? before[0].segments.length : 0;
+  const chunksBefore = await countChunks(sourceId);
 
   await db
     .update(knowledgeSource)
@@ -122,6 +124,10 @@ export async function retireSource(sourceId: string): Promise<RetireReport> {
       transcriptSegments: null,
     })
     .where(eq(knowledgeSource.id, sourceId));
+
+  // 片跟着源一起走 —— 只置 is_indexable 不清片，下架通道就只做了一半
+  await deleteChunksForSource(sourceId);
+  const chunksAfter = await countChunks(sourceId);
 
   const sourcesAfter = await countIndexable();
 
@@ -133,5 +139,7 @@ export async function retireSource(sourceId: string): Promise<RetireReport> {
     sources_after: sourcesAfter,
     segments_before: segmentsBefore,
     segments_after: 0,
+    chunks_before: chunksBefore,
+    chunks_after: chunksAfter,
   };
 }

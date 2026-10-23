@@ -1,0 +1,41 @@
+description: 闸① claim_type 评测 —— 与人工标注比（不进 CI / check-dev.sh）
+prompts:
+  - file://prompt.txt
+providers:
+  # 裁判模型名写死；端点与 key 从本地 .env 读
+  - id: openai:chat:qwen3.8-flash
+    config:
+      apiBaseUrl: '{{env.OPENAI_BASE_URL}}'
+      apiKeyEnvar: OPENAI_API_KEY
+      temperature: 0
+      # 与线上判官的 jsonMode 对齐；否则推理模型会把 Thinking 混进输出
+      response_format: { type: 'json_object' }
+tests: file://dataset.jsonl
+defaultTest:
+  assert:
+    # 第一层（确定性）：输出里能解析出四类之一的 claim_type
+    - type: javascript
+      value: |
+        const raw = output.trim();
+        const matches = [...raw.matchAll(/\{[^{}]*\}/g)];
+        const last = matches.length > 0 ? matches[matches.length - 1][0] : '';
+        try {
+          const value = JSON.parse(last).claim_type;
+          return ['观点', '事实', '演示', '寒暄'].includes(value);
+        } catch {
+          return false;
+        }
+    # 第二层（确定性）：与标注比 —— 推理模型的 Thinking 会和答案一起返回，取最后一个 JSON
+    - type: javascript
+      value: |
+        const expected = String(context.vars.expected || '').trim();
+        const raw = output.trim();
+        const matches = [...raw.matchAll(/\{[^{}]*\}/g)];
+        const last = matches.length > 0 ? matches[matches.length - 1][0] : '';
+        let actual = '';
+        try {
+          actual = String(JSON.parse(last).claim_type || '').trim();
+        } catch {
+          actual = '';
+        }
+        return actual === expected;

@@ -1,4 +1,4 @@
-import { boolean, date, integer, jsonb, pgTable, real, text, timestamp, uuid, vector } from 'drizzle-orm/pg-core';
+import { boolean, date, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid, vector } from 'drizzle-orm/pg-core';
 
 /** 探针表 —— 证明 vector 扩展与 HNSW 索引建得起来。不要删。 */
 export const smoke = pgTable('smoke', {
@@ -108,3 +108,41 @@ export const knowledgeSource = pgTable('knowledge_source', {
   contentHash: text('content_hash'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * 知识片 —— 检索的最小单位，由 `knowledge_source` 的转写切出来。
+ *
+ * 🔴 `text` 是切片全文：**只进库、绝不出接口**（ADR-008）。
+ *    `context_prefix` 与它分开存、分开参与 embedding，不参与对外呈现。
+ * `content_hash` 是片级幂等键：同一条源重跑不新增片。
+ * 下架源时片随行删除（feat-005 §5.4）。
+ */
+export const knowledgeChunk = pgTable(
+  'knowledge_chunk',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sourceId: uuid('source_id')
+      .notNull()
+      .references(() => knowledgeSource.id, { onDelete: 'cascade' }),
+    chunkIndex: integer('chunk_index').notNull(),
+    /** 引用回溯的定位键 —— 抖音没有分 P，统一记 `p1-<start_ts>` */
+    segmentKey: text('segment_key').notNull(),
+    text: text('text').notNull(),
+    contextPrefix: text('context_prefix').notNull(),
+    startTs: real('start_ts').notNull(),
+    endTs: real('end_ts').notNull(),
+    topicTags: text('topic_tags').array().notNull().default([]),
+    exerciseTags: text('exercise_tags').array().notNull().default([]),
+    claimType: text('claim_type').notNull(), // '观点' | '事实' | '演示' | '寒暄'
+    isCitable: boolean('is_citable').notNull(),
+    asrConfidence: real('asr_confidence'),
+    contentHash: text('content_hash').notNull(),
+    embeddingModel: text('embedding_model').notNull(),
+    embedding: vector('embedding', { dimensions: 1024 }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('knowledge_chunk_source_hash_unique').on(t.sourceId, t.contentHash),
+    index('knowledge_chunk_source_index').on(t.sourceId, t.chunkIndex),
+    index('knowledge_chunk_embedding_hnsw').using('hnsw', t.embedding.op('vector_cosine_ops')),
+  ],
+);

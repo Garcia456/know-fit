@@ -6,7 +6,7 @@
   "description": "健身 / 运动人群的 AI Agent —— 对话录入训练与饮食，建议锚定头部博主视频且可点回原片",
   "packageManager": "pnpm@12.10.1",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.22.0"
   },
   "scripts": {
     "dev": "pnpm -r --parallel dev",
@@ -19,6 +19,7 @@
     "db:migrate": "pnpm --filter @know-fit/api db:migrate",
     "db:check": "node --env-file-if-exists=.env scripts/db-check.mjs",
     "kb:ingest": "pnpm --filter @know-fit/api kb:ingest",
+    "kb:index": "pnpm --filter @know-fit/api kb:index",
     "kb:smoke": "pnpm --filter @know-fit/api kb:smoke"
   },
   "devDependencies": {

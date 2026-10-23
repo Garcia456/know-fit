@@ -1,5 +1,5 @@
 import { createFakeClient } from './fake.js';
-import { createOpenAiClient } from './openai.js';
+import { createOpenAiClient, type OpenAiClientOptions } from './openai.js';
 import type { LlmClient } from './client.js';
 
 export type LlmProvider = 'fake' | 'openai';
@@ -11,11 +11,14 @@ export function resolveProvider(raw: string | undefined = process.env.LLM_PROVID
   throw new Error(`LLM_PROVIDER 只认 fake / openai，收到「${raw}」`);
 }
 
-export function createLlmClient(provider: LlmProvider = resolveProvider()): LlmClient {
-  return provider === 'openai' ? createOpenAiClient() : createFakeClient();
+export function createLlmClient(
+  provider: LlmProvider = resolveProvider(),
+  options: OpenAiClientOptions = {},
+): LlmClient {
+  return provider === 'openai' ? createOpenAiClient(options) : createFakeClient();
 }
 
 export type { ChatRequest, LlmClient, StructuredRequest } from './client.js';
 export { createFakeClient } from './fake.js';
 export { createOpenAiClient } from './openai.js';
-export type { StructuredMethod } from './openai.js';
+export type { OpenAiClientOptions, StructuredMethod } from './openai.js';

@@ -137,7 +137,8 @@ fi
 #   A. 录入往返（dev-002/003）—— POST /api/turns → 库里真有这条记录
 #   B. 采集转写（dev-004）—— 真跑一遍 kb:ingest → 库里真有知识源、
 #      正文没漏出去、下架通道通。走**替身 provider**（不联网、不加载模型）。
-bold "4/4  端到端往返（POST /api/turns + 采集转写管线）"
+#   C. 切片与索引（dev-004b）—— 真跑 kb:index → 片落对、重跑幂等、下架带走片。
+bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引）"
 if [ "$FAILED" -eq 0 ]; then
   if node scripts/e2e-turn.mjs; then
     ok "端到端往返通过"
@@ -155,6 +156,15 @@ if [ "$FAILED" -eq 0 ]; then
     bad "采集转写管线失败"
     hint "库起了吗？迁移（pnpm db:migrate）跑了吗？"
   fi
+
+  # 切片与索引（dev-004b）—— 同样走替身：不联网、不需要 key。
+  # 它证的是「片落对 + 幂等 + 下架联动」；「切得像不像一个观点 / 判得准不准」不在这一步。
+  if node scripts/kb-index-check.mjs; then
+    ok "切片与索引通过"
+  else
+    bad "切片与索引失败"
+    hint "0004 迁移跑了吗？pnpm db:migrate"
+  fi
 else
   hint "跳过：前面的步骤已经失败（dev server / 库未必起着）"
 fi
@@ -170,5 +180,8 @@ printf '  ⚠️ 本闸门跑在 LLM_PROVIDER=fake 上 —— 它证明的是「
 printf '     **不是**「模型抽得准」；准确率只能来自本地 llm:smoke（要作者自己的 key）。\n'
 printf '  ⚠️ 采集转写那步同样跑在替身上 —— 它证明「管道通」，\n'
 printf '     **不是**「抖音解析对 / 转写准」；那两件事只能来自作者本机 kb:smoke。\n'
+printf '  ⚠️ 切片与索引那步也跑在替身上 —— 它证明「落库 / 幂等 / 下架联动通」，\n'
+printf '     **不是**「切得像一个完整观点 / claim_type 判得准」；那两件事只能来自\n'
+printf '     作者本机肉眼复核 + promptfoo 评测（≥20 条人工标注）。\n'
 printf '  ⚠️ 但注意：护栏只落了「路由层不读库」与「契约无全文型字段名」两条 ——\n'
 printf '     「运行期断言响应体里不漏原文」那条还没做，仍敞开（挂 dev-005）。\n'

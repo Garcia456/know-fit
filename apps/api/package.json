@@ -9,7 +9,11 @@
     "test": "vitest run",
     "llm:smoke": "node --env-file-if-exists=../../.env --import tsx src/llm/smoke.ts",
     "kb:ingest": "node --env-file-if-exists=../../.env --import tsx src/kb/ingest.ts",
+    "kb:index": "node --env-file-if-exists=../../.env --import tsx src/kb/index.ts",
     "kb:smoke": "node --env-file-if-exists=../../.env --import tsx src/kb/smoke.ts",
+    "kb:eval:export": "node --env-file-if-exists=../../.env evals/claim-type/export.mjs",
+    "kb:eval:check": "node evals/claim-type/check-dataset.mjs",
+    "kb:eval": "node --env-file-if-exists=../../.env evals/claim-type/run-eval.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -27,6 +31,7 @@
     "@types/pg": "8.23.1",
     "drizzle-kit": "0.31.11",
     "eslint": "10.12.0",
+    "promptfoo": "0.124.1",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.0.3"

@@ -1,4 +1,5 @@
 import { EMPTY_WORKOUT, EXTRACTION_FIXTURES, GOLDEN_INTENTS } from './fixtures.js';
+import { classifyClaimType } from '../kb/claimJudge.js';
 import type { ChatRequest, LlmClient } from './client.js';
 import type { Intent } from '../contracts/extraction.js';
 
@@ -44,6 +45,8 @@ export function createFakeClient(): LlmClient {
         raw = { intent: classifyIntent(input) };
       } else if (req.name === 'extraction') {
         raw = EXTRACTION_FIXTURES[input] ?? EMPTY_WORKOUT;
+      } else if (req.name === 'claim_type') {
+        raw = { claim_type: classifyClaimType(input) };
       } else {
         throw new Error(`替身没有「${req.name}」这条 fixture —— 要在 fixtures.ts 里补`);
       }

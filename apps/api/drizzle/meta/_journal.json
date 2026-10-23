@@ -29,6 +29,13 @@
       "when": 1791960143826,
       "tag": "0003_knowledge_source",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792740374838,
+      "tag": "0004_knowledge_chunk",
+      "breakpoints": true
     }
   ]
 }

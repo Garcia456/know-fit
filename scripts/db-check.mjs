@@ -7,7 +7,8 @@
  *   2. 能建 `vector(1024)` 列 + HNSW（cosine）索引 —— 建完即回滚
  *   3. 录入链路的 6 张记录表都建出来了（迁移跑没跑）
  *   4. v1 单用户的固定锚点行还在（没有它，任何落库都会撞外键）
- *   5. 知识库那张表建出来了（采集与转写往这里落）
+ *   5. 知识库两张表建出来了（采集落 knowledge_source，切片落 knowledge_chunk）
+ *   6. knowledge_chunk 上真有 HNSW（cosine）索引 —— 检索侧就靠它
  *
  * 为什么第 2 条不能省：第 1 条只证明「扩展装上了」，
  * 而项目真正依赖的是 HNSW 索引能不能建 ——
@@ -102,14 +103,32 @@ try {
     ok('单用户锚点行在');
   }
 
-  // 5. 知识库表 —— 采集管线落库的目标；缺了它 kb:ingest 会在落库那一刻才炸
+  // 5. 知识库两张表 —— 采集 / 切片各自落库的目标；缺了它们管线会在落库那一刻才炸
   const kb = await client.query(
-    "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'knowledge_source'",
+    "SELECT table_name, count(*)::int AS n FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('knowledge_source', 'knowledge_chunk') GROUP BY table_name",
   );
-  if (kb.rows[0].n === 0) {
-    bad('knowledge_source 表不在 —— 0003 迁移没跑：pnpm db:migrate');
+  const columns = new Map(kb.rows.map((r) => [r.table_name, r.n]));
+  const missingKb = ['knowledge_source', 'knowledge_chunk'].filter((t) => !columns.has(t));
+  if (missingKb.length > 0) {
+    bad(`知识库表不在：${missingKb.join('、')} —— 0003 / 0004 迁移没跑：pnpm db:migrate`);
   } else {
-    ok(`知识库表 knowledge_source 在（${kb.rows[0].n} 列）`);
+    ok(`知识库两张表都在（knowledge_source ${columns.get('knowledge_source')} 列 / knowledge_chunk ${columns.get('knowledge_chunk')} 列）`);
+  }
+
+  // 6. HNSW 索引 —— 第 2 条只证明「本机建得起来」，这条证明「迁移真把索引建在表上了」
+  const hnsw = await client.query(
+    `SELECT indexdef FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename = 'knowledge_chunk'
+        AND indexname = 'knowledge_chunk_embedding_hnsw'`,
+  );
+  if (
+    hnsw.rowCount === 1 &&
+    /hnsw/i.test(hnsw.rows[0].indexdef) &&
+    /vector_cosine_ops/i.test(hnsw.rows[0].indexdef)
+  ) {
+    ok('knowledge_chunk 上有 HNSW（cosine）索引');
+  } else {
+    bad('knowledge_chunk 上缺 HNSW（cosine）索引 —— 0004 迁移没跑：pnpm db:migrate');
   }
 } finally {
   await client.end();

@@ -43,7 +43,11 @@ export function createOpenAiClient(options: OpenAiClientOptions = {}): LlmClient
         name: req.name,
         method: options.method ?? 'functionCalling',
       });
-      return runnable.invoke([new SystemMessage(req.system), new HumanMessage(req.input)]);
+      const out = await runnable.invoke([new SystemMessage(req.system), new HumanMessage(req.input)]);
+      if (out === undefined || out === null) {
+        throw new Error(`结构化输出为空（method=${options.method ?? 'functionCalling'}）—— 模型没走工具调用`);
+      }
+      return out;
     },
 
     async generate(req): Promise<string> {

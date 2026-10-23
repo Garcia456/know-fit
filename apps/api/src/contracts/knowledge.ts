@@ -38,5 +38,8 @@ export const RetireReportSchema = z.object({
   sources_after: z.number().int(),
   segments_before: z.number().int(),
   segments_after: z.number().int(),
+  /** 下架同时清除该源的片 —— feat-005 §5.4：「置 false 并清除 chunk」 */
+  chunks_before: z.number().int(),
+  chunks_after: z.number().int(),
 });
 export type RetireReport = z.infer<typeof RetireReportSchema>;

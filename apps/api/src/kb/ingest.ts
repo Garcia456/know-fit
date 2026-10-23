@@ -77,7 +77,8 @@ try {
       console.log('\n下架：');
       console.log(
         `  可检索知识源 ${report.sources_before} → ${report.sources_after}；` +
-          `该源转写段 ${report.segments_before} → ${report.segments_after}`,
+          `该源转写段 ${report.segments_before} → ${report.segments_after}；` +
+          `该源知识片 ${report.chunks_before} → ${report.chunks_after}`,
       );
       console.log(`  compliance_status = ${report.compliance_status}，行本身保留（下架要留痕）`);
     }
