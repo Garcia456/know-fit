@@ -12,27 +12,26 @@ import {
 import type { TranscriptSegment } from './types.js';
 
 describe('deriveIsCitable：claim_type + 置信度 → 是否可引用', () => {
-  it('只有观点 / 事实可引用', () => {
-    expect(deriveIsCitable('观点', 0.9)).toBe(true);
-    expect(deriveIsCitable('事实', 0.9)).toBe(true);
+  it('只有陈述可引用', () => {
+    expect(deriveIsCitable('陈述', 0.9)).toBe(true);
     expect(deriveIsCitable('演示', 0.99)).toBe(false);
     expect(deriveIsCitable('寒暄', 0.99)).toBe(false);
   });
 
   it('门限是 0.75，恰好等于也放行', () => {
     expect(DEFAULT_CONFIDENCE_THRESHOLD).toBe(0.75);
-    expect(deriveIsCitable('观点', 0.75)).toBe(true);
-    expect(deriveIsCitable('观点', 0.7499)).toBe(false);
+    expect(deriveIsCitable('陈述', 0.75)).toBe(true);
+    expect(deriveIsCitable('陈述', 0.7499)).toBe(false);
   });
 
   it('置信度未知（null）不因此排除', () => {
-    expect(deriveIsCitable('事实', null)).toBe(true);
+    expect(deriveIsCitable('陈述', null)).toBe(true);
     expect(deriveIsCitable('寒暄', null)).toBe(false);
   });
 
   it('门限可注入', () => {
-    expect(deriveIsCitable('观点', 0.6, 0.5)).toBe(true);
-    expect(deriveIsCitable('观点', 0.6, 0.9)).toBe(false);
+    expect(deriveIsCitable('陈述', 0.6, 0.5)).toBe(true);
+    expect(deriveIsCitable('陈述', 0.6, 0.9)).toBe(false);
   });
 });
 
@@ -65,14 +64,10 @@ describe('替身判官（CI 用）', () => {
     expect(await judge.judge('来，跟我做第一个动作')).toBe('演示');
   });
 
-  it('带判断的表述 → 观点', async () => {
+  it('主张 / 要领 / 描述 → 陈述', async () => {
     const judge = createFakeClaimJudge();
-    expect(await judge.judge('我觉得握距应该比肩宽一点')).toBe('观点');
-  });
-
-  it('其余 → 事实', async () => {
-    const judge = createFakeClaimJudge();
-    expect(await judge.judge('杠铃卧推主要练胸大肌')).toBe('事实');
+    expect(await judge.judge('我觉得握距应该比肩宽一点')).toBe('陈述');
+    expect(await judge.judge('杠铃卧推主要练胸大肌')).toBe('陈述');
   });
 });
 
@@ -90,14 +85,14 @@ describe('LLM 判官', () => {
     const llm: LlmClient = {
       async structured<T extends Record<string, unknown>>(req: StructuredRequest<T>): Promise<T> {
         seen = req as unknown as StructuredRequest<{ claim_type: string }>;
-        return { claim_type: '观点' } as unknown as T;
+        return { claim_type: '陈述' } as unknown as T;
       },
       async generate(): Promise<string> {
         return '';
       },
     };
     const judge = createLlmClaimJudge(llm);
-    expect(await judge.judge('随便一段')).toBe('观点');
+    expect(await judge.judge('随便一段')).toBe('陈述');
     expect(seen!.name).toBe('claim_type');
     expect(seen!.system).toBe(claimPrompt());
   });

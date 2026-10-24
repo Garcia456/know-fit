@@ -1,3 +1,4 @@
+import type { AssessmentCard } from '../contracts/assessment.js';
 import type { MissingField, RecordStatus } from '../contracts/extraction.js';
 import type { VolumeHook } from '../contracts/metrics.js';
 import type { WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
@@ -31,6 +32,17 @@ export interface HookInput {
   exercises: WorkoutCardExercise[];
 }
 
+export interface AssessInput {
+  user_id: string;
+  related_record_id: string | null;
+  trigger: 'explicit' | 'hook';
+}
+
+export interface AssessOutput {
+  card: AssessmentCard | null;
+  notices: string[];
+}
+
 export interface TurnDeps {
   llm: LlmClient;
   /**
@@ -43,5 +55,10 @@ export interface TurnDeps {
    * 不注入时卡片不带钩子。
    */
   computeHook?: (input: HookInput) => Promise<VolumeHook>;
+  /**
+   * 评估子图由调用方注入 —— 知识库故障不能拖垮录入，
+   * 所以这条通道失败只降级成一条 notice，不影响卡片。
+   */
+  assess?: (input: AssessInput) => Promise<AssessOutput>;
   now?: () => Date;
 }

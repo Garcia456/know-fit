@@ -85,8 +85,7 @@ try {
     );
     console.log(`   调整：低于下限并片 ${s.notes.merged_low} 片；单段超长 ${s.notes.over_limit} 片`);
     console.log(
-      `   闸①：观点 ${s.claim_distribution.观点} / 事实 ${s.claim_distribution.事实} / ` +
-        `演示 ${s.claim_distribution.演示} / 寒暄 ${s.claim_distribution.寒暄}；` +
+      `   闸①：陈述 ${s.claim_distribution.陈述} / 演示 ${s.claim_distribution.演示} / ` +
         `可引用 ${s.citable} 片，被置信度门限挡下 ${s.excluded_by_confidence} 片`,
     );
     console.log(
@@ -101,8 +100,8 @@ try {
       `被置信度门限挡下 ${report.totals.excluded_by_confidence} 条`,
   );
   console.log(
-    `  类别分布：观点 ${report.totals.claim_distribution.观点} / 事实 ${report.totals.claim_distribution.事实} / ` +
-      `演示 ${report.totals.claim_distribution.演示} / 寒暄 ${report.totals.claim_distribution.寒暄}`,
+    `  类别分布：陈述 ${report.totals.claim_distribution.陈述} / 演示 ${report.totals.claim_distribution.演示} / ` +
+      `寒暄 ${report.totals.claim_distribution.寒暄}`,
   );
 
   const showText = embeddingProvider === 'real' || process.env.KB_INDEX_SHOW_TEXT === '1';

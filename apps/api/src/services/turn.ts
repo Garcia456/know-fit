@@ -3,6 +3,7 @@ import { buildTurnGraph } from '../graph/turn.js';
 import { SINGLE_USER_ID, TurnState } from '../graph/state.js';
 import { createLlmClient } from '../llm/index.js';
 import type { LlmClient } from '../llm/client.js';
+import { assessRecord } from './assessment.js';
 import { loadTrainingBand, logTurn, persistWorkout } from './record.js';
 import { volumeHookFor } from './metrics.js';
 
@@ -18,15 +19,15 @@ export interface TurnInput {
 let cached: ReturnType<typeof buildTurnGraph> | null = null;
 
 function turnGraph(llm: LlmClient) {
-  cached ??= buildTurnGraph({ llm, persistWorkout, computeHook: volumeHookFor, now: () => new Date() });
+  cached ??= buildTurnGraph({
+    llm,
+    persistWorkout,
+    computeHook: volumeHookFor,
+    assess: assessRecord,
+    now: () => new Date(),
+  });
   return cached;
 }
-
-/**
- * ⚠️ 纯求评估时如实说「没有可评估的数据」——
- *    **不等于**评估能力已经存在（评估链路还没做）。
- */
-const ASSESS_NOTICE = '这条没带新记录 —— 我手上还没有可评估的数据，先记一条训练我再看';
 
 export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
   const user_id = input.user_id ?? SINGLE_USER_ID;
@@ -41,8 +42,7 @@ export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
   // 出口校验：图交出来的状态必须满足对外契约
   const state = TurnState.parse(final);
 
-  let notices = state.notices;
-  if (!notices.length && !state.card && state.intent === 'assess') notices = [ASSESS_NOTICE];
+  const notices = state.notices;
 
   const turn_id = await logTurn({
     user_id,
@@ -55,6 +55,7 @@ export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
     turn_id,
     intent: state.intent,
     card: state.card,
+    assessment: state.assessment,
     notices,
   });
 }

@@ -15,7 +15,7 @@ import type { TranscriptSegment } from './types.js';
  *    术语错时 ASR 置信度照样很高（「保加利亚敦」≈0.93），它兜不住。
  */
 
-export const CLAIM_TYPES = ['观点', '事实', '演示', '寒暄'] as const;
+export const CLAIM_TYPES = ['陈述', '演示', '寒暄'] as const;
 export type ClaimType = (typeof CLAIM_TYPES)[number];
 
 export const ClaimJudgementSchema = z.object({ claim_type: z.enum(CLAIM_TYPES) });
@@ -49,8 +49,8 @@ export function createLlmClaimJudge(llm: LlmClient): ClaimJudge {
   };
 }
 
-/** 可引用池只收「观点」与「事实」；「演示」归跟练，「寒暄」无内容价值 */
-export const CITABLE_CLAIM_TYPES: readonly ClaimType[] = ['观点', '事实'];
+/** 可引用池只收「陈述」；「演示」归跟练，「寒暄」无内容价值 */
+export const CITABLE_CLAIM_TYPES: readonly ClaimType[] = ['陈述'];
 
 /** ASR 置信度门限 —— 先设低门限，真跑时把砍掉什么贴出来，再反向调参 */
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.75;
@@ -78,7 +78,6 @@ export function meanConfidence(segments: TranscriptSegment[]): number | null {
 
 const GREETING_HINTS = ['大家好', '哈喽', ' hello', '谢谢', '拜拜', '下期见', '关注我', '点赞', '评论区', '我们下期'];
 const DEMO_HINTS = ['跟我做', '跟我练', '看我的动作', '我们一起', '第一个动作', '照着做', '你现在'];
-const OPINION_HINTS = ['我觉得', '我认为', '建议', '应该', '最好', '关键是', '其实', '因为', '所以', '记住', '注意', '效果', '一定'];
 
 /**
  * 确定性替身 —— CI 与 check-dev 只用它，**不联网、不需要 key**。
@@ -89,8 +88,7 @@ export function classifyClaimType(input: string): ClaimType {
   const text = input.trim();
   if (text.length < 200 && GREETING_HINTS.some((h) => text.includes(h))) return '寒暄';
   if (DEMO_HINTS.some((h) => text.includes(h))) return '演示';
-  if (OPINION_HINTS.some((h) => text.includes(h))) return '观点';
-  return '事实';
+  return '陈述';
 }
 
 export function createFakeClaimJudge(): ClaimJudge {

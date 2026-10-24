@@ -63,7 +63,7 @@ try {
   if (lines.length === 0) {
     console.log('⚠️ 库里没有片 —— 先跑 pnpm kb:index。');
   } else {
-    console.log('下一步：逐行把 vars.expected 填成「观点 / 事实 / 演示 / 寒暄」之一，');
+    console.log('下一步：逐行把 vars.expected 填成「陈述 / 演示 / 寒暄」之一，');
     console.log('        至少 20 行，然后跑 pnpm kb:eval:check 与 pnpm kb:eval。');
     console.log('⚠️ 不填标注 = 没有准确率可言，别拿「跑了没报错」顶替。');
   }

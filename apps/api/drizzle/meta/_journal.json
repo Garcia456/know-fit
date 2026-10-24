@@ -36,6 +36,20 @@
       "when": 1792740374838,
       "tag": "0004_knowledge_chunk",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792828734167,
+      "tag": "0005_claim_type_three_classes",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792961800000,
+      "tag": "0006_assessment_citation",
+      "breakpoints": true
     }
   ]
 }

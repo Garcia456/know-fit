@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FILE = join(HERE, 'dataset.jsonl');
 const MIN = 20;
-const TYPES = ['观点', '事实', '演示', '寒暄'];
+const TYPES = ['陈述', '演示', '寒暄'];
 
 let text = '';
 try {

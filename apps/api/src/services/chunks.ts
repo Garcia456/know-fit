@@ -140,6 +140,12 @@ export async function replaceSourceChunks(
   });
 }
 
+/** R-C 用：全部片正文 —— 只在进程内做窗口哈希，绝不外传 */
+export async function loadAllChunkTexts(): Promise<string[]> {
+  const rows = await getDb().select({ text: knowledgeChunk.text }).from(knowledgeChunk);
+  return rows.map((r) => r.text);
+}
+
 export async function countChunks(sourceId?: string): Promise<number> {
   const rows = sourceId
     ? await getDb().select({ id: knowledgeChunk.id }).from(knowledgeChunk).where(eq(knowledgeChunk.sourceId, sourceId))

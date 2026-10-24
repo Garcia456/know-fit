@@ -1,4 +1,4 @@
-description: 闸① claim_type 评测 —— 与人工标注比（不进 CI / check-dev.sh）
+description: 闸① claim_type 评测 —— 结构层三类 + 闸门层二值（不进 CI / check-dev.sh）
 prompts:
   - file://prompt.txt
 providers:
@@ -13,7 +13,7 @@ providers:
 tests: file://dataset.jsonl
 defaultTest:
   assert:
-    # 第一层（确定性）：输出里能解析出四类之一的 claim_type
+    # 第一层（确定性）：输出里能解析出三类之一的 claim_type
     - type: javascript
       value: |
         const raw = output.trim();
@@ -21,13 +21,14 @@ defaultTest:
         const last = matches.length > 0 ? matches[matches.length - 1][0] : '';
         try {
           const value = JSON.parse(last).claim_type;
-          return ['观点', '事实', '演示', '寒暄'].includes(value);
+          return ['陈述', '演示', '寒暄'].includes(value);
         } catch {
           return false;
         }
-    # 第二层（确定性）：与标注比 —— 推理模型的 Thinking 会和答案一起返回，取最后一个 JSON
+    # 第二层（确定性）：只比「可引用 / 不可引用」——唯一可引用的是「陈述」（ADR-035）
     - type: javascript
       value: |
+        const CITABLE = ['陈述'];
         const expected = String(context.vars.expected || '').trim();
         const raw = output.trim();
         const matches = [...raw.matchAll(/\{[^{}]*\}/g)];
@@ -38,4 +39,9 @@ defaultTest:
         } catch {
           actual = '';
         }
-        return actual === expected;
+        const pass = CITABLE.includes(actual) === CITABLE.includes(expected);
+        return {
+          pass,
+          score: pass ? 1 : 0,
+          reason: `标注=${expected || '?'}（${CITABLE.includes(expected) ? '可引用' : '不可引用'}），模型=${actual || '解析失败'}（${CITABLE.includes(actual) ? '可引用' : '不可引用'}）`,
+        };

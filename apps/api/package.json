@@ -14,6 +14,10 @@
     "kb:eval:export": "node --env-file-if-exists=../../.env evals/claim-type/export.mjs",
     "kb:eval:check": "node evals/claim-type/check-dataset.mjs",
     "kb:eval": "node --env-file-if-exists=../../.env evals/claim-type/run-eval.mjs",
+    "rag:check": "node --env-file-if-exists=../../.env --import tsx src/rag/check.ts",
+    "rag:smoke": "node --env-file-if-exists=../../.env --import tsx src/rag/smoke.ts",
+    "rag:eval:queries": "node --env-file-if-exists=../../.env --import tsx evals/rag/generate-queries.ts",
+    "rag:eval": "node --env-file-if-exists=../../.env --import tsx evals/rag/eval.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

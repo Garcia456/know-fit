@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { AssessmentCardSchema } from '../contracts/assessment.js';
 import { ExtractionSchema, IntentSchema, MissingFieldSchema, RecordStatusSchema } from '../contracts/extraction.js';
 import { TurnCardSchema, WorkoutCardExerciseSchema } from '../contracts/turn.js';
 import { GuardVerdictSchema } from './guard.js';
 
 /**
  * 图的 State。
- * 评估侧那几项（metrics / citations / hook）不在这里 —— 等评估链路进来再补。
+ * 评估是独立字段（不是卡片 union 的一员）；chunk 全文**不进**这里。
  */
 
 /** v1 单用户 —— 迁移里种下的那个固定 id */
@@ -31,6 +32,8 @@ export const TurnState = z.object({
   card_exercises: z.array(WorkoutCardExerciseSchema).default([]),
 
   card: TurnCardSchema.nullable().default(null),
+  /** 纯评估 / 混合意图的评估结果；没有评估时为 null */
+  assessment: AssessmentCardSchema.nullable().default(null),
   notices: z.array(z.string()).default([]),
 });
 

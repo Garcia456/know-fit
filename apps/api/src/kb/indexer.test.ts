@@ -99,7 +99,7 @@ describe('indexSource：一条源的完整一跳', () => {
       expect(r.segment_key).toBe(`p1-${Number(r.start_ts).toFixed(1)}`);
       expect(r.topic_tags).toEqual(['训练动作']);
       expect(Array.isArray(r.exercise_tags)).toBe(true);
-      // 判据只落四类之一，is_citable 是真布尔
+      // 判据只落三类之一，is_citable 是真布尔
       expect(CLAIM_TYPES).toContain(r.claim_type);
       expect(typeof r.is_citable).toBe('boolean');
       expect(r.asr_confidence).toBeGreaterThan(0);

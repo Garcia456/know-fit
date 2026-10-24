@@ -32,12 +32,14 @@ function requiredModel(): string {
  *    于是换端点只改 .env，不改这里。
  */
 export function createOpenAiClient(options: OpenAiClientOptions = {}): LlmClient {
+  const modelName = options.model ?? requiredModel();
   const model = new ChatOpenAI({
-    model: options.model ?? requiredModel(),
+    model: modelName,
     temperature: options.temperature ?? 0,
   });
 
   return {
+    model: modelName,
     async structured<T extends Record<string, unknown>>(req: StructuredRequest<T>): Promise<T> {
       const runnable = model.withStructuredOutput<T>(req.schema, {
         name: req.name,

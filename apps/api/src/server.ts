@@ -1,18 +1,60 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { pathToFileURL } from 'node:url';
 import { databaseUrl } from './db/client.js';
+import { responseGuard } from './guardrails/rc.js';
+import { assessmentRoutes } from './routes/assessments.js';
 import { healthRoutes } from './routes/health.js';
 import { metricsRoutes } from './routes/metrics.js';
 import { turnRoutes } from './routes/turns.js';
+import { loadAllChunkTexts } from './services/chunks.js';
 import { closeDb, getPool } from './services/pool.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
+/** R-C 窗口集刷新间隔 —— 新入库的片最多晚 60 秒被纳入 */
+const RC_REFRESH_MS = 60_000;
+
+async function refreshGuardWindows(app: FastifyInstance): Promise<void> {
+  try {
+    responseGuard.setTexts(await loadAllChunkTexts());
+  } catch (e) {
+    app.log.warn(`R-C 窗口集刷新失败：${(e as Error).message}`);
+  }
+}
 
 export async function buildServer() {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
+
+  // 🔴 R-C：钩子必须在注册路由之前挂 —— onSend 只作用于之后注册的路由
+  await refreshGuardWindows(app);
+  const timer = setInterval(() => void refreshGuardWindows(app), RC_REFRESH_MS);
+  timer.unref();
+  app.addHook('onClose', async () => clearInterval(timer));
+
+  app.addHook('onSend', async (request, reply, payload) => {
+    const contentType = reply.getHeader('content-type');
+    if (typeof contentType !== 'string' || !contentType.includes('application/json')) return payload;
+    if (typeof payload !== 'string') return payload;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      return payload;
+    }
+
+    const verdict = responseGuard.inspect(parsed);
+    if (!verdict.blocked) return payload;
+
+    // 只记路由与哈希前缀，不记原文
+    app.log.error({ route: request.url, rc_prefix: verdict.prefix }, 'R-C 拦截：响应疑似含知识片全文');
+    await reply.code(500).type('application/json');
+    return JSON.stringify({ error: 'response_guard' });
+  });
+
   await app.register(healthRoutes);
   await app.register(turnRoutes);
   await app.register(metricsRoutes);
+  await app.register(assessmentRoutes);
   return app;
 }
 

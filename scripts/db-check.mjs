@@ -8,7 +8,8 @@
  *   3. 录入链路的 6 张记录表都建出来了（迁移跑没跑）
  *   4. v1 单用户的固定锚点行还在（没有它，任何落库都会撞外键）
  *   5. 知识库两张表建出来了（采集落 knowledge_source，切片落 knowledge_chunk）
- *   6. knowledge_chunk 上真有 HNSW（cosine）索引 —— 检索侧就靠它
+ *   6. 评估两张表与引用偏移列建出来了（assessment / citation）
+ *   7. knowledge_chunk 上真有 HNSW（cosine）索引 —— 检索侧就靠它
  *
  * 为什么第 2 条不能省：第 1 条只证明「扩展装上了」，
  * 而项目真正依赖的是 HNSW 索引能不能建 ——
@@ -115,7 +116,31 @@ try {
     ok(`知识库两张表都在（knowledge_source ${columns.get('knowledge_source')} 列 / knowledge_chunk ${columns.get('knowledge_chunk')} 列）`);
   }
 
-  // 6. HNSW 索引 —— 第 2 条只证明「本机建得起来」，这条证明「迁移真把索引建在表上了」
+  // 6. 评估两张表 + 偏移列 —— 缺了它们，带来源的回应无处落库
+  const assess = await client.query(
+    `SELECT table_name, column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name IN ('assessment', 'citation')
+        AND column_name IN ('verdict_json', 'has_source', 'pipeline_meta', 'quote_start', 'quote_end', 'usability_status')`,
+  );
+  const assessCols = new Set(assess.rows.map((r) => `${r.table_name}.${r.column_name}`));
+  const needAssess = [
+    'assessment.verdict_json',
+    'assessment.has_source',
+    'assessment.pipeline_meta',
+    'citation.quote_start',
+    'citation.quote_end',
+    'citation.usability_status',
+  ];
+  const missingAssess = needAssess.filter((c) => !assessCols.has(c));
+  if (missingAssess.length > 0) {
+    bad(`评估表缺列：${missingAssess.join('、')} —— 0006 迁移没跑：pnpm db:migrate`);
+  } else {
+    ok('assessment / citation 两张表与 quote_start/end 列都在');
+  }
+
+  // 7. HNSW 索引 —— 第 2 条只证明「本机建得起来」，这条证明「迁移真把索引建在表上了」
   const hnsw = await client.query(
     `SELECT indexdef FROM pg_indexes
       WHERE schemaname = 'public' AND tablename = 'knowledge_chunk'

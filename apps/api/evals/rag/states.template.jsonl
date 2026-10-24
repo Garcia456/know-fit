@@ -1,0 +1,20 @@
+{"id":"q01","goal":"增肌","split":"推日","current":2400,"baseline":3000,"note":"模板：下降 20%"}
+{"id":"q02","goal":"增肌","split":"推日","current":2500,"baseline":2400,"note":"模板：上涨"}
+{"id":"q03","goal":"增肌","split":"推日","current":2420,"baseline":2400,"note":"模板：停滞"}
+{"id":"q04","goal":"减脂","split":"背日","current":1800,"baseline":2200,"note":"模板：下降"}
+{"id":"q05","goal":"减脂","split":"背日","current":2350,"baseline":2200,"note":"模板：上涨"}
+{"id":"q06","goal":"增肌","split":"腿日","current":5200,"baseline":5200,"note":"模板：停滞（持平）"}
+{"id":"q07","goal":"力量","split":"推日","current":2600,"baseline":3000,"note":"模板：下降"}
+{"id":"q08","goal":"力量","split":"腿日","current":6000,"baseline":5000,"note":"模板：上涨"}
+{"id":"q09","goal":"增肌","split":"全身","current":3000,"baseline":3100,"note":"模板：停滞"}
+{"id":"q10","goal":"增肌","split":"背日","current":1600,"baseline":2000,"note":"模板：下降 20%"}
+{"id":"q11","goal":null,"split":"推日","current":2000,"baseline":2500,"note":"goal 为空 → 前缀用「训练」"}
+{"id":"q12","goal":"增肌","split":null,"current":2000,"baseline":2500,"note":"无 split → 走 LLM 兜底"}
+{"id":"q13","goal":"增肌","split":"推日","current":2000,"baseline":null,"note":"无基线 → 走 LLM 兜底"}
+{"id":"q14","goal":"减脂","split":"腿日","current":4000,"baseline":4800,"note":"模板：下降"}
+{"id":"q15","goal":"增肌","split":"肩日","current":900,"baseline":800,"note":"模板：上涨"}
+{"id":"q16","goal":"力量","split":"背日","current":2100,"baseline":2100,"note":"模板：停滞"}
+{"id":"q17","goal":"增肌","split":"推日","current":1300,"baseline":2000,"note":"模板：大幅下降"}
+{"id":"q18","goal":"增肌","split":"腿日","current":7000,"baseline":6000,"note":"模板：大幅上涨"}
+{"id":"q19","goal":"减脂","split":"全身","current":2600,"baseline":2650,"note":"模板：停滞"}
+{"id":"q20","goal":"增肌","split":"背日","current":2200,"baseline":2200,"note":"模板：停滞（持平）"}

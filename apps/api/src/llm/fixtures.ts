@@ -144,6 +144,15 @@ export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
     exercises: [{ raw_name: '卧推', name_confidence: 'high', mentioned_sets: working(4, 70, 'kg', 8) }],
   },
 
+  // 标记 split 的混合意图 —— rag:check 用它验「落库后接着评估」这条边
+  '推日：卧推 70kg×5 五组，帮我看下够不够': {
+    kind: 'workout',
+    day_hint: null,
+    split_label: 'rag-check',
+    note: null,
+    exercises: [{ raw_name: '卧推', name_confidence: 'high', mentioned_sets: working(5, 70, 'kg', 5) }],
+  },
+
   // 饮食：只走契约，不落库、不接界面
   '午饭吃了两碗米饭': {
     kind: 'meal',
@@ -165,6 +174,7 @@ export const GOLDEN_INTENTS: Record<string, Intent> = {
   '昨天练了胸': 'record',
   '午饭吃了两碗米饭': 'record',
   '卧推 70kg×8 四组，帮我看下够不够': 'mixed',
+  '推日：卧推 70kg×5 五组，帮我看下够不够': 'mixed',
   '我不太想练了': 'chat',
   '膝盖疼还能练吗': 'reject',
   '我 14 岁，能练吗': 'boundary',

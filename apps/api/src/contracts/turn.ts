@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AssessmentCardSchema } from './assessment.js';
 import {
   IntentSchema,
   MealItemSchema,
@@ -87,6 +88,8 @@ export const TurnResponseSchema = z.object({
   intent: IntentSchema,
   /** 没产生卡片的轮次（只求评估 / 红线条目）为 null */
   card: TurnCardSchema.nullable(),
+  /** 评估是独立字段，不塞进卡片 union —— 混合意图时 card 与 assessment 同时有值 */
+  assessment: AssessmentCardSchema.nullable(),
   /** 补充提示，至多 1 条；后置、可选，不拦截录入 */
   notices: z.array(z.string()),
 });

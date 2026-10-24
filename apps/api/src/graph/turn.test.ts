@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildTurnGraph } from './turn.js';
-import type { PersistWorkoutInput } from './deps.js';
+import type { AssessInput, PersistWorkoutInput } from './deps.js';
 import { createFakeClient } from '../llm/fake.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 
@@ -94,7 +94,7 @@ describe('记录链路：走通 → 落库 → 出卡片', () => {
     expect(state.notices).toHaveLength(1);
   });
 
-  it('混合意图：「…帮我看下够不够」只落库，不出任何建议', async () => {
+  it('混合意图：「…帮我看下够不够」先落库出卡片（评估接线另测）', async () => {
     const { graph, calls } = build();
     const state = await graph.invoke({ message: '卧推 70kg×8 四组，帮我看下够不够' });
     expect(state.intent).toBe('mixed');
@@ -168,11 +168,51 @@ describe('三个出口：不落库', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('纯求评估 → 到此为止（评估链路还没接）', async () => {
+  it('纯求评估 → 不落库、不出记录卡片', async () => {
     const { graph, calls } = build();
     const state = await graph.invoke({ message: '帮我看看最近怎么样' });
     expect(state.intent).toBe('assess');
     expect(state.card).toBeNull();
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('评估接线', () => {
+  function buildWithAssess(fail = false) {
+    const s = stub();
+    const calls: AssessInput[] = [];
+    const graph = buildTurnGraph({
+      llm: createFakeClient(),
+      persistWorkout: s.persistWorkout,
+      assess: async (input) => {
+        calls.push(input);
+        if (fail) throw new Error('boom');
+        return { card: null, notices: ['评估桩'] };
+      },
+      now: () => NOW,
+    });
+    return { graph, calls };
+  }
+
+  it('纯评估 → 不带 related_record_id（评估最近一次）', async () => {
+    const { graph, calls } = buildWithAssess();
+    await graph.invoke({ message: '帮我评估一下' });
+    expect(calls).toEqual([{ user_id: '00000000-0000-4000-8000-000000000001', related_record_id: null, trigger: 'explicit' }]);
+  });
+
+  it('混合意图 → 评估本轮刚落库的那条', async () => {
+    const { graph, calls } = buildWithAssess();
+    const state = await graph.invoke({ message: '卧推 70kg×8 四组，帮我看下够不够' });
+    expect(state.card?.kind).toBe('workout');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.related_record_id).toBe('stub-1');
+  });
+
+  it('评估挂了也不吞掉录入卡片', async () => {
+    const { graph } = buildWithAssess(true);
+    const state = await graph.invoke({ message: '卧推 70kg×8 四组，帮我看下够不够' });
+    expect(state.card?.kind).toBe('workout');
+    expect(state.assessment).toBeNull();
+    expect(state.notices).toContain('评估暂时没生成出来，稍后再试');
   });
 });

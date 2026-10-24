@@ -117,9 +117,9 @@ if command -v curl >/dev/null 2>&1; then
     hint "注意：端口上已有服务在响应 —— 本步骤可能探到的不是本次启动的进程"
   fi
 
-  # 🔴 LLM_PROVIDER=fake 显式写死：闸门绝不联网、绝不需要 key。
+  # 🔴 三个 provider 显式写死 fake：闸门绝不联网、绝不需要 key。
   #    （dev server 不读 .env，默认也是 fake —— 这里显式设是为了防外部环境变量把它翻过去。）
-  LLM_PROVIDER=fake pnpm dev >/tmp/knowfit-dev.log 2>&1 &
+  LLM_PROVIDER=fake EMBEDDING_PROVIDER=fake RERANK_PROVIDER=fake pnpm dev >/tmp/knowfit-dev.log 2>&1 &
   DEV_PID=$!
 
   wait_for_http "$WEB_URL"   "web 首页 GET /" 40
@@ -138,7 +138,8 @@ fi
 #   B. 采集转写（dev-004）—— 真跑一遍 kb:ingest → 库里真有知识源、
 #      正文没漏出去、下架通道通。走**替身 provider**（不联网、不加载模型）。
 #   C. 切片与索引（dev-004b）—— 真跑 kb:index → 片落对、重跑幂等、下架带走片。
-bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引）"
+#   D. 检索与引用（dev-005）—— 造源 → 检索过滤 → 闸② → 引用偏移 → R-C 计数。
+bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引 + 检索引用）"
 if [ "$FAILED" -eq 0 ]; then
   if node scripts/e2e-turn.mjs; then
     ok "端到端往返通过"
@@ -165,6 +166,16 @@ if [ "$FAILED" -eq 0 ]; then
     bad "切片与索引失败"
     hint "0004 迁移跑了吗？pnpm db:migrate"
   fi
+
+  # 检索与引用（dev-005）—— 走替身 embedding / rerank / LLM：不联网。
+  # 它证的是「五条过滤都在、闸② 拒绝会降级、引用偏移能还原、R-C 计数在涨」；
+  # 「召回准不准 / 引用贴不贴切」不在这一步（那只能来自作者盲评的 pilot）。
+  if pnpm rag:check; then
+    ok "检索与引用通过"
+  else
+    bad "检索与引用失败"
+    hint "0006 迁移跑了吗？pnpm db:migrate"
+  fi
 else
   hint "跳过：前面的步骤已经失败（dev server / 库未必起着）"
 fi
@@ -183,5 +194,7 @@ printf '     **不是**「抖音解析对 / 转写准」；那两件事只能来
 printf '  ⚠️ 切片与索引那步也跑在替身上 —— 它证明「落库 / 幂等 / 下架联动通」，\n'
 printf '     **不是**「切得像一个完整观点 / claim_type 判得准」；那两件事只能来自\n'
 printf '     作者本机肉眼复核 + promptfoo 评测（≥20 条人工标注）。\n'
-printf '  ⚠️ 但注意：护栏只落了「路由层不读库」与「契约无全文型字段名」两条 ——\n'
-printf '     「运行期断言响应体里不漏原文」那条还没做，仍敞开（挂 dev-005）。\n'
+printf '  ⚠️ 检索与引用那步同样跑在替身上 —— 它证明「过滤 / 闸② / 偏移 / 护栏通」，\n'
+printf '     **不是**「召回准 / 引用贴切」；那只能来自作者盲评的 20 条 pilot。\n'
+printf '  ⚠️ 闸③（定期复核引用是否仍成立）不在 v1：写入即判「可用」，没有后续复核。\n'
+printf '  ⚠️ 检索参数（topK / topN / 0.5 相似度门槛）是推断初值，尚未用真实数据校准。\n'

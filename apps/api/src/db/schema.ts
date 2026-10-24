@@ -133,7 +133,7 @@ export const knowledgeChunk = pgTable(
     endTs: real('end_ts').notNull(),
     topicTags: text('topic_tags').array().notNull().default([]),
     exerciseTags: text('exercise_tags').array().notNull().default([]),
-    claimType: text('claim_type').notNull(), // '观点' | '事实' | '演示' | '寒暄'
+    claimType: text('claim_type').notNull(), // '陈述' | '演示' | '寒暄'
     isCitable: boolean('is_citable').notNull(),
     asrConfidence: real('asr_confidence'),
     contentHash: text('content_hash').notNull(),
@@ -145,4 +145,59 @@ export const knowledgeChunk = pgTable(
     index('knowledge_chunk_source_index').on(t.sourceId, t.chunkIndex),
     index('knowledge_chunk_embedding_hnsw').using('hnsw', t.embedding.op('vector_cosine_ops')),
   ],
+);
+
+/**
+ * 一次评估 —— 不是日志：`has_source` 是无源率的分母。
+ *
+ * `verdict_json` 是算好的判定（不含措辞）；`advice_text` 是渲染后的建议。
+ * `advice_claims` 存结构化 claims —— 钩子幂等要原样返回同一张卡，不重新生成。
+ * `pipeline_meta` 只放标识与枚举（模型串 / 降级标记 / 无源原因），**不放原文**。
+ */
+export const assessment = pgTable(
+  'assessment',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    trigger: text('trigger').notNull(), // 'explicit' | 'hook'
+    relatedRecordId: uuid('related_record_id').references(() => workoutSession.id, {
+      onDelete: 'set null',
+    }),
+    verdictJson: jsonb('verdict_json').notNull(),
+    adviceText: text('advice_text').notNull(),
+    adviceClaims: jsonb('advice_claims').notNull(),
+    hasSource: boolean('has_source').notNull(),
+    modelVersion: text('model_version').notNull(),
+    judgeModelVersion: text('judge_model_version').notNull(),
+    pipelineMeta: jsonb('pipeline_meta').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('assessment_user_created_index').on(t.userId, t.createdAt)],
+);
+
+/**
+ * 一条引用 —— 一条建议挂一个知识片。
+ *
+ * 🔴 `quote_start` / `quote_end` 是支撑句在 `knowledge_chunk.text` 里的字符偏移，
+ *    **不存引用文本**（ADR-031）：读时从 chunk 还原并断言逐字。
+ * 片被删时 `chunk_id` 置空、偏移清空，行保留为历史并标 `usability_status = '失效'`。
+ */
+export const citation = pgTable(
+  'citation',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    assessmentId: uuid('assessment_id')
+      .notNull()
+      .references(() => assessment.id, { onDelete: 'cascade' }),
+    chunkId: uuid('chunk_id').references(() => knowledgeChunk.id, { onDelete: 'set null' }),
+    urlWithTs: text('url_with_ts').notNull(),
+    displayOrder: integer('display_order').notNull(),
+    usabilityStatus: text('usability_status').notNull(), // '可用' | '失效'
+    quoteStart: integer('quote_start'),
+    quoteEnd: integer('quote_end'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('citation_assessment_index').on(t.assessmentId)],
 );

@@ -2,4 +2,9 @@
 export interface HealthResponse {
   status: 'ok';
   service: string;
+  /** R-C 运行期护栏计数 —— check-dev 用它证明钩子真的跑了 */
+  rc: {
+    scanned: number;
+    blocked: number;
+  };
 }

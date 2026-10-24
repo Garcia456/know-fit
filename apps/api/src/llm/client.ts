@@ -21,6 +21,8 @@ export interface ChatRequest {
 }
 
 export interface LlmClient {
+  /** 版本串，写进 assessment.model_version / judge_model_version */
+  readonly model?: string;
   structured<T extends Record<string, unknown>>(req: StructuredRequest<T>): Promise<T>;
   generate(req: ChatRequest): Promise<string>;
 }

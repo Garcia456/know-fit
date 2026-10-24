@@ -14,8 +14,8 @@ import { TurnState } from './state.js';
 /**
  * 录入主图 —— 一句话进来，走到落库与卡片。
  *
- * 三个出口（拒答 / 非目标用户 / 闲聊）+ 录入链路；**评估链路不在这里**，
- * 因此「纯求评估」与「混合意图的后半段」都停在落库为止。
+ * 三个出口（拒答 / 非目标用户 / 闲聊）+ 录入链路；
+ * 评估走独立子图，只在本图的两个位置接一次：纯评估、混合意图落库之后。
  */
 export function buildTurnGraph(deps: TurnDeps) {
   const now = deps.now ?? (() => new Date());
@@ -163,6 +163,22 @@ export function buildTurnGraph(deps: TurnDeps) {
         return { card, notices: composeNotice(state.card_exercises, state.missing_fields) };
       })
 
+      .addNode('assess_node', async (state) => {
+        if (!deps.assess) {
+          return { assessment: null, notices: [...state.notices, '评估暂时没生成出来，稍后再试'] };
+        }
+        // 混合意图评估的是本轮刚落库的那条；纯评估评估最近一次（v1 不解析「上周那次」）
+        const related =
+          state.intent === 'mixed' && state.record_ref?.type === 'workout' ? state.record_ref.id : null;
+        try {
+          const out = await deps.assess({ user_id: state.user_id, related_record_id: related, trigger: 'explicit' });
+          return { assessment: out.card, notices: [...state.notices, ...out.notices] };
+        } catch {
+          // 🔴 录入可用性 > 评估可用性：评估挂了也要把卡片还回去
+          return { assessment: null, notices: [...state.notices, '评估暂时没生成出来，稍后再试'] };
+        }
+      })
+
       .addNode('chat_node', async (state) => {
         const reply = await deps.llm.generate({ system: CHAT_SYSTEM, input: state.message });
         return { card: { kind: 'chat' as const, reply } };
@@ -187,16 +203,19 @@ export function buildTurnGraph(deps: TurnDeps) {
       })
       .addConditionalEdges('classify_intent', (state) => {
         if (state.intent === 'record' || state.intent === 'mixed') return 'extract_record';
+        if (state.intent === 'assess') return 'assess_node';
         if (state.intent === 'chat') return 'chat_node';
         if (state.intent === 'boundary') return 'boundary_node';
         if (state.intent === 'reject') return 'reject_node';
-        // 纯求评估：还没有评估链路，到此为止（卡片在服务层补一条说明）
         return END;
       })
       .addEdge('extract_record', 'persist_record')
       .addEdge('persist_record', 'compose_card')
-      // 混合意图那条边走到「只落库、不评估」为止
-      .addEdge('compose_card', END)
+      // 混合意图：先给录入卡片，再评估本轮刚落库的那条
+      .addConditionalEdges('compose_card', (state) =>
+        state.intent === 'mixed' ? 'assess_node' : END,
+      )
+      .addEdge('assess_node', END)
       .addEdge('chat_node', END)
       .addEdge('reject_node', END)
       .addEdge('boundary_node', END)

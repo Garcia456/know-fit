@@ -31,7 +31,8 @@ const url = process.env.DATABASE_URL ?? 'postgres://knowfit:knowfit@localhost:54
 const KEYS = ['fixture-0001', 'fixture-0002'];
 /** 替身转写里的正文片段 —— 它**不该出现**在任何对外输出里 */
 const BODY_FRAGMENTS = ['肩胛要收紧', '动作变形了就说明重了'];
-const CLAIM_TYPES = ['观点', '事实', '演示', '寒暄'];
+const CLAIM_TYPES = ['陈述', '演示', '寒暄'];
+const CITABLE_CLAIM_TYPES = ['陈述'];
 const FAKE_MODEL = 'fake-text-embedding-1024';
 const CONFIDENCE_THRESHOLD = 0.75;
 
@@ -148,7 +149,7 @@ try {
       if (!r.context_prefix.includes('·')) problems.push(`${key}#${i} 前缀缺元数据分隔`);
       if (!CLAIM_TYPES.includes(r.claim_type)) problems.push(`${key}#${i} claim_type=${r.claim_type}`);
       const expectedCitable =
-        CLAIM_TYPES.slice(0, 2).includes(r.claim_type) &&
+        CITABLE_CLAIM_TYPES.includes(r.claim_type) &&
         (r.asr_confidence === null || Number(r.asr_confidence) >= CONFIDENCE_THRESHOLD);
       if (r.is_citable !== expectedCitable) {
         problems.push(`${key}#${i} is_citable=${r.is_citable} 与派生规则不符`);
@@ -227,7 +228,7 @@ try {
     }
   }
 
-  // 报告合并口径：至少有一条可引用片（替身判官对样本判「事实」）
+  // 报告合并口径：至少有一条可引用片（替身判官对样本判「陈述」）
   const citable = await client.query(
     `SELECT count(*)::int AS n FROM knowledge_chunk c
        JOIN knowledge_source s ON s.id = c.source_id
