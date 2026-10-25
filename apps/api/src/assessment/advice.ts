@@ -13,10 +13,36 @@ import type { AssessmentCandidate } from './types.js';
 export const DraftClaimSchema = z.object({
   claim: z.string(),
   basis: z.enum(['personal_data', 'source']),
-  source_index: z.number().int().nullable(),
+  // personal_data claim 常常不带这个键 —— 缺省补 null，不让解析层替模型报错
+  source_index: z.number().int().nullable().default(null),
 });
 
 export const DraftSchema = z.object({ claims: z.array(DraftClaimSchema) });
+
+/**
+ * 同一视频只留排位最高的一片 —— 否则「不同 claim 不许同源」光靠提示词拦不住。
+ * 返回去重后的候选，以及「去重下标 → 原下标」映射。
+ */
+export function dedupeBySource(candidates: AssessmentCandidate[]): {
+  picked: AssessmentCandidate[];
+  keep: number[];
+} {
+  const keep: number[] = [];
+  const seen = new Set<string>();
+  candidates.forEach((c, i) => {
+    if (seen.has(c.source_id)) return;
+    seen.add(c.source_id);
+    keep.push(i);
+  });
+  return { picked: keep.map((i) => candidates[i]!), keep };
+}
+
+/** 起草看到的是去重后的编号，这里换回候选全集的下标 */
+export function remapDraftIndices(draft: Draft, keep: number[]): void {
+  for (const claim of draft.claims) {
+    if (claim.source_index !== null) claim.source_index = keep[claim.source_index] ?? null;
+  }
+}
 
 export type Draft = z.infer<typeof DraftSchema>;
 export type DraftProblem =

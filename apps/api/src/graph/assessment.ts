@@ -6,6 +6,8 @@ import { VolumeHookSchema } from '../contracts/metrics.js';
 import {
   DraftSchema,
   assembleCitations,
+  dedupeBySource,
+  remapDraftIndices,
   renderAdvice,
   sanitizeNoSourceAdvice,
   toAdviceClaims,
@@ -123,8 +125,6 @@ export type AssessmentStateValue = z.infer<typeof AssessmentState>;
 
 export interface AssessmentDeps {
   llm: LlmClient;
-  /** 闸② 专用的客户端 —— 真实端点下 functionCalling 会空返回，这里走 jsonMode */
-  gateLlm?: LlmClient;
   repo: AssessmentRepo;
   now?: () => Date;
 }
@@ -174,13 +174,15 @@ export function buildAssessmentGraph(deps: AssessmentDeps) {
 
       .addNode('generate_draft', async (state) => {
         const target = state.target!;
+        const { picked, keep } = dedupeBySource(state.candidates);
         try {
           const draft = await deps.llm.structured({
             system: DRAFT_SYSTEM,
-            input: draftInput(target.verdict, state.candidates),
+            input: draftInput(target.verdict, picked),
             schema: DraftSchema,
             name: 'draft_advice',
           });
+          remapDraftIndices(draft, keep);
           const problem = validateDraft(draft, state.candidates);
           if (problem) {
             const reason: NoSourceReason =
@@ -218,7 +220,7 @@ export function buildAssessmentGraph(deps: AssessmentDeps) {
           reason: string;
         }[] = [];
         try {
-          const out = await (deps.gateLlm ?? deps.llm).structured({
+          const out = await deps.llm.structured({
             system: GATE_SYSTEM,
             input: gateInput(verdict, claims),
             schema: GateBatchSchema,

@@ -14,14 +14,21 @@
  * 用法：pnpm rag:eval
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { assembleCitations, DraftSchema, renderAdvice, validateDraft } from '../../src/assessment/advice.js';
+import {
+  assembleCitations,
+  DraftSchema,
+  dedupeBySource,
+  remapDraftIndices,
+  renderAdvice,
+  validateDraft,
+} from '../../src/assessment/advice.js';
 import { GateBatchSchema, checkGateResult, type GateCheck, type GateClaim } from '../../src/assessment/gate.js';
 import { DRAFT_SYSTEM, GATE_SYSTEM, draftInput, gateInput } from '../../src/assessment/prompts.js';
 import { ragConfig } from '../../src/assessment/types.js';
 import { SINGLE_USER_ID } from '../../src/graph/state.js';
 import { createEmbeddingClient } from '../../src/kb/embedding.js';
 import { createRerankClient } from '../../src/kb/rerank.js';
-import { createLlmClient, resolveProvider } from '../../src/llm/index.js';
+import { createLlmClient } from '../../src/llm/index.js';
 import { buildVolumeHook } from '../../src/metrics/hook.js';
 import { createAssessmentRepo } from '../../src/services/assessment.js';
 
@@ -77,7 +84,6 @@ if (unlabeled > 0) {
 }
 
 const llm = createLlmClient();
-const gateLlm = createLlmClient(resolveProvider(), { method: 'jsonMode' });
 const repo = createAssessmentRepo({ embedder: createEmbeddingClient(), reranker: createRerankClient() });
 const cfg = ragConfig();
 
@@ -108,12 +114,14 @@ for (const row of rows) {
   let noSourceReason: string | null = null;
 
   if (candidates.length > 0) {
+    const { picked, keep } = dedupeBySource(candidates);
     const draft = await llm.structured({
       system: DRAFT_SYSTEM,
-      input: draftInput(verdict, candidates),
+      input: draftInput(verdict, picked),
       schema: DraftSchema,
       name: 'draft_advice',
     });
+    remapDraftIndices(draft, keep);
     const problem = validateDraft(draft, candidates);
     if (problem) {
       noSourceReason = problem === 'source_count' ? 'generator_no_source_claim' : 'draft_invalid';
@@ -125,7 +133,7 @@ for (const row of rows) {
         return [{ claim_id: `C${i}`, claim: c.claim, candidate_id: `K${c.source_index}`, chunk_text: candidate.chunk_text }];
       });
       try {
-        const out = await gateLlm.structured({
+        const out = await llm.structured({
           system: GATE_SYSTEM,
           input: gateInput(verdict, claims),
           schema: GateBatchSchema,

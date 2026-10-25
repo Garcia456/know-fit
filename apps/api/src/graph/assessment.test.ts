@@ -74,41 +74,16 @@ function makeRepo(overrides: Partial<AssessmentRepo> = {}) {
   return { repo, persisted };
 }
 
-function build(repo: AssessmentRepo, llm: LlmClient = createFakeClient(), gateLlm?: LlmClient) {
-  return buildAssessmentGraph({ llm, gateLlm, repo });
+function build(repo: AssessmentRepo, llm: LlmClient = createFakeClient()) {
+  return buildAssessmentGraph({ llm, repo });
 }
 
-const invoke = (repo: AssessmentRepo, llm?: LlmClient, gateLlm?: LlmClient) =>
-  build(repo, llm, gateLlm).invoke({
+const invoke = (repo: AssessmentRepo, llm?: LlmClient) =>
+  build(repo, llm).invoke({
     user_id: 'user-1',
     related_record_id: 'session-1',
     trigger: 'explicit',
   });
-
-/** 记录 structured 的 name，用来断言闸② 走的是专用客户端 */
-function recordingLlm(names: string[]): LlmClient {
-  const inner = createFakeClient();
-  return {
-    ...inner,
-    async structured<T extends Record<string, unknown>>(req: Parameters<LlmClient['structured']>[0]) {
-      names.push(req.name);
-      return inner.structured(req) as Promise<T>;
-    },
-  };
-}
-
-describe('闸② 的客户端', () => {
-  it('注入 gateLlm 时，verify_citation 只打 gateLlm', async () => {
-    const mainNames: string[] = [];
-    const gateNames: string[] = [];
-    const { repo } = makeRepo();
-    const state = await invoke(repo, recordingLlm(mainNames), recordingLlm(gateNames));
-
-    expect(gateNames).toEqual(['verify_citation']);
-    expect(mainNames).not.toContain('verify_citation');
-    expect(state.card?.has_source).toBe(true);
-  });
-});
 
 describe('有源路径', () => {
   it('起草 → 闸② → 引用落库 → 卡片带逐字短引用', async () => {

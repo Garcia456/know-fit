@@ -18,7 +18,7 @@ import { createEmbeddingClient, type EmbeddingClient } from '../kb/embedding.js'
 import { visiblePlatforms } from '../kb/platforms.js';
 import { createRerankClient, type RerankClient } from '../kb/rerank.js';
 import { assessment, citation, knowledgeChunk, knowledgeSource, userProfile, workoutSession } from '../db/schema.js';
-import { createLlmClient, resolveProvider } from '../llm/index.js';
+import { createLlmClient } from '../llm/index.js';
 import type { LlmClient } from '../llm/client.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 import { prevSameSplitVolume, sessionVolume } from './metrics.js';
@@ -347,7 +347,6 @@ let cachedGraph: ReturnType<typeof buildAssessmentGraph> | null = null;
 function assessmentGraph(llm: LlmClient) {
   cachedGraph ??= buildAssessmentGraph({
     llm,
-    gateLlm: createLlmClient(resolveProvider(), { method: 'jsonMode' }),
     repo: createAssessmentRepo({ embedder: createEmbeddingClient(), reranker: createRerankClient() }),
     now: () => new Date(),
   });
