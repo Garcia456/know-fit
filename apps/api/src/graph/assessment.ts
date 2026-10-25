@@ -123,6 +123,8 @@ export type AssessmentStateValue = z.infer<typeof AssessmentState>;
 
 export interface AssessmentDeps {
   llm: LlmClient;
+  /** 闸② 专用的客户端 —— 真实端点下 functionCalling 会空返回，这里走 jsonMode */
+  gateLlm?: LlmClient;
   repo: AssessmentRepo;
   now?: () => Date;
 }
@@ -216,7 +218,7 @@ export function buildAssessmentGraph(deps: AssessmentDeps) {
           reason: string;
         }[] = [];
         try {
-          const out = await deps.llm.structured({
+          const out = await (deps.gateLlm ?? deps.llm).structured({
             system: GATE_SYSTEM,
             input: gateInput(verdict, claims),
             schema: GateBatchSchema,

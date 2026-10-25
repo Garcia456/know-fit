@@ -21,7 +21,7 @@ import { ragConfig } from '../../src/assessment/types.js';
 import { SINGLE_USER_ID } from '../../src/graph/state.js';
 import { createEmbeddingClient } from '../../src/kb/embedding.js';
 import { createRerankClient } from '../../src/kb/rerank.js';
-import { createLlmClient } from '../../src/llm/index.js';
+import { createLlmClient, resolveProvider } from '../../src/llm/index.js';
 import { buildVolumeHook } from '../../src/metrics/hook.js';
 import { createAssessmentRepo } from '../../src/services/assessment.js';
 
@@ -77,6 +77,7 @@ if (unlabeled > 0) {
 }
 
 const llm = createLlmClient();
+const gateLlm = createLlmClient(resolveProvider(), { method: 'jsonMode' });
 const repo = createAssessmentRepo({ embedder: createEmbeddingClient(), reranker: createRerankClient() });
 const cfg = ragConfig();
 
@@ -124,7 +125,7 @@ for (const row of rows) {
         return [{ claim_id: `C${i}`, claim: c.claim, candidate_id: `K${c.source_index}`, chunk_text: candidate.chunk_text }];
       });
       try {
-        const out = await llm.structured({
+        const out = await gateLlm.structured({
           system: GATE_SYSTEM,
           input: gateInput(verdict, claims),
           schema: GateBatchSchema,

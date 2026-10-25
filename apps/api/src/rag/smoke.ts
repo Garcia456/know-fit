@@ -18,7 +18,7 @@ import { ragConfig } from '../assessment/types.js';
 import { SINGLE_USER_ID } from '../graph/state.js';
 import { resolveEmbeddingProvider, createEmbeddingClient } from '../kb/embedding.js';
 import { createRerankClient, resolveRerankProvider } from '../kb/rerank.js';
-import { createLlmClient } from '../llm/index.js';
+import { createLlmClient, resolveProvider } from '../llm/index.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 import { createAssessmentRepo } from '../services/assessment.js';
 import type { VolumeHook } from '../contracts/metrics.js';
@@ -37,6 +37,8 @@ const cfg = ragConfig();
 line('参数', `topK=${cfg.topK} topN=${cfg.topN} 相似度≥${cfg.minSimilarity} 引用≤${cfg.maxCitations}`);
 
 const llm = createLlmClient();
+// 闸② 走 jsonMode：真实端点下 functionCalling 会空返回（实测 2026-10-25）
+const gateLlm = createLlmClient(resolveProvider(), { method: 'jsonMode' });
 const repo = createAssessmentRepo({
   embedder: createEmbeddingClient(),
   reranker: createRerankClient(),
@@ -111,7 +113,7 @@ let checks: GateCheck[] = [];
 if (claims.length > 0) {
   const t4 = Date.now();
   try {
-    const out = await llm.structured({
+    const out = await gateLlm.structured({
       system: GATE_SYSTEM,
       input: gateInput(verdict, claims),
       schema: GateBatchSchema,
