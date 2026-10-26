@@ -19,6 +19,11 @@ function seed(): Seed {
   return cachedSeed;
 }
 
+/** 19 块肌群及 coarse 归类 —— 检索 query 聚部位用 */
+export function muscleRegions() {
+  return seed().muscle_regions;
+}
+
 async function loadExercises(sessionId: string): Promise<AllocExercise[]> {
   const db = getDb();
 

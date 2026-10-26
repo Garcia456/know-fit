@@ -8,6 +8,7 @@ import {
   type Draft,
 } from './advice.js';
 import type { AssessmentCandidate } from './types.js';
+import { buildGateWindows } from './windows.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 
 const VERDICT = buildVolumeHook({ current: 2000, baseline: 2500, split_label: '推日' });
@@ -21,6 +22,12 @@ function candidate(id: string, sourceId: string): AssessmentCandidate {
     url: `https://www.douyin.com/video/${sourceId}`,
     start_ts: 10,
     chunk_text: `片段 ${id} 的正文，足够长到能当引用。`,
+    windows: buildGateWindows({
+      chunk_text: `片段 ${id} 的正文，足够长到能当引用。`,
+      start_ts: 0,
+      end_ts: 1,
+      segments: null,
+    }),
     context_prefix: '[测试]',
     similarity: 0.9,
     rerank_score: 0.8,

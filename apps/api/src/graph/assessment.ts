@@ -6,22 +6,14 @@ import { VolumeHookSchema } from '../contracts/metrics.js';
 import {
   DraftSchema,
   assembleCitations,
-  dedupeBySource,
-  remapDraftIndices,
   renderAdvice,
   sanitizeNoSourceAdvice,
   toAdviceClaims,
-  validateDraft,
 } from '../assessment/advice.js';
-import { GateBatchSchema, GateCheckSchema, checkGateResult, type GateCheck, type GateClaim } from '../assessment/gate.js';
-import {
-  DRAFT_SYSTEM,
-  GATE_SYSTEM,
-  NO_SOURCE_SYSTEM,
-  draftInput,
-  gateInput,
-  noSourceInput,
-} from '../assessment/prompts.js';
+import { draftAdvice } from '../assessment/draft.js';
+import { GateCheckSchema, type GateCheck, type GateClaim } from '../assessment/gate.js';
+import { NO_SOURCE_SYSTEM, noSourceInput } from '../assessment/prompts.js';
+import { verifyClaims } from '../assessment/verify.js';
 import { buildQuery } from '../assessment/query.js';
 import type { AssessmentRepo } from '../assessment/repo.js';
 import { ragConfig, type NoSourceReason, type PipelineMeta } from '../assessment/types.js';
@@ -51,6 +43,9 @@ const CandidateStateSchema = z.object({
   url: z.string(),
   start_ts: z.number(),
   chunk_text: z.string(),
+  windows: z
+    .array(z.object({ index: z.number(), start: z.number(), end: z.number(), text: z.string() }))
+    .default([]),
   context_prefix: z.string(),
   similarity: z.number(),
   rerank_score: z.number(),
@@ -99,6 +94,7 @@ export const AssessmentState = z.object({
       session_date: z.string(),
       split_label: z.string().nullable(),
       goal: z.string().nullable(),
+      body_parts: z.array(z.string()).default([]),
       verdict: VolumeHookSchema,
     })
     .nullable()
@@ -160,7 +156,7 @@ export function buildAssessmentGraph(deps: AssessmentDeps) {
 
       .addNode('build_query', async (state) => {
         const target = state.target!;
-        const built = await buildQuery(target.verdict, target.goal, deps.llm);
+        const built = await buildQuery(target.verdict, target.goal, deps.llm, target.body_parts);
         return { query: built.query, query_source: built.source };
       })
 
@@ -174,17 +170,9 @@ export function buildAssessmentGraph(deps: AssessmentDeps) {
 
       .addNode('generate_draft', async (state) => {
         const target = state.target!;
-        const { picked, keep } = dedupeBySource(state.candidates);
         try {
-          const draft = await deps.llm.structured({
-            system: DRAFT_SYSTEM,
-            input: draftInput(target.verdict, picked),
-            schema: DraftSchema,
-            name: 'draft_advice',
-          });
-          remapDraftIndices(draft, keep);
-          const problem = validateDraft(draft, state.candidates);
-          if (problem) {
+          const { draft, problem } = await draftAdvice(deps.llm, target.verdict, state.candidates);
+          if (!draft || problem) {
             const reason: NoSourceReason =
               problem === 'source_count' ? 'generator_no_source_claim' : 'draft_invalid';
             return { draft: null, draft_problem: problem, meta: { ...state.meta, no_source_reason: reason } };
@@ -209,43 +197,12 @@ export function buildAssessmentGraph(deps: AssessmentDeps) {
             claim: claim.claim,
             candidate_id: `K${claim.source_index}`,
             chunk_text: candidate.chunk_text,
+            windows: candidate.windows,
           });
         }
 
-        let results: {
-          claim_id: string;
-          candidate_id: string;
-          supported: boolean;
-          supporting_quote: string;
-          reason: string;
-        }[] = [];
-        try {
-          const out = await deps.llm.structured({
-            system: GATE_SYSTEM,
-            input: gateInput(verdict, claims),
-            schema: GateBatchSchema,
-            name: 'verify_citation',
-          });
-          results = out.results;
-        } catch {
-          // fail-closed：解析失败 / 超时一律按不支撑
-        }
-
-        const byId = new Map(results.map((r) => [r.claim_id, r]));
-        const checks: GateCheck[] = claims.map((claim) =>
-          checkGateResult({
-            result:
-              byId.get(claim.claim_id) ?? {
-                claim_id: claim.claim_id,
-                candidate_id: claim.candidate_id,
-                supported: false,
-                supporting_quote: '',
-                reason: '闸② 没有给出结果',
-              },
-            claim,
-            verdict,
-          }),
-        );
+        // 每条 claim 单独调用、并发发；失败一条也是 fail-closed
+        const checks: GateCheck[] = (await verifyClaims(deps.llm, verdict, claims)).map((v) => v.check);
 
         const assembled = assembleCitations({
           draft,

@@ -16,15 +16,20 @@ export const FALLBACK_QUERY = '训练 容量 调整';
 
 const QueryResultSchema = z.object({ query: z.string() });
 
-export function templateQuery(verdict: VolumeHook, goal: string | null): string | null {
+export function templateQuery(
+  verdict: VolumeHook,
+  goal: string | null,
+  bodyParts: readonly string[] = [],
+): string | null {
   const split = verdict.scope.split_label;
   const delta = verdict.delta_pct;
   if (!split || delta === null) return null;
 
   const prefix = goal?.trim() ? goal.trim() : '训练';
-  if (delta <= -10) return `${prefix} ${split} 训练容量下降 怎么调整`;
-  if (delta >= 10) return `${prefix} ${split} 训练容量上涨 要不要加量`;
-  return `${prefix} ${split} 训练容量停滞 怎么突破`;
+  const parts = bodyParts.length > 0 ? ` ${bodyParts.join(' ')}` : '';
+  if (delta <= -10) return `${prefix} ${split}${parts} 训练容量下降 怎么调整`;
+  if (delta >= 10) return `${prefix} ${split}${parts} 训练容量上涨 要不要加量`;
+  return `${prefix} ${split}${parts} 训练容量停滞 怎么突破`;
 }
 
 function usableFallbackQuery(query: string): boolean {
@@ -36,8 +41,9 @@ export async function buildQuery(
   verdict: VolumeHook,
   goal: string | null,
   llm: LlmClient,
+  bodyParts: readonly string[] = [],
 ): Promise<{ query: string; source: QuerySource }> {
-  const templated = templateQuery(verdict, goal);
+  const templated = templateQuery(verdict, goal, bodyParts);
   if (templated) return { query: templated, source: 'template' };
 
   try {

@@ -14,21 +14,16 @@
  * 用法：pnpm rag:eval
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import {
-  assembleCitations,
-  DraftSchema,
-  dedupeBySource,
-  remapDraftIndices,
-  renderAdvice,
-  validateDraft,
-} from '../../src/assessment/advice.js';
-import { GateBatchSchema, checkGateResult, type GateCheck, type GateClaim } from '../../src/assessment/gate.js';
-import { DRAFT_SYSTEM, GATE_SYSTEM, draftInput, gateInput } from '../../src/assessment/prompts.js';
+import { assembleCitations, renderAdvice } from '../../src/assessment/advice.js';
+import { draftAdvice } from '../../src/assessment/draft.js';
+import { GATE_QUOTE_MAX, type GateCheck, type GateClaim } from '../../src/assessment/gate.js';
+import { windowSpan } from '../../src/assessment/windows.js';
+import { verifyClaims } from '../../src/assessment/verify.js';
 import { ragConfig } from '../../src/assessment/types.js';
 import { SINGLE_USER_ID } from '../../src/graph/state.js';
-import { createEmbeddingClient } from '../../src/kb/embedding.js';
-import { createRerankClient } from '../../src/kb/rerank.js';
-import { createLlmClient } from '../../src/llm/index.js';
+import { createEmbeddingClient, resolveEmbeddingProvider } from '../../src/kb/embedding.js';
+import { createRerankClient, resolveRerankProvider } from '../../src/kb/rerank.js';
+import { createLlmClient, resolveProvider } from '../../src/llm/index.js';
 import { buildVolumeHook } from '../../src/metrics/hook.js';
 import { createAssessmentRepo } from '../../src/services/assessment.js';
 
@@ -50,6 +45,15 @@ interface RowResult {
   gate_passed: boolean;
   has_source: boolean;
   citations: number;
+  citations_detail: { claim: string; quote: string; creator: string; title: string }[];
+  gate_rejects: {
+    claim: string;
+    reason: string;
+    from_window: number | null;
+    to_window: number | null;
+    quote: string;
+    quote_len: number;
+  }[];
   no_source_reason: string | null;
   latency_ms: number;
   advice: string;
@@ -83,6 +87,17 @@ if (unlabeled > 0) {
   console.warn(`⚠️ 有 ${unlabeled} 条没标 author_reviewed=true —— 它们不进 hit@5 汇总。`);
 }
 
+// 🔴 替身管线会让 20 条全部 no_candidate、看起来像「100% 无源」—— 直接拒绝，别给假数字
+if (resolveProvider() !== 'openai' || resolveEmbeddingProvider() !== 'real') {
+  console.error(
+    'rag:eval 需要真实端点：LLM_PROVIDER=openai EMBEDDING_PROVIDER=real RERANK_PROVIDER=real pnpm rag:eval',
+  );
+  process.exit(1);
+}
+if (resolveRerankProvider() !== 'real') {
+  console.warn('⚠️ RERANK_PROVIDER 不是 real —— 本轮按向量顺序取 topN，结果不可与真实 rerank 的轮次横比。');
+}
+
 const llm = createLlmClient();
 const repo = createAssessmentRepo({ embedder: createEmbeddingClient(), reranker: createRerankClient() });
 const cfg = ragConfig();
@@ -112,48 +127,44 @@ for (const row of rows) {
   let advice = '';
   let hasSource = false;
   let noSourceReason: string | null = null;
+  let citationDetail: RowResult['citations_detail'] = [];
+  let gateRejects: RowResult['gate_rejects'] = [];
 
   if (candidates.length > 0) {
-    const { picked, keep } = dedupeBySource(candidates);
-    const draft = await llm.structured({
-      system: DRAFT_SYSTEM,
-      input: draftInput(verdict, picked),
-      schema: DraftSchema,
-      name: 'draft_advice',
-    });
-    remapDraftIndices(draft, keep);
-    const problem = validateDraft(draft, candidates);
-    if (problem) {
+    let drafted: Awaited<ReturnType<typeof draftAdvice>> | null = null;
+    try {
+      drafted = await draftAdvice(llm, verdict, candidates);
+    } catch {
+      // 一条 query 的解析失败不该让整轮评测挂掉
+      noSourceReason = 'draft_invalid';
+    }
+    const draft = drafted?.draft ?? null;
+    const problem = drafted?.problem ?? null;
+    if (!draft || problem) {
       noSourceReason = problem === 'source_count' ? 'generator_no_source_claim' : 'draft_invalid';
     } else {
       const claims: GateClaim[] = draft.claims.flatMap((c, i) => {
         if (c.basis !== 'source' || c.source_index === null) return [];
         const candidate = candidates[c.source_index];
         if (!candidate) return [];
-        return [{ claim_id: `C${i}`, claim: c.claim, candidate_id: `K${c.source_index}`, chunk_text: candidate.chunk_text }];
+        return [{ claim_id: `C${i}`, claim: c.claim, candidate_id: `K${c.source_index}`, chunk_text: candidate.chunk_text, windows: candidate.windows }];
       });
       try {
-        const out = await llm.structured({
-          system: GATE_SYSTEM,
-          input: gateInput(verdict, claims),
-          schema: GateBatchSchema,
-          name: 'verify_citation',
-        });
-        const byId = new Map(out.results.map((r) => [r.claim_id, r]));
-        checks = claims.map((claim) =>
-          checkGateResult({
-            result:
-              byId.get(claim.claim_id) ?? {
-                claim_id: claim.claim_id,
-                candidate_id: claim.candidate_id,
-                supported: false,
-                supporting_quote: '',
-                reason: '闸② 没给出结果',
-              },
-            claim,
-            verdict,
-          }),
-        );
+        const verdicts = await verifyClaims(llm, verdict, claims);
+        checks = verdicts.map((v) => v.check);
+        gateRejects = verdicts
+          .filter((v) => !v.check.supported)
+          .map((v) => {
+            const picked = v.raw ? windowSpan(v.claim.windows, v.raw.from_window) : null;
+            return {
+              claim: v.claim.claim,
+              reason: v.check.reason,
+              from_window: v.raw?.from_window ?? null,
+              to_window: picked?.to_index ?? null,
+              quote: picked?.text ?? '',
+              quote_len: picked?.text.length ?? 0,
+            };
+          });
       } catch {
         noSourceReason = 'gate2_reject';
       }
@@ -169,6 +180,12 @@ for (const row of rows) {
       } else {
         hasSource = true;
         advice = renderAdvice(draft);
+        citationDetail = assembled.plans.map((plan) => ({
+          claim: draft.claims[plan.claim_index]!.claim,
+          quote: plan.candidate.chunk_text.slice(plan.quote_start, plan.quote_end),
+          creator: plan.candidate.creator,
+          title: plan.candidate.title,
+        }));
       }
     }
   } else {
@@ -192,6 +209,8 @@ for (const row of rows) {
     gate_passed: checks.length > 0 && checks.every((c) => c.supported),
     has_source: hasSource,
     citations: checks.filter((c) => c.supported).length,
+    citations_detail: citationDetail,
+    gate_rejects: gateRejects,
     no_source_reason: noSourceReason,
     latency_ms: latency,
     advice,
@@ -214,10 +233,12 @@ writeFileSync(new URL(`results-${stamp}.jsonl`, dir), `${results.map((r) => JSON
 writeFileSync(new URL(`ab-${stamp}.jsonl`, dir), `${ab.map((r) => JSON.stringify(r)).join('\n')}\n`);
 writeFileSync(new URL(`ab-key-${stamp}.json`, dir), JSON.stringify(abKey, null, 2));
 
-const labeled = results.filter((r) => r.hit !== null);
+const reviewed = new Set(rows.filter((r) => r.author_reviewed).map((r) => r.id));
+const labeled = results.filter((r) => reviewed.has(r.id) && r.hit !== null);
 const hitRate = labeled.length === 0 ? null : labeled.filter((r) => r.hit).length / labeled.length;
 const noSourceRate = results.filter((r) => !r.has_source).length / results.length;
 const gateRejects = results.filter((r) => r.no_source_reason === 'gate2_reject').length;
+const allRejects = results.flatMap((r) => r.gate_rejects);
 const reasons = results.reduce<Record<string, number>>((acc, r) => {
   if (r.no_source_reason) acc[r.no_source_reason] = (acc[r.no_source_reason] ?? 0) + 1;
   return acc;
@@ -235,9 +256,10 @@ const md = [
   '',
   `- hit@5：${hitRate === null ? '未标注' : `${(hitRate * 100).toFixed(1)}%（${labeled.filter((r) => r.hit).length}/${labeled.length}）`}`,
   `- 无源率：${(noSourceRate * 100).toFixed(1)}%（目标 ≤40%）`,
-  `- 闸② 拒绝：${gateRejects} 条`,
+  `- 闸② 拒绝：${gateRejects} 条（编号无效 ${allRejects.filter((j) => j.quote_len === 0).length} 条 / 引文超 ${GATE_QUOTE_MAX} 字 ${allRejects.filter((j) => j.quote_len > GATE_QUOTE_MAX).length} 条）`,
   `- no-source 原因分布：${JSON.stringify(reasons)}`,
-  `- 耗时：p50 ${pct(0.5)}ms / p95 ${pct(0.95)}ms（目标 ≤30s）`,
+  `- 唯一 query：${new Set(results.map((r) => r.query)).size} / ${results.length}（模板优先：同 split + 同趋势会生成同一句）`,
+  `- 耗时：p50 ${pct(0.5)}ms / p95 ${pct(0.95)}ms（目标 ≤10s）`,
   `- 未标注 query：${unlabeled} 条`,
   '',
   '## 逐条',
@@ -249,6 +271,32 @@ const md = [
       `| ${r.id} | ${r.query} | ${r.candidates} | ${r.hit === null ? '—' : r.hit ? '✓' : '✗'} | ${r.gate_passed ? '✓' : '✗'} | ${r.has_source ? '✓' : '✗'} | ${r.citations} | ${r.latency_ms}ms | ${r.no_source_reason ?? '—'} |`,
   ),
   '',
+  '## 闸② 拒绝明细（判得对不对，看这里）',
+  '',
+  ...results.flatMap((r) =>
+    r.gate_rejects.map(
+      (j) =>
+        `- ${r.id}：${j.claim} —— ${j.reason}（窗口 ${j.from_window ?? '—'}–${j.to_window ?? '—'} / ${j.quote_len} 字）\n  - 原始 quote：${j.quote || '（无）'}`,
+    ),
+  ),
+  '',
+  '## 逐条引用（来源可用率复核 —— 每条标「真实讲了 / 没讲 / 另一回事」）',
+  '',
+  ...results.flatMap((r) =>
+    r.citations_detail.length === 0
+      ? []
+      : [
+          `### ${r.id} · ${r.query}`,
+          '',
+          `建议：${r.advice.replace(/\n/g, ' / ')}`,
+          '',
+          ...r.citations_detail.flatMap((c) => [
+            `- claim：${c.claim}`,
+            `  - 引用：${c.creator}「${c.quote}」`,
+          ]),
+          '',
+        ],
+  ),
   '## 下一步（作者）',
   '',
   `1. 逐条看 \`results-${stamp}.jsonl\` 里的引用句与 advice，标「真实讲了 / 没讲 / 另一回事」；`,

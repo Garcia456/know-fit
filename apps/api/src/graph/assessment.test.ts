@@ -8,6 +8,7 @@ import {
 } from './assessment.js';
 import type { AssessmentRepo, PersistAssessmentInput } from '../assessment/repo.js';
 import type { AssessmentCandidate } from '../assessment/types.js';
+import { buildGateWindows } from '../assessment/windows.js';
 import { FAKE_UNSUPPORTED_MARK, createFakeClient } from '../llm/fake.js';
 import type { LlmClient } from '../llm/client.js';
 import { buildVolumeHook } from '../metrics/hook.js';
@@ -19,7 +20,8 @@ import { buildVolumeHook } from '../metrics/hook.js';
 
 const SPLIT = '推日';
 const VERDICT = buildVolumeHook({ current: 2000, baseline: 2500, split_label: SPLIT });
-const CHUNK = '先说一句背景，这句话也得够长但不该是最长的。容量下降的时候先把离心放慢，等动作稳住了再考虑加重量。';
+const CHUNK =
+  '先说一句背景，这句话也得够长但不该是最长的。容量下降的时候先把离心放慢，等动作稳住了再考虑加重量。训练日志要记到每一组，别只记总容量，不然下次没法判断是哪一组掉了。另外每次训练后把感受记下来，过两周再回看会清楚很多。';
 
 const candidate = (text = CHUNK): AssessmentCandidate => ({
   chunk_id: 'chunk-1',
@@ -29,6 +31,7 @@ const candidate = (text = CHUNK): AssessmentCandidate => ({
   url: 'https://www.douyin.com/video/1',
   start_ts: 10,
   chunk_text: text,
+  windows: buildGateWindows({ chunk_text: text, start_ts: 10, end_ts: 60, segments: null }),
   context_prefix: '[测试]',
   similarity: 0.9,
   rerank_score: 0.8,
@@ -51,6 +54,7 @@ function makeRepo(overrides: Partial<AssessmentRepo> = {}) {
           session_date: '2026-10-20',
           split_label: SPLIT,
           goal: '增肌',
+          body_parts: ['胸'],
           verdict: VERDICT,
         },
       };

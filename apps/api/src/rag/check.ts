@@ -14,7 +14,6 @@
 import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { templateQuery } from '../assessment/query.js';
-import { buildVolumeHook } from '../metrics/hook.js';
 import { FAKE_EMBEDDING_MODEL, createFakeEmbeddingClient } from '../kb/embedding.js';
 import { FAKE_RERANK_MODEL, createFakeRerankClient } from '../kb/rerank.js';
 import { SINGLE_USER_ID } from '../graph/state.js';
@@ -148,7 +147,7 @@ async function insertSession(input: { day: string; split: string | null; weight:
   if (input.weight !== null) {
     const ex = await client.query<{ id: string }>(
       `INSERT INTO exercise_entry (session_id, "order", raw_name, exercise_id, name_confidence)
-       VALUES ($1, 0, '卧推', 'barbell_bench_press', 'high') RETURNING id`,
+       VALUES ($1, 0, '卧推', 'bench_press', 'high') RETURNING id`,
       [sessionId],
     );
     const entryId = ex.rows[0]!.id;
@@ -212,16 +211,24 @@ try {
   await cleanup();
   const realBefore = await nonFixtureFingerprint();
 
-  // ── 1. 造 fixture：3 条源 / 4 个片 ────────────────────────────────
-  const goalRow = await client.query<{ goal: string | null }>(
-    'SELECT goal FROM user_profile WHERE user_id = $1',
-    [USER],
-  );
-  const goal = goalRow.rows[0]?.goal ?? null;
+  // ── 1. 造 fixture：会话 + 3 条源 / 4 个片 ─────────────────────────
+  // 会话先建：query 会带上本次训练的主要部位（ADR-039），embedding 替身按整句哈希，
+  // 片段向量必须与最终 query 逐字一致才能命中。
+  await insertSession({ day: daysAgo(5), split: SPLIT, weight: 100 });
+  const sessionB = await insertSession({ day: daysAgo(3), split: SPLIT, weight: 80 });
+  // C 故意不带 split：既验「零组 + 缺 split」的不足分支，也不搅乱后面的同 split 基线
+  const sessionC = await insertSession({ day: daysAgo(2), split: null, weight: null });
+  ok('会话 fixture 就绪：A 2500kg / B 2000kg（同 split）/ C 零组');
 
-  const verdict = buildVolumeHook({ current: 2000, baseline: 2500, split_label: SPLIT });
-  const query = templateQuery(verdict, goal) ?? '训练 容量 调整';
   const embedder = createFakeEmbeddingClient();
+  const repo = createAssessmentRepo({ embedder, reranker: createFakeRerankClient() });
+  const target = await repo.computeTarget({
+    user_id: USER,
+    session: { session_id: sessionB, session_date: daysAgo(3), split_label: SPLIT },
+  });
+  if (target.status !== 'ok') throw new Error(`会话 fixture 算不出判定：${target.status}`);
+  const query =
+    templateQuery(target.target.verdict, target.target.goal, target.target.body_parts) ?? '训练 容量 调整';
   const [vector] = await embedder.embed([query]);
   if (!vector) throw new Error('替身 embedding 没返回向量');
 
@@ -269,7 +276,6 @@ try {
   ok(`fixture 就绪：3 条源 / 4 个片；query = 「${query}」`);
 
   // ── 2. 检索过滤：只有 S1 的陈述片能进候选 ──────────────────────────
-  const repo = createAssessmentRepo({ embedder, reranker: createFakeRerankClient() });
   const retrieved = await repo.retrieve({ user_id: USER, query });
   if (retrieved.status !== 'ok') {
     bad(`检索失败：${retrieved.message}`);
@@ -292,14 +298,7 @@ try {
     );
   }
 
-  // ── 3. 会话 fixture：两次同 split + 一次零组 ───────────────────────
-  await insertSession({ day: daysAgo(5), split: SPLIT, weight: 100 });
-  const sessionB = await insertSession({ day: daysAgo(3), split: SPLIT, weight: 80 });
-  // C 故意不带 split：既验「零组 + 缺 split」的不足分支，也不搅乱后面的同 split 基线
-  const sessionC = await insertSession({ day: daysAgo(2), split: null, weight: null });
-  ok('会话 fixture 就绪：A 2500kg / B 2000kg（同 split）/ C 零组');
-
-  // ── 4. 钩子评估：有源 + 引用指向 S1 ───────────────────────────────
+  // ── 3. 钩子评估：有源 + 引用指向 S1 ───────────────────────────────
   const hook = await postJson('/api/assessments', { trigger: 'hook', related_record_id: sessionB });
   const card = hook.json?.card as Record<string, unknown> | undefined;
   expect(hook.status === 200, 'POST /api/assessments（hook）→ 200', `HTTP ${hook.status}`);

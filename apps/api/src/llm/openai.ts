@@ -1,6 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import type { LlmClient, StructuredRequest } from './client.js';
+import type { LlmCallOptions, LlmClient, StructuredRequest } from './client.js';
 
 export type StructuredMethod = 'jsonSchema' | 'functionCalling' | 'jsonMode';
 
@@ -50,17 +50,24 @@ export function createOpenAiClient(options: OpenAiClientOptions = {}): LlmClient
 
   return {
     model: modelName,
-    async structured<T extends Record<string, unknown>>(req: StructuredRequest<T>): Promise<T> {
+    async structured<T extends Record<string, unknown>>(
+      req: StructuredRequest<T>,
+      options?: LlmCallOptions,
+    ): Promise<T> {
       const runnable = model.withStructuredOutput<T>(req.schema, { name: req.name, method });
-      const out = await runnable.invoke([new SystemMessage(req.system), new HumanMessage(req.input)]);
+      const out = await runnable.invoke([new SystemMessage(req.system), new HumanMessage(req.input)], {
+        signal: options?.signal,
+      });
       if (out === undefined || out === null) {
         throw new Error(`结构化输出为空（method=${method}）—— 模型没回可解析的 JSON`);
       }
       return out;
     },
 
-    async generate(req): Promise<string> {
-      const res = await model.invoke([new SystemMessage(req.system), new HumanMessage(req.input)]);
+    async generate(req, options): Promise<string> {
+      const res = await model.invoke([new SystemMessage(req.system), new HumanMessage(req.input)], {
+        signal: options?.signal,
+      });
       if (typeof res.content === 'string') return res.content;
       return res.content
         .map((part) => (typeof part === 'string' ? part : 'text' in part ? part.text : ''))

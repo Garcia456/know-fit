@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import type { VolumeHook } from '../contracts/metrics.js';
+import { windowSpan, type GateWindow } from './windows.js';
 
 /**
  * 闸② 的确定性校验 —— LLM 说「支撑」不算数。
  *
- * 一条引用要同时满足：
- *   ① 支撑句是片段原文的连续子串；
- *   ② 支撑句 12–120 字；
- *   ③ 建议里的数字必须能在判定或支撑句里找到（防数字幻觉）。
+ * 模型只返回**起点的窗口编号**，不返回原文、也不返回终点；
+ * 引文由服务端从起点起取最多 3 个窗口切出来。一条引用要同时满足：
+ *   ① 起点编号合法；
+ *   ② 切出来的引文 12–120 字，且与片段原文逐字一致；
+ *   ③ 建议里的数字必须能在判定或引文里找到（防数字幻觉）。
  * 任一条不过 → 不支撑；解析失败 / 超时也按不支撑（fail-closed）。
  */
 
@@ -18,11 +20,13 @@ export const GateResultSchema = z.object({
   claim_id: z.string(),
   candidate_id: z.string(),
   supported: z.boolean(),
-  supporting_quote: z.string(),
+  from_window: z.number().int().nonnegative(),
   reason: z.string(),
 });
 
 export const GateBatchSchema = z.object({ results: z.array(GateResultSchema) });
+
+export type GateResult = z.infer<typeof GateResultSchema>;
 
 export const GateCheckSchema = z.object({
   claim_id: z.string(),
@@ -41,6 +45,7 @@ export interface GateClaim {
   claim: string;
   candidate_id: string;
   chunk_text: string;
+  windows: GateWindow[];
 }
 
 export function numbersIn(value: unknown): number[] {
@@ -57,7 +62,7 @@ export function numbersAllowed(claim: string, allowed: number[]): boolean {
 }
 
 export function checkGateResult(input: {
-  result: { claim_id: string; candidate_id: string; supported: boolean; supporting_quote: string; reason: string };
+  result: { claim_id: string; candidate_id: string; supported: boolean; from_window: number; reason: string };
   claim: GateClaim;
   verdict: VolumeHook;
 }): GateCheck {
@@ -77,15 +82,19 @@ export function checkGateResult(input: {
   }
   if (!result.supported) return fail(result.reason || 'LLM 判定不支撑');
 
-  const quote = result.supporting_quote.trim();
-  if (quote.length < GATE_QUOTE_MIN) return fail(`支撑句太短（${quote.length} 字）`);
-  if (quote.length > GATE_QUOTE_MAX) return fail(`支撑句太长（${quote.length} 字）`);
-  const start = claim.chunk_text.indexOf(quote);
-  if (start < 0) return fail('支撑句不是片段原文的连续子串');
+  const range = windowSpan(claim.windows, result.from_window);
+  if (!range) return fail('起点窗口编号不合法');
+  const quote = range.text;
+  if (quote.length < GATE_QUOTE_MIN) return fail(`引文太短（${quote.length} 字）`);
+  if (quote.length > GATE_QUOTE_MAX) return fail(`引文太长（${quote.length} 字）`);
+  // 防御：窗口偏移必须真的能在片段原文里切出同一段
+  if (claim.chunk_text.slice(range.start, range.end) !== quote) {
+    return fail('窗口偏移与片段原文对不上');
+  }
 
-  // 数字守卫：建议里的数字必须来自判定或支撑句
+  // 数字守卫：建议里的数字必须来自判定或引文
   if (!numbersAllowed(claim.claim, [...numbersIn(verdict), ...numbersIn(quote)])) {
-    return fail('建议里有判定与支撑句都没有的数字');
+    return fail('建议里有判定与引文都没有的数字');
   }
 
   return {
@@ -93,8 +102,8 @@ export function checkGateResult(input: {
     candidate_id: claim.candidate_id,
     supported: true,
     quote,
-    quote_start: start,
-    quote_end: start + quote.length,
+    quote_start: range.start,
+    quote_end: range.end,
     reason: result.reason,
   };
 }

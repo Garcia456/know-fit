@@ -10,16 +10,10 @@
  * 用法： pnpm rag:smoke
  *        EMBEDDING_PROVIDER=real RERANK_PROVIDER=real LLM_PROVIDER=openai pnpm rag:smoke
  */
-import {
-  assembleCitations,
-  DraftSchema,
-  dedupeBySource,
-  remapDraftIndices,
-  renderAdvice,
-  validateDraft,
-} from '../assessment/advice.js';
-import { GateBatchSchema, checkGateResult, type GateCheck, type GateClaim } from '../assessment/gate.js';
-import { DRAFT_SYSTEM, GATE_SYSTEM, draftInput, gateInput } from '../assessment/prompts.js';
+import { assembleCitations, renderAdvice } from '../assessment/advice.js';
+import { draftAdvice } from '../assessment/draft.js';
+import { type GateCheck, type GateClaim } from '../assessment/gate.js';
+import { verifyClaims } from '../assessment/verify.js';
 import { buildQuery } from '../assessment/query.js';
 import { ragConfig } from '../assessment/types.js';
 import { SINGLE_USER_ID } from '../graph/state.js';
@@ -98,56 +92,30 @@ if (retrieved.candidates.length === 0) {
 }
 
 const t3 = Date.now();
-const { picked, keep } = dedupeBySource(retrieved.candidates);
-const draft = await llm.structured({
-  system: DRAFT_SYSTEM,
-  input: draftInput(verdict, picked),
-  schema: DraftSchema,
-  name: 'draft_advice',
-});
-remapDraftIndices(draft, keep);
-console.log(`\n── 4. 起草（${ms(t3)}，校验：${validateDraft(draft, retrieved.candidates) ?? '通过'}）──`);
+const drafted = await draftAdvice(llm, verdict, retrieved.candidates);
+console.log(`\n── 4. 起草（${ms(t3)}，校验：${drafted.problem ?? '通过'}）──`);
+if (!drafted.draft) {
+  console.log('\n草稿两次都不合法 —— 真实路径会整条降级为无源。\n');
+  process.exit(0);
+}
+const draft = drafted.draft;
 draft.claims.forEach((c, i) => line(`C${i} [${c.basis}]`, c.claim));
 
 const claims: GateClaim[] = draft.claims.flatMap((c, i) => {
   if (c.basis !== 'source' || c.source_index === null) return [];
   const candidate = retrieved.candidates[c.source_index];
   if (!candidate) return [];
-  return [{ claim_id: `C${i}`, claim: c.claim, candidate_id: `K${c.source_index}`, chunk_text: candidate.chunk_text }];
+  return [{ claim_id: `C${i}`, claim: c.claim, candidate_id: `K${c.source_index}`, chunk_text: candidate.chunk_text, windows: candidate.windows }];
 });
 
 let checks: GateCheck[] = [];
 if (claims.length > 0) {
   const t4 = Date.now();
-  try {
-    const out = await llm.structured({
-      system: GATE_SYSTEM,
-      input: gateInput(verdict, claims),
-      schema: GateBatchSchema,
-      name: 'verify_citation',
-    });
-    const byId = new Map(out.results.map((r) => [r.claim_id, r]));
-    checks = claims.map((claim) =>
-      checkGateResult({
-        result:
-          byId.get(claim.claim_id) ?? {
-            claim_id: claim.claim_id,
-            candidate_id: claim.candidate_id,
-            supported: false,
-            supporting_quote: '',
-            reason: '闸② 没给出结果',
-          },
-        claim,
-        verdict,
-      }),
-    );
-    console.log(`\n── 5. 闸②（${ms(t4)}）──`);
-    for (const c of checks) {
-      line(`${c.claim_id} ${c.supported ? '✓' : '✗'}`, c.reason);
-      if (c.quote) line('', `「${c.quote}」 [${c.quote_start}, ${c.quote_end})`);
-    }
-  } catch (e) {
-    console.log(`\n── 5. 闸② 失败（fail-closed）：${(e as Error).message} ──`);
+  checks = (await verifyClaims(llm, verdict, claims)).map((v) => v.check);
+  console.log(`\n── 5. 闸②（${ms(t4)}）──`);
+  for (const c of checks) {
+    line(`${c.claim_id} ${c.supported ? '✓' : '✗'}`, c.reason);
+    if (c.quote) line('', `「${c.quote}」 [${c.quote_start}, ${c.quote_end})`);
   }
 }
 

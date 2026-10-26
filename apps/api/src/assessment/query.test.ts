@@ -23,6 +23,13 @@ describe('query 模板', () => {
     expect(templateQuery(hook(2010, 2000), '增肌')).toBe('增肌 推日 训练容量停滞 怎么突破');
   });
 
+  it('主要部位接在 split 后面；没有部位就留空', () => {
+    expect(templateQuery(hook(2000, 2500), '增肌', ['胸', '肩', '三头'])).toBe(
+      '增肌 推日 胸 肩 三头 训练容量下降 怎么调整',
+    );
+    expect(templateQuery(hook(2000, 2500), '增肌', [])).toBe('增肌 推日 训练容量下降 怎么调整');
+  });
+
   it('刚好 ±10% 也算方向变化', () => {
     expect(templateQuery(hook(900, 1000), '增肌')).toContain('下降');
     expect(templateQuery(hook(1100, 1000), '增肌')).toContain('上涨');

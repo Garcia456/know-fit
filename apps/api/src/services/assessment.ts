@@ -8,6 +8,7 @@ import {
 import type { VolumeHook } from '../contracts/metrics.js';
 import {
   AssessmentState,
+  GENERATION_FAILURE_NOTICE,
   NO_SOURCE_NOTICE,
   RETRIEVAL_FAILURE_NOTICE,
   buildAssessmentGraph,
@@ -19,9 +20,11 @@ import { visiblePlatforms } from '../kb/platforms.js';
 import { createRerankClient, type RerankClient } from '../kb/rerank.js';
 import { assessment, citation, knowledgeChunk, knowledgeSource, userProfile, workoutSession } from '../db/schema.js';
 import { createLlmClient } from '../llm/index.js';
-import type { LlmClient } from '../llm/client.js';
+import { bindSignal } from '../llm/client.js';
 import { buildVolumeHook } from '../metrics/hook.js';
-import { prevSameSplitVolume, sessionVolume } from './metrics.js';
+import { topBodyParts } from '../assessment/bodyParts.js';
+import { buildGateWindows } from '../assessment/windows.js';
+import { muscleRegions, prevSameSplitVolume, sessionVolume } from './metrics.js';
 import { getDb } from './pool.js';
 
 /**
@@ -113,6 +116,7 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
         target: {
           ...session,
           goal: await loadGoal(user_id),
+          body_parts: topBodyParts(volume.by_muscle, muscleRegions()),
           verdict: buildVolumeHook({
             current: volume.total_volume_kg,
             baseline,
@@ -143,6 +147,8 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
         title: string;
         url: string;
         start_ts: number;
+        end_ts: number;
+        transcript_segments: unknown;
         chunk_text: string;
         context_prefix: string;
         similarity: number;
@@ -156,6 +162,9 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
             title: knowledgeSource.title,
             url: knowledgeSource.originalUrl,
             start_ts: knowledgeChunk.startTs,
+            end_ts: knowledgeChunk.endTs,
+            // 只用来切闸② 的窗口；不进候选对象
+            transcript_segments: knowledgeSource.transcriptSegments,
             chunk_text: knowledgeChunk.text,
             context_prefix: knowledgeChunk.contextPrefix,
             similarity: sql<number>`1 - (${distance})`.as('similarity'),
@@ -179,7 +188,22 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
         return { status: 'error', message: (e as Error).message, meta };
       }
 
-      const candidates = rows.map((r) => ({ ...r, similarity: Number(r.similarity), rerank_score: 0 }));
+      const candidates = rows.map((r) => {
+        const { transcript_segments, ...rest } = r;
+        return {
+          ...rest,
+          similarity: Number(r.similarity),
+          rerank_score: 0,
+          windows: buildGateWindows({
+            chunk_text: r.chunk_text,
+            start_ts: r.start_ts,
+            end_ts: r.end_ts,
+            segments: transcript_segments as
+              | { start_ts: number; end_ts: number; text: string }[]
+              | null,
+          }),
+        };
+      });
       if (candidates.length === 0) return { status: 'ok', candidates: [], meta };
 
       try {
@@ -342,15 +366,21 @@ export interface AssessActionResult {
   lookup_status: 'ok' | 'none' | 'not_found' | 'insufficient';
 }
 
-let cachedGraph: ReturnType<typeof buildAssessmentGraph> | null = null;
+/** 全链路上限（定义文档 §1.12）：到点掐断在途调用，按生成失败返回 */
+export const ASSESSMENT_DEADLINE_MS = Number(process.env.ASSESS_DEADLINE_MS) || 30_000;
 
-function assessmentGraph(llm: LlmClient) {
-  cachedGraph ??= buildAssessmentGraph({
-    llm,
-    repo: createAssessmentRepo({ embedder: createEmbeddingClient(), reranker: createRerankClient() }),
-    now: () => new Date(),
-  });
-  return cachedGraph;
+/**
+ * 跑一轮评估并限时。signal 经 `bindSignal` 进到每次模型调用，
+ * 到点是真掐断，不是只把 Promise 丢掉（否则模型还在后台跑、可能照样落库）。
+ */
+export async function withDeadline<T>(ms: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await run(controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function assessRecord(input: AssessRecordInput): Promise<AssessActionResult> {
@@ -362,12 +392,22 @@ export async function assessRecord(input: AssessRecordInput): Promise<AssessActi
     if (cached) return { card: cached, notices: [], lookup_status: 'ok' };
   }
 
-  const final = await assessmentGraph(createLlmClient()).invoke({
-    user_id: input.user_id,
-    related_record_id: input.related_record_id,
-    trigger: input.trigger,
-  });
-  const state = AssessmentState.parse(final);
-
-  return { card: state.card, notices: state.notices, lookup_status: state.lookup_status };
+  try {
+    const final = await withDeadline(ASSESSMENT_DEADLINE_MS, (signal) =>
+      buildAssessmentGraph({
+        // 图按请求建：signal 不同，不能缓存
+        llm: bindSignal(createLlmClient(), signal),
+        repo: createAssessmentRepo({ embedder: createEmbeddingClient(), reranker: createRerankClient() }),
+        now: () => new Date(),
+      }).invoke({
+        user_id: input.user_id,
+        related_record_id: input.related_record_id,
+        trigger: input.trigger,
+      }),
+    );
+    const state = AssessmentState.parse(final);
+    return { card: state.card, notices: state.notices, lookup_status: state.lookup_status };
+  } catch {
+    return { card: null, notices: [GENERATION_FAILURE_NOTICE], lookup_status: 'ok' };
+  }
 }

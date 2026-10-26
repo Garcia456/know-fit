@@ -1,6 +1,5 @@
 import { EMPTY_WORKOUT, EXTRACTION_FIXTURES, GOLDEN_INTENTS } from './fixtures.js';
 import { classifyClaimType } from '../kb/claimJudge.js';
-import { extractShortQuote } from '../kb/quote.js';
 import { NO_SOURCE_SYSTEM } from '../assessment/prompts.js';
 import type { ChatRequest, LlmClient } from './client.js';
 import type { Intent } from '../contracts/extraction.js';
@@ -57,17 +56,17 @@ function verdictFromInput(input: string): { current: number; baseline: number | 
   }
 }
 
-/** 闸② 的替身结果：候选里有标记就判不支撑，否则摘一句逐字原话当支撑句 */
+/** 闸② 的替身结果：候选里有标记就判不支撑，否则从第一个窗口起 */
 function gateFixture(input: string): { results: unknown[] } {
   const pair = /<建议 id="(C\d+)">([\s\S]*?)<\/建议>\n<候选 id="(K\d+)">([\s\S]*?)<\/候选>/g;
   const results = [...input.matchAll(pair)].map((m) => {
-    const [, claimId, , candidateId, chunk] = m;
-    if (chunk!.includes(FAKE_UNSUPPORTED_MARK)) {
-      return { claim_id: claimId, candidate_id: candidateId, supported: false, supporting_quote: '', reason: '替身标记：不支撑' };
+    const [, claimId, , candidateId, block] = m;
+    const no = { claim_id: claimId, candidate_id: candidateId, supported: false, from_window: 0 };
+    if (block!.includes(FAKE_UNSUPPORTED_MARK)) {
+      return { ...no, reason: '替身标记：不支撑' };
     }
-    const picked = extractShortQuote(chunk!);
-    const quote = picked.length >= 12 ? picked.slice(0, 120) : chunk!.trim().slice(0, 120);
-    return { claim_id: claimId, candidate_id: candidateId, supported: true, supporting_quote: quote, reason: '替身：片段直接支撑' };
+    if (!/<窗口 i="\d+">/.test(block!)) return { ...no, reason: '替身：没有窗口' };
+    return { claim_id: claimId, candidate_id: candidateId, supported: true, from_window: 0, reason: '替身：片段直接支撑' };
   });
   return { results };
 }
