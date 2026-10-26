@@ -135,6 +135,12 @@ export interface RobotsCheck {
   allowed: boolean | null;
 }
 
+/** 博主作品列表的一页 —— `cursor = null` 表示没有下一页 */
+export interface CandidatePage {
+  candidates: VideoCandidate[];
+  cursor: string | null;
+}
+
 /**
  * 采集端 —— 可注入（承 `LlmClient` 同型）。
  *
@@ -144,8 +150,11 @@ export interface RobotsCheck {
 export interface Fetcher {
   /** 钉住的视频 —— 一条直达，不经遍历 */
   fetch(video: WhitelistVideo): Promise<FetchedVideo>;
-  /** 遍历一个白名单博主的作品列表 —— **只取元数据，不下音频** */
-  listCreatorVideos(creator: Creator): Promise<VideoCandidate[]>;
+  /**
+   * 遍历一个白名单博主的作品列表 —— **只取元数据，不下音频**。
+   * 一页一取：传上一页的 `cursor` 拿下一页；`cursor = null` 表示到头了。
+   */
+  listCreatorVideos(creator: Creator, cursor?: string | null): Promise<CandidatePage>;
   /** 把一条音频 URL 落成本地文件 */
   downloadAudio(audioUrl: string): Promise<string>;
   checkRobots(): Promise<RobotsCheck>;

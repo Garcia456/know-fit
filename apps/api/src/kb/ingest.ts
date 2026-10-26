@@ -10,6 +10,7 @@
  *   real → seed/knowledge_whitelist.json（作者填）
  *
  * 可选：KB_RETIRE=<platform_video_key> —— 采完把它下架，并把前后行数打出来。
+ * 可选：KB_CREATOR=<博主名> —— 只跑这一位（名字按白名单 `creator` 字段全等匹配）。
  *
  * 跑法：pnpm kb:ingest      （真实跑法见 kb:smoke）
  */
@@ -20,7 +21,12 @@ import { createFakeFetcher } from './fake.js';
 import { createDouyinFetcher } from './douyin.js';
 import { ingestAll } from './pipeline.js';
 import { FIXTURE_WHITELIST } from './fixtures.js';
-import { loadWhitelist, isWhitelistEmpty, WHITELIST_PATH } from './whitelist.js';
+import {
+  loadWhitelist,
+  isWhitelistEmpty,
+  scopeWhitelistToCreator,
+  WHITELIST_PATH,
+} from './whitelist.js';
 import type { AsrClient, Fetcher } from './types.js';
 
 const provider = process.env.KB_PROVIDER ?? 'fake';
@@ -29,7 +35,13 @@ if (provider !== 'fake' && provider !== 'real') {
   process.exit(1);
 }
 
-const whitelist = provider === 'real' ? loadWhitelist() : FIXTURE_WHITELIST;
+let whitelist = provider === 'real' ? loadWhitelist() : FIXTURE_WHITELIST;
+try {
+  whitelist = scopeWhitelistToCreator(whitelist, process.env.KB_CREATOR);
+} catch (e) {
+  console.error(`✗ ${(e as Error).message}`);
+  process.exit(1);
+}
 if (isWhitelistEmpty(whitelist)) {
   console.error(`白名单是空的（${WHITELIST_PATH}）—— 先把你选定的博主主页或视频填进去。`);
   process.exit(1);
@@ -43,6 +55,9 @@ console.log(`\n=== know-fit 知识库采集（provider = ${provider}）===`);
 console.log(
   `白名单：博主 ${whitelist.creators.length} 个（各取近 max_items 条）+ 钉住视频 ${whitelist.videos.length} 条\n`,
 );
+if (process.env.KB_CREATOR?.trim()) {
+  console.log(`⚠️ KB_CREATOR=${process.env.KB_CREATOR.trim()}：只跑这一位。\n`);
+}
 
 let failed = false;
 try {

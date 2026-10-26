@@ -4,6 +4,7 @@ import { EmptyTranscriptError } from './types.js';
 import type { IngestedSource } from '../contracts/knowledge.js';
 import type {
   AsrClient,
+  Creator,
   Fetcher,
   FetchedVideo,
   IngestSkip,
@@ -38,6 +39,8 @@ export type IngestProgress =
       creator: string;
       candidates: number;
       picked: number;
+      /** 翻了几页 —— 一眼看出「一页就够」还是「筛完不够、往后翻了」 */
+      pages: number;
       /** 被**排除词**挡下的标题 —— 定义 §3.1 第 5 条要求真跑时能肉眼看有没有误杀 */
       excluded: string[];
       /** 被**原声判定**（规则 ④）挡下的标题 —— 同上，这是预期内的剔除，看一眼有没有误杀真原声 */
@@ -57,10 +60,12 @@ const iso = (d: Date): string => d.toISOString();
  *  ② **音频 URL 得在** —— 解析不到就没什么可转的；
  *  ③ **标题不含排除词** —— 列表项里没有「这是广告」这个字段，只能拿标题猜（**启发式，会误伤**）；
  *  ④ **音频必须是「原声」** —— 博主挂授权配乐时 `music.play_url` 指的是**那首歌**（ADR-033）；
- *  ⑤ **截断到 `max_items`** —— 服务端的 `count` 只是提示（实测要 5 回来 8、要 10 回来 13），截断只能在客户端做。
+ *  ⑤ **截断到 `max_items`** —— 服务端的 `count` 只是提示（实测要 5 回来 8、要 50 回来 44），截断只能在客户端做。
  *
  * ⚠️ 顺序是「**先过滤再截断**」：反过来的话，被过滤掉的条目会白占一个名额，
  *    拿到的条数就比 `max_items` 少 —— 那是个很难被发现的静默短缺。
+ * ⚠️ 一页筛完不够 `max_items` 时要**翻下一页**（`cursor`）—— 一页里混着图文 / 配乐片 / 推广片，
+ *    只取一页就等于让这些不可采的条目挤掉名额。
  * ⚠️ 排除词与原声判定只在这条路径上生效 —— **钉住的视频不查**：那是作者显式点名的，
  *    他想采就采，代码不替他判断；钉住的真是配乐片，由「空转写跳过」接住。
  */
@@ -69,7 +74,25 @@ export function selectCreatorVideos(
   maxItems: number,
   excludeTitleKeywords: string[] = [],
 ): VideoCandidate[] {
-  return candidates.filter((c) => candidateRejection(c, excludeTitleKeywords) === null).slice(0, maxItems);
+  return pickCandidates(candidates, maxItems, excludeTitleKeywords);
+}
+
+/** 选片本体 —— 翻页时额外传 `seen`，跨页去重（同一条可能出现在两页里） */
+function pickCandidates(
+  candidates: readonly VideoCandidate[],
+  maxItems: number,
+  excludeTitleKeywords: readonly string[],
+  seen: Set<string> = new Set(),
+): VideoCandidate[] {
+  const picked: VideoCandidate[] = [];
+  for (const c of candidates) {
+    if (picked.length >= maxItems) break;
+    if (seen.has(c.platform_video_key)) continue;
+    if (candidateRejection(c, excludeTitleKeywords) !== null) continue;
+    seen.add(c.platform_video_key);
+    picked.push(c);
+  }
+  return picked;
 }
 
 /** 候选被刷掉的原因（`null` = 留下）。规则表就一份，选片与「挡下了哪几条」共用，不各写一遍。 */
@@ -213,6 +236,48 @@ export async function ingestVideo(
   return source;
 }
 
+/** 翻页上限 —— 再怎么也够筛出 50 条了；设上限是防上游 cursor 出错时转圈 */
+const MAX_CREATOR_PAGES = 10;
+
+/**
+ * 一页一页拿候选，直到**过规则的有 `max_items` 条**或没有下一页。
+ *
+ * 只取一页时，图文 / 配乐片 / 推广片会白占名额，筛完常常不到 `max_items` ——
+ * 白名单写的是「近 N 条」，不该被这些不可采的条目挤掉。
+ * ⚠️ 跨页按 `platform_video_key` 去重：翻页期间博主发了新片，同一条可能出现在两页里。
+ */
+async function collectCreatorVideos(
+  fetcher: Fetcher,
+  creator: Creator,
+  excludeTitleKeywords: readonly string[],
+): Promise<{ fetched: VideoCandidate[]; picked: VideoCandidate[]; pages: number }> {
+  const fetched: VideoCandidate[] = [];
+  const picked: VideoCandidate[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  let pages = 0;
+
+  for (; pages < MAX_CREATOR_PAGES; ) {
+    const res = await fetcher.listCreatorVideos(creator, cursor);
+    pages++;
+    fetched.push(...res.candidates);
+    picked.push(
+      ...pickCandidates(
+        res.candidates,
+        creator.max_items - picked.length,
+        excludeTitleKeywords,
+        seen,
+      ),
+    );
+
+    // 没下一页 / 上游把同一个 cursor 又给了一遍 —— 都要停，否则就是转圈
+    if (picked.length >= creator.max_items || !res.cursor || res.cursor === cursor) break;
+    cursor = res.cursor;
+  }
+
+  return { fetched, picked, pages };
+}
+
 /**
  * 采一个**白名单博主**的近期作品。
  *
@@ -230,31 +295,32 @@ export async function ingestCreator(
 ): Promise<IngestedSource[]> {
   const creator = assertWhitelistedCreator(whitelist, profileUrl);
 
-  const candidates = await deps.fetcher.listCreatorVideos(creator);
-  const picked = selectCreatorVideos(
-    candidates,
-    creator.max_items,
+  const { fetched, picked, pages } = await collectCreatorVideos(
+    deps.fetcher,
+    creator,
     whitelist.exclude_title_keywords,
-    // ⚠️ 跳过放在**截断之后**：钉住的那条若也在列表里，它本来就该占「近 N 条」的一个名额 ——
-    //    放到截断之前，总数会超过 `max_items`。
-  ).filter((c) => !skipKeys.has(c.platform_video_key));
+  );
+  // ⚠️ 跳过放在**截断之后**：钉住的那条若也在列表里，它本来就该占「近 N 条」的一个名额 ——
+  //    放到截断之前，总数会超过 `max_items`。
+  const selected = picked.filter((c) => !skipKeys.has(c.platform_video_key));
 
   deps.onProgress?.({
     stage: 'listed',
     creator: creator.creator,
-    candidates: candidates.length,
-    picked: picked.length,
-    excluded: candidates
+    candidates: fetched.length,
+    picked: selected.length,
+    pages,
+    excluded: fetched
       .filter((c) => candidateRejection(c, whitelist.exclude_title_keywords) === 'keyword')
       .map((c) => c.title),
-    music_excluded: candidates
+    music_excluded: fetched
       .filter((c) => candidateRejection(c, whitelist.exclude_title_keywords) === 'music')
       .map((c) => c.title),
   });
 
   const sources: IngestedSource[] = [];
-  for (const c of picked) {
-    // selectCreatorVideos 已保证 audio_url 在，这里只是收窄类型
+  for (const c of selected) {
+    // 选片规则已保证 audio_url 在，这里只是收窄类型
     if (!c.audio_url) continue;
     deps.onProgress?.({
       stage: 'transcribe',

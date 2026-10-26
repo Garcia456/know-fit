@@ -17,7 +17,12 @@ import { loadTranscript } from '../services/knowledge.js';
 import { closeDb } from '../services/pool.js';
 import { createDouyinFetcher } from './douyin.js';
 import { ingestAll } from './pipeline.js';
-import { loadWhitelist, isWhitelistEmpty, WHITELIST_PATH } from './whitelist.js';
+import {
+  loadWhitelist,
+  isWhitelistEmpty,
+  scopeWhitelistToCreator,
+  WHITELIST_PATH,
+} from './whitelist.js';
 
 const whitelist = loadWhitelist();
 if (isWhitelistEmpty(whitelist)) {
@@ -28,6 +33,8 @@ if (isWhitelistEmpty(whitelist)) {
 /**
  * `KB_SMOKE_LIMIT=N` —— **只跑钉住的前 N 条**，用来快速验「管道通 + 是口播」。
  * 它**不走遍历**（遍历是慢的那一半），所以 N 要跟 `videos` 对着看。
+ *
+ * `KB_CREATOR=<博主名>` —— 只跑这一位（名字按白名单 `creator` 字段全等匹配）。
  */
 const limitRaw = process.env.KB_SMOKE_LIMIT;
 const limit = limitRaw === undefined ? null : Number(limitRaw);
@@ -35,10 +42,17 @@ if (limit !== null && (!Number.isInteger(limit) || limit < 1)) {
   console.error(`KB_SMOKE_LIMIT 得是 ≥1 的整数（现在填的是「${limitRaw}」）。`);
   process.exit(1);
 }
+let base = whitelist;
+try {
+  base = scopeWhitelistToCreator(whitelist, process.env.KB_CREATOR);
+} catch (e) {
+  console.error(`✗ ${(e as Error).message}`);
+  process.exit(1);
+}
 const scoped =
   limit === null
-    ? whitelist
-    : { ...whitelist, creators: [], videos: whitelist.videos.slice(0, limit) };
+    ? base
+    : { ...base, creators: [], videos: base.videos.slice(0, limit) };
 if (limit !== null) {
   if (scoped.videos.length === 0) {
     console.error(
@@ -54,6 +68,9 @@ console.log(
   `白名单：博主 ${scoped.creators.length} 个 + 钉住视频 ${scoped.videos.length} 条；` +
     `先确认解析服务起着、本机装好了 faster-whisper。\n`,
 );
+if (process.env.KB_CREATOR?.trim()) {
+  console.log(`⚠️ KB_CREATOR=${process.env.KB_CREATOR.trim()}：只跑这一位。\n`);
+}
 
 let failed = false;
 try {
@@ -68,7 +85,7 @@ try {
     asr,
     onProgress: (e) => {
       if (e.stage === 'listed') {
-        console.log(`—— 博主「${e.creator}」：候选 ${e.candidates} 条 → 采 ${e.picked} 条`);
+        console.log(`—— 博主「${e.creator}」：候选 ${e.candidates} 条（${e.pages} 页） → 采 ${e.picked} 条`);
         // 定义 §3.1 第 5 条：真跑时要能肉眼看出排除词挡了谁、有没有误杀
         for (const t of e.excluded) console.log(`   ⛔ 排除词挡下：「${t}」`);
         // 同条规则的另一半：原声判定挡了谁 —— 这是**预期内的剔除**，但也得能看出有没有误杀真原声

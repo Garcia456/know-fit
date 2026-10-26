@@ -14,7 +14,8 @@ export function createFakeFetcher(): Fetcher {
     },
 
     async listCreatorVideos(creator) {
-      return fixtureCandidates(creator);
+      // 替身只有一页，也没有下一页 —— 翻页逻辑由管线的用例单独喂
+      return { candidates: fixtureCandidates(creator), cursor: null };
     },
 
     async downloadAudio(audioUrl) {

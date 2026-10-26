@@ -287,6 +287,126 @@ describe('ingestCreator：遍历一个白名单博主', () => {
     expect(music).toEqual([['替身候选 6', '替身候选 7']]);
   });
 
+  it('🔴 一页筛完不够 max_items → 按 cursor 翻下一页，凑够才停', async () => {
+    const all = fixtureCandidates(FIXTURE_CREATORS[0]!);
+    const byKey = new Map(all.map((c) => [c.platform_video_key, c]));
+    const pages = [
+      // 第一页只有不可采的：图文 + 没音频
+      { candidates: [byKey.get('fixture-cand-0')!, byKey.get('fixture-cand-2')!], cursor: 'p2' },
+      { candidates: [byKey.get('fixture-cand-1')!], cursor: null },
+    ];
+    const calls: (string | null)[] = [];
+    const paging: Fetcher = {
+      ...createFakeFetcher(),
+      async listCreatorVideos(_creator, cursor = null) {
+        calls.push(cursor);
+        return pages[calls.length - 1]!;
+      },
+    };
+    const listed: number[] = [];
+    const whitelist = {
+      ...FIXTURE_CREATOR_WHITELIST,
+      creators: [{ ...FIXTURE_CREATORS[0]!, max_items: 1 }],
+    };
+
+    const sources = await ingestCreator(
+      whitelist,
+      {
+        ...deps(),
+        fetcher: paging,
+        onProgress: (e) => {
+          if (e.stage === 'listed') listed.push(e.pages);
+        },
+      },
+      FIXTURE_CREATORS[0]!.profile_url,
+      ROBOTS,
+    );
+
+    expect(calls).toEqual([null, 'p2']);
+    expect(listed).toEqual([2]);
+    expect(sources.map((s) => s.platform_video_key)).toEqual(['fixture-cand-1']);
+  });
+
+  it('凑够 max_items 就不再翻页 —— 不多打一发上游请求', async () => {
+    let calls = 0;
+    const onePage: Fetcher = {
+      ...createFakeFetcher(),
+      async listCreatorVideos() {
+        calls++;
+        return { candidates: fixtureCandidates(FIXTURE_CREATORS[0]!), cursor: 'never-used' };
+      },
+    };
+
+    const sources = await ingestCreator(
+      FIXTURE_CREATOR_WHITELIST,
+      { ...deps(), fetcher: onePage },
+      FIXTURE_CREATORS[0]!.profile_url,
+      ROBOTS,
+    );
+
+    expect(calls).toBe(1);
+    expect(sources.map((s) => s.platform_video_key)).toEqual(['fixture-cand-1', 'fixture-cand-3']);
+  });
+
+  it('🔴 跨页去重：同一条出现在两页里只采一次', async () => {
+    const all = fixtureCandidates(FIXTURE_CREATORS[0]!);
+    const byKey = new Map(all.map((c) => [c.platform_video_key, c]));
+    const pages = [
+      { candidates: [byKey.get('fixture-cand-1')!], cursor: 'p2' },
+      {
+        candidates: [byKey.get('fixture-cand-1')!, byKey.get('fixture-cand-3')!],
+        cursor: null,
+      },
+    ];
+    const downloads: string[] = [];
+    const paging: Fetcher = {
+      ...createFakeFetcher(),
+      async listCreatorVideos(_creator, cursor = null) {
+        return pages[cursor === null ? 0 : 1]!;
+      },
+      async downloadAudio(audioUrl) {
+        downloads.push(audioUrl);
+        return createFakeFetcher().downloadAudio(audioUrl);
+      },
+    };
+
+    const sources = await ingestCreator(
+      FIXTURE_CREATOR_WHITELIST,
+      { ...deps(), fetcher: paging },
+      FIXTURE_CREATORS[0]!.profile_url,
+      ROBOTS,
+    );
+
+    expect(sources.map((s) => s.platform_video_key)).toEqual(['fixture-cand-1', 'fixture-cand-3']);
+    expect(downloads).toHaveLength(2);
+  });
+
+  it('上游把同一个 cursor 又给一遍 → 停，不转圈', async () => {
+    const all = fixtureCandidates(FIXTURE_CREATORS[0]!);
+    const byKey = new Map(all.map((c) => [c.platform_video_key, c]));
+    const pages = [
+      { candidates: [byKey.get('fixture-cand-0')!], cursor: 'p2' },
+      { candidates: [byKey.get('fixture-cand-2')!], cursor: 'p2' },
+    ];
+    let calls = 0;
+    const paging: Fetcher = {
+      ...createFakeFetcher(),
+      async listCreatorVideos() {
+        return pages[calls++]!;
+      },
+    };
+
+    const sources = await ingestCreator(
+      FIXTURE_CREATOR_WHITELIST,
+      { ...deps(), fetcher: paging },
+      FIXTURE_CREATORS[0]!.profile_url,
+      ROBOTS,
+    );
+
+    expect(calls).toBe(2);
+    expect(sources).toEqual([]);
+  });
+
   it('🔴 空转写不中止整批：那条跳过、后面的照跑，且跳过被记进 `skipped`', async () => {
     // 让 cand-1 那条吐空转写 —— 它是**第一条**，若还抛穿整批，cand-3 就采不到了
     const emptyFor = '/tmp/knowfit-fixture-cand-1.mp3';

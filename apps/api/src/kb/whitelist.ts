@@ -49,6 +49,30 @@ export function isWhitelistEmpty(whitelist: Whitelist): boolean {
   return whitelist.creators.length === 0 && whitelist.videos.length === 0;
 }
 
+/**
+ * `KB_CREATOR=<博主名>` —— 本次只跑这一位；不传就原样返回。
+ *
+ * 名字按白名单里的 `creator` 字段**全等**匹配（同一个人的主页和钉住视频都算）。
+ * ⚠️ 找不到是配置错，抛出来 —— 静默跑成空清单等于「今天什么都没采」却看不出来。
+ */
+export function scopeWhitelistToCreator(
+  whitelist: Whitelist,
+  creatorName: string | undefined,
+): Whitelist {
+  const name = creatorName?.trim();
+  if (!name) return whitelist;
+
+  const creators = whitelist.creators.filter((c) => c.creator === name);
+  const videos = whitelist.videos.filter((v) => v.creator === name);
+  if (creators.length === 0 && videos.length === 0) {
+    const known = [...whitelist.creators.map((c) => c.creator), ...whitelist.videos.map((v) => v.creator)];
+    throw new Error(
+      `KB_CREATOR=「${name}」不在白名单里 —— 现有：${[...new Set(known)].join(' / ') || '（空）'}`,
+    );
+  }
+  return { ...whitelist, creators, videos };
+}
+
 /** 在不在白名单里 —— 采集的准入判定，只有这一个入口 */
 export function assertWhitelisted(whitelist: Whitelist, key: string): WhitelistVideo {
   const hit = whitelist.videos.find((v) => v.platform_video_key === key);

@@ -33,6 +33,9 @@ const MAX_WAIT_SECONDS = 30;
 const POLL_INTERVAL_MS = 1000;
 const POLL_MAX_ATTEMPTS = 60;
 
+/** 列表每页要多少条 —— dtk 的抖音上限是 50；要给得多只会多翻几页 */
+const PAGE_SIZE = 50;
+
 /** v5 的统一信封 —— 成功失败都长这样 */
 interface Envelope {
   success?: boolean;
@@ -315,13 +318,19 @@ export function createDouyinFetcher(opts: DouyinFetcherOptions = {}): Fetcher {
       };
     },
 
-    async listCreatorVideos(creator: Creator) {
-      const label = `遍历博主 ${creator.creator}`;
+    async listCreatorVideos(creator: Creator, cursor: string | null = null) {
+      const label = `遍历博主 ${creator.creator}${cursor ? '（下一页）' : ''}`;
+      const params: Record<string, string> = {
+        url: creator.profile_url,
+        count: String(PAGE_SIZE),
+        wait: String(MAX_WAIT_SECONDS),
+      };
+      if (cursor) params.cursor = cursor;
       const data = await callParser(
         baseUrl,
         apiKey,
         `/api/v1/${PLATFORM}/user/posts`,
-        { url: creator.profile_url, count: String(creator.max_items), wait: String(MAX_WAIT_SECONDS) },
+        params,
         label,
       );
       const items = Array.isArray(data.items) ? data.items.filter(isObject) : [];
@@ -333,8 +342,13 @@ export function createDouyinFetcher(opts: DouyinFetcherOptions = {}): Fetcher {
           key: '',
         }),
       );
-      // 没有内容 id 的条目没法当键、也没法跟别处对上 —— 在解析这一层就丢掉
-      return parsed.filter((c) => c.video_id !== '');
+      // `has_more === false` 时就算还带 cursor 也不翻 —— 那是本页锚点，不是下一页
+      const next = typeof data.cursor === 'string' && data.cursor ? data.cursor : null;
+      return {
+        // 没有内容 id 的条目没法当键、也没法跟别处对上 —— 在解析这一层就丢掉
+        candidates: parsed.filter((c) => c.video_id !== ''),
+        cursor: data.has_more === false ? null : next,
+      };
     },
 
     downloadAudio,

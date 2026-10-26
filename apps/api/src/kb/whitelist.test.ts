@@ -4,6 +4,7 @@ import {
   assertWhitelistedCreator,
   loadWhitelist,
   parseWhitelist,
+  scopeWhitelistToCreator,
 } from './whitelist.js';
 
 /**
@@ -132,6 +133,35 @@ describe('assertWhitelistedCreator：遍历的准入入口', () => {
     expect(() =>
       assertWhitelistedCreator(parseWhitelist(wrap([VIDEO])), CREATOR.profile_url),
     ).toThrow(/不在白名单里/);
+  });
+});
+
+describe('scopeWhitelistToCreator：KB_CREATOR 只跑一位', () => {
+  const other = {
+    ...CREATOR,
+    creator: '另一位博主',
+    profile_url: 'https://www.douyin.com/user/yyyy',
+  };
+  const wl = parseWhitelist(
+    wrapCreators(
+      [CREATOR, other],
+      [VIDEO, { ...VIDEO, platform_video_key: 'dy-0002', creator: '另一位博主' }],
+    ),
+  );
+
+  it('不传名字 → 原样返回', () => {
+    expect(scopeWhitelistToCreator(wl, undefined)).toBe(wl);
+    expect(scopeWhitelistToCreator(wl, '  ')).toBe(wl);
+  });
+
+  it('只留这一位的博主与钉住视频（按 creator 全等）', () => {
+    const scoped = scopeWhitelistToCreator(wl, '某博主');
+    expect(scoped.creators.map((c) => c.profile_url)).toEqual([CREATOR.profile_url]);
+    expect(scoped.videos.map((v) => v.platform_video_key)).toEqual(['dy-0001']);
+  });
+
+  it('🔴 名字不在清单里 → 抛，不静默跑成空清单', () => {
+    expect(() => scopeWhitelistToCreator(wl, '查无此人')).toThrow(/KB_CREATOR=「查无此人」/);
   });
 });
 
