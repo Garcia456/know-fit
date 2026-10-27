@@ -7,7 +7,6 @@ import {
   type SessionDetail,
   type SessionListResponse,
 } from '../contracts/sessions.js';
-import { SINGLE_USER_ID } from '../graph/state.js';
 import {
   appendToSession,
   getSessionDetail,
@@ -26,20 +25,20 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       await reply.code(400).send({ error: '查询参数需要 from / to（YYYY-MM-DD）' });
       return undefined;
     }
-    const sessions = await listSessions({ user_id: SINGLE_USER_ID, ...parsed.data });
+    const sessions = await listSessions({ user_id: request.userId, ...parsed.data });
     return { sessions };
   });
 
   app.get('/history', async (request): Promise<HistoryResponse> => {
     const parsed = HistoryQuerySchema.safeParse(request.query ?? {});
     const limit = parsed.success ? parsed.data.limit : 20;
-    const items = await listHistory({ user_id: SINGLE_USER_ID, limit });
+    const items = await listHistory({ user_id: request.userId, limit });
     return { items };
   });
 
   app.get('/sessions/:id', async (request, reply): Promise<SessionDetail | undefined> => {
     const { id } = request.params as { id: string };
-    const detail = await getSessionDetail({ user_id: SINGLE_USER_ID, session_id: id });
+    const detail = await getSessionDetail({ user_id: request.userId, session_id: id });
     if (!detail) {
       await reply.code(404).send({ error: '没有这条训练记录' });
       return undefined;
@@ -56,7 +55,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const result = await appendToSession({
-      user_id: SINGLE_USER_ID,
+      user_id: request.userId,
       session_id: id,
       patch: parsed.data,
     });

@@ -44,6 +44,8 @@ function WheelColumnView({
   /** 值来自滚动时不再往回纠偏，否则会和惯性滚动打架 */
   const fromScroll = useRef(false);
   const frame = useRef(0);
+  const optionsRef = useRef(column.options);
+  optionsRef.current = column.options;
 
   useEffect(() => {
     if (fromScroll.current) {
@@ -51,12 +53,12 @@ function WheelColumnView({
       return;
     }
     const host = ref.current;
-    const active = host?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!host || !active) return;
-    // 只滚列自身，避免 scrollIntoView 把整页带跑
-    const offset =
-      active.getBoundingClientRect().top - host.getBoundingClientRect().top;
-    host.scrollTop += offset - (host.clientHeight - active.offsetHeight) / 2;
+    if (!host) return;
+    // 行号 × 行高定位：弹层的缩放动画会把 getBoundingClientRect 一起缩小
+    const index = optionsRef.current.findIndex((o) => o.value === value);
+    if (index < 0) return;
+    const row = host.querySelector<HTMLElement>('.wheel__opt')?.offsetHeight || ROW_FALLBACK;
+    host.scrollTop = index * row;
   }, [value]);
 
   useEffect(() => () => cancelAnimationFrame(frame.current), []);

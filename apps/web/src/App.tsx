@@ -1,13 +1,18 @@
 import { LazyMotion, domAnimation } from 'motion/react';
 import { useCallback, useState } from 'react';
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router';
+import { AuthGate } from './auth/AuthGate';
+import { AuthProvider } from './auth/AuthContext';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { readConversationId, writeConversationId } from './lib/conversation';
 import { PageSwipe } from './components/PageSwipe';
 import { TopNav } from './components/TopNav';
 import { ChatPage } from './pages/ChatPage';
 import { DataPage } from './pages/DataPage';
+import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { RegisterPage } from './pages/RegisterPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { StatsPage } from './pages/StatsPage';
 
 /** 四页路由；resetToken 传给聊天页做「新会话」。 */
@@ -103,7 +108,28 @@ export function AppShell() {
 export function App() {
   return (
     <BrowserRouter>
-      <AppShell />
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/settings"
+            element={
+              <AuthGate>
+                <SettingsPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <AuthGate>
+                <AppShell />
+              </AuthGate>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

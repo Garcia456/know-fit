@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { SINGLE_USER_ID } from '../graph/state.js';
 import {
   ConversationNotFoundError,
   deleteConversation,
@@ -22,8 +21,8 @@ function isUuid(value: string): boolean {
 }
 
 export async function conversationRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/conversations', async () => {
-    return { conversations: await listConversations(SINGLE_USER_ID) };
+  app.get('/conversations', async (request) => {
+    return { conversations: await listConversations(request.userId) };
   });
 
   app.get('/conversations/:id', async (request, reply) => {
@@ -33,7 +32,7 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
       return undefined;
     }
     try {
-      return await getConversation(SINGLE_USER_ID, id);
+      return await getConversation(request.userId, id);
     } catch (e) {
       if (e instanceof ConversationNotFoundError) {
         await reply.code(404).send({ error: '会话不存在' });
@@ -60,7 +59,7 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
       return undefined;
     }
     try {
-      return { conversation: await renameConversation({ user_id: SINGLE_USER_ID, conversation_id: id, title }) };
+      return { conversation: await renameConversation({ user_id: request.userId, conversation_id: id, title }) };
     } catch (e) {
       if (e instanceof ConversationNotFoundError) {
         await reply.code(404).send({ error: '会话不存在' });
@@ -77,7 +76,7 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
       return undefined;
     }
     try {
-      await deleteConversation(SINGLE_USER_ID, id);
+      await deleteConversation(request.userId, id);
       await reply.code(204).send();
     } catch (e) {
       if (e instanceof ConversationNotFoundError) {

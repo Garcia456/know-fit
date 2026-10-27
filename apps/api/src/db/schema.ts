@@ -7,11 +7,42 @@ export const smoke = pgTable('smoke', {
   embedding: vector('embedding', { dimensions: 1024 }),
 });
 
-/** 用户表。v1 单用户，迁移 0002 里种一个固定 id，无鉴权。 */
-export const user = pgTable('user', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+/** 用户表。邮箱密码登录；邮箱统一存小写。 */
+export const user = pgTable(
+  'user',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(),
+    passwordHash: text('password_hash').notNull(),
+    nickname: text('nickname').notNull(),
+    birthday: date('birthday'),
+    gender: text('gender'), // '男' | '女' | '其他'
+    bio: text('bio'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('user_email_unique').on(t.email)],
+);
+
+/** 会话表。只存 token 的 SHA-256 哈希，注销 / 过期即删。 */
+export const authSession = pgTable(
+  'auth_session',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('auth_session_token_hash_unique').on(t.tokenHash),
+    index('auth_session_user_index').on(t.userId),
+    index('auth_session_expiry_index').on(t.expiresAt),
+  ],
+);
 
 /** 档案表。training_started_on 是「是否 < 3 个月」那个边界判定的依据。 */
 export const userProfile = pgTable('user_profile', {

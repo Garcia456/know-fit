@@ -4,7 +4,6 @@ import {
   NudgeActionSchema,
   type NudgeNextResponse,
 } from '../contracts/sessions.js';
-import { SINGLE_USER_ID } from '../graph/state.js';
 import { nextNudge, recordNudgeAction } from '../services/nudges.js';
 
 /**
@@ -12,8 +11,8 @@ import { nextNudge, recordNudgeAction } from '../services/nudges.js';
  * `next` 用 POST 是因为它有副作用（写 shown_at）。
  */
 export async function nudgeRoutes(app: FastifyInstance): Promise<void> {
-  app.post('/nudges/next', async (): Promise<NudgeNextResponse> => {
-    const nudge = await nextNudge({ user_id: SINGLE_USER_ID });
+  app.post('/nudges/next', async (request): Promise<NudgeNextResponse> => {
+    const nudge = await nextNudge({ user_id: request.userId });
     return { nudge };
   });
 
@@ -26,7 +25,7 @@ export async function nudgeRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const ok = await recordNudgeAction({
-      user_id: SINGLE_USER_ID,
+      user_id: request.userId,
       nudge_id: id.data,
       action: parsed.data.action,
     });

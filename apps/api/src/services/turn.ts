@@ -1,6 +1,6 @@
 import { TurnResponseSchema, type TurnResponse } from '../contracts/turn.js';
 import { buildTurnGraph } from '../graph/turn.js';
-import { SINGLE_USER_ID, TurnState } from '../graph/state.js';
+import { TurnState } from '../graph/state.js';
 import { createLlmClient } from '../llm/index.js';
 import type { LlmClient } from '../llm/client.js';
 import { answerKnowledge } from '../knowledge/service.js';
@@ -21,7 +21,7 @@ import { volumeHookFor } from './metrics.js';
 
 export interface TurnInput {
   message: string;
-  user_id?: string;
+user_id: string;
   conversation_id?: string | null;
 }
 
@@ -59,7 +59,7 @@ async function finish(input: {
 }
 
 export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
-  const user_id = input.user_id ?? SINGLE_USER_ID;
+const user_id = input.user_id;
   const conversation_id = await resolveConversation({
     user_id,
     conversation_id: input.conversation_id,

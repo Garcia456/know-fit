@@ -91,7 +91,7 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
     },
 
     async computeTarget({ user_id, session }) {
-      const volume = await sessionVolume(session.session_id);
+      const volume = await sessionVolume({ user_id, session_id: session.session_id });
       if (!volume) return { status: 'insufficient', missing: ['sets'] };
 
       const missing: string[] = [];

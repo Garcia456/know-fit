@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { AssessmentRequestSchema, type AssessmentResponse } from '../contracts/assessment.js';
-import { SINGLE_USER_ID } from '../graph/state.js';
 import { assessRecord } from '../services/assessment.js';
 
 /**
@@ -28,7 +27,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const result = await assessRecord({
-      user_id: SINGLE_USER_ID,
+      user_id: request.userId,
       related_record_id: relatedRecordId,
       trigger,
     });

@@ -853,3 +853,303 @@ body.sheet-open .page-body {
   color: var(--brand);
   font-weight: 600;
 }
+
+/* ---------- 登录 / 注册 ---------- */
+
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--s-6) 20px;
+  background: var(--surface-2);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  padding: var(--s-6) 20px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-4);
+  background: #fff;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.auth-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-2);
+  background: var(--brand);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.auth-sub {
+  margin: 6px 0 var(--s-6);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--s-3);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.auth-field input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-3);
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.auth-field input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.auth-card .error-text {
+  margin: 0 0 var(--s-3);
+}
+
+.auth-card .btn--block {
+  margin-top: var(--s-2);
+}
+
+.auth-links {
+  margin: var(--s-4) 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.auth-links a {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.auth-demo {
+  margin-top: var(--s-6);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.auth-demo p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auth-demo__fill {
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.auth-demo__fill:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ---------- 我的 · 账号摘要 ---------- */
+
+.profile--account .avatar {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.profile--account > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-bio {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.profile-settings {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-full);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.profile-settings:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ---------- 设置页 ---------- */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 460px;
+  height: 100dvh;
+  margin: 0 auto;
+  background: var(--surface);
+}
+
+.settings-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-hd h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.settings-hd .icon-btn {
+  text-decoration: none;
+}
+
+.settings-hd__spacer {
+  width: 36px;
+  height: 36px;
+}
+
+.set-row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.set-row--button {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.set-row--button:last-child {
+  border-bottom: 0;
+}
+
+.set-row--button:hover {
+  background: var(--surface-2);
+}
+
+.set-row--button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+.set-row--button.is-danger .lbl {
+  color: #b3261e;
+}
+
+.bio-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-3);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.bio-input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.danger-box {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #e6b8b4;
+  border-radius: var(--r-3);
+  background: #fdf3f2;
+}
+
+.danger-box p {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 10px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.danger-box .set-input {
+  background: #fff;
+}
+
+.danger-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: 10px;
+}
+
+.btn--danger {
+  background: #b3261e;
+  color: #fff;
+}
+
+.btn--danger:disabled {
+  opacity: 0.45;
+}
