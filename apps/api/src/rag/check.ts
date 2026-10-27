@@ -168,10 +168,28 @@ interface HttpResult {
   text: string;
 }
 
+/** 数据接口都要会话：用 demo 账号登录，fixture 也挂在这个账号下。 */
+let cookie = '';
+async function loginDemo(): Promise<void> {
+  const email = process.env.E2E_EMAIL ?? 'demo@knowfit.local';
+  const password = process.env.E2E_PASSWORD ?? 'knowfit-demo';
+  const res = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error(`demo 登录失败：HTTP ${res.status}（0009 迁移跑了吗？）`);
+  cookie = (res.headers.getSetCookie?.() ?? [])
+    .map((line) => line.split(';')[0])
+    .filter(Boolean)
+    .join('; ');
+  if (!cookie) throw new Error('demo 登录没拿到会话 cookie');
+}
+
 async function postJson(path: string, body: unknown): Promise<HttpResult> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie },
     body: JSON.stringify(body),
   });
   const text = await res.text();
@@ -185,7 +203,7 @@ async function postJson(path: string, body: unknown): Promise<HttpResult> {
 }
 
 async function getJson(path: string): Promise<HttpResult> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { headers: { cookie } });
   const text = await res.text();
   let json: Record<string, unknown> | null = null;
   try {
@@ -209,6 +227,7 @@ const nonFixtureFingerprint = async () => {
 
 try {
   await cleanup();
+  await loginDemo();
   const realBefore = await nonFixtureFingerprint();
 
   // ── 1. 造 fixture：会话 + 3 条源 / 4 个片 ─────────────────────────

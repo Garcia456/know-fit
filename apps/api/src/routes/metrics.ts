@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { SessionVolume, StatsRange, WeeklyVolume, WeightHistory } from '../contracts/metrics.js';
-import { SINGLE_USER_ID } from '../graph/state.js';
 import { sessionVolume, statsRange, weeklyVolume, weightHistory } from '../services/metrics.js';
 
 /**
@@ -26,7 +25,7 @@ const MAX_SPAN_DAYS = 365;
 export async function metricsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/sessions/:id/volume', async (request, reply): Promise<SessionVolume | undefined> => {
     const { id } = request.params as { id: string };
-    const volume = await sessionVolume(id);
+    const volume = await sessionVolume({ user_id: request.userId, session_id: id });
     if (!volume) {
       await reply.code(404).send({ error: '没有这条训练记录' });
       return undefined;
@@ -37,13 +36,13 @@ export async function metricsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/metrics/weekly', async (request): Promise<WeeklyVolume> => {
     const parsed = WeeksQuerySchema.safeParse(request.query ?? {});
     const weeks = parsed.success ? parsed.data.weeks : 4;
-    return weeklyVolume({ user_id: SINGLE_USER_ID, weeks });
+    return weeklyVolume({ user_id: request.userId, weeks });
   });
 
   app.get('/metrics/weight', async (request): Promise<WeightHistory> => {
     const parsed = WeeksQuerySchema.safeParse(request.query ?? {});
     const weeks = parsed.success ? parsed.data.weeks : 8;
-    return weightHistory({ user_id: SINGLE_USER_ID, weeks });
+    return weightHistory({ user_id: request.userId, weeks });
   });
 
   app.get('/stats', async (request, reply): Promise<StatsRange | undefined> => {
@@ -62,6 +61,6 @@ export async function metricsRoutes(app: FastifyInstance): Promise<void> {
       await reply.code(400).send({ error: '范围最长 366 天' });
       return undefined;
     }
-    return statsRange({ user_id: SINGLE_USER_ID, from, to });
+    return statsRange({ user_id: request.userId, from, to });
   });
 }

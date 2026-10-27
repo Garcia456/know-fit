@@ -182,7 +182,7 @@ export async function getSessionDetail(input: {
   }
 
   const names = exerciseNames();
-  const volume = await sessionVolume(session.id);
+  const volume = await sessionVolume({ user_id: input.user_id, session_id: session.id });
   if (!volume) return null;
 
   const baseline = await prevSameSplitVolume({

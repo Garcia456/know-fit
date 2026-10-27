@@ -83,13 +83,17 @@ async function loadExercises(sessionId: string): Promise<AllocExercise[]> {
   }));
 }
 
-/** 一次训练的容量与肌群分摊 —— 读不到这条记录时返回 null */
-export async function sessionVolume(sessionId: string): Promise<SessionVolume | null> {
+/** 一次训练的容量与肌群分摊 —— 读不到这条（或不属于该用户）时返回 null */
+export async function sessionVolume(input: {
+  user_id: string;
+  session_id: string;
+}): Promise<SessionVolume | null> {
   const db = getDb();
+  const { user_id, session_id: sessionId } = input;
   const found = await db
     .select({ id: workoutSession.id })
     .from(workoutSession)
-    .where(eq(workoutSession.id, sessionId))
+    .where(and(eq(workoutSession.id, sessionId), eq(workoutSession.userId, user_id)))
     .limit(1);
   if (!found[0]) return null;
 
@@ -122,7 +126,7 @@ export async function prevSameSplitVolume(input: {
   const current = await db
     .select({ date: workoutSession.date, createdAt: workoutSession.createdAt })
     .from(workoutSession)
-    .where(eq(workoutSession.id, exclude_session_id))
+    .where(and(eq(workoutSession.id, exclude_session_id), eq(workoutSession.userId, user_id)))
     .limit(1);
   const cur = current[0];
   if (!cur) return null;
@@ -149,7 +153,7 @@ export async function prevSameSplitVolume(input: {
   const prev = rows[0];
   if (!prev) return null;
 
-  const v = await sessionVolume(prev.id);
+  const v = await sessionVolume({ user_id, session_id: prev.id });
   return v?.total_volume_kg ?? null;
 }
 

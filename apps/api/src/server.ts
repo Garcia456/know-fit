@@ -2,7 +2,10 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { pathToFileURL } from 'node:url';
 import { databaseUrl } from './db/client.js';
 import { responseGuard } from './guardrails/rc.js';
+import { authOnRequest } from './plugins/auth.js';
+import { accountRoutes } from './routes/account.js';
 import { assessmentRoutes } from './routes/assessments.js';
+import { authRoutes } from './routes/auth.js';
 import { healthRoutes } from './routes/health.js';
 import { metricsRoutes } from './routes/metrics.js';
 import { nudgeRoutes } from './routes/nudges.js';
@@ -26,6 +29,10 @@ async function refreshGuardWindows(app: FastifyInstance): Promise<void> {
 
 export async function buildServer() {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
+
+  // 🔴 认证钩子必须在注册路由之前挂到**根作用域**（包在 register 里不会作用于兄弟路由）
+  app.decorateRequest('userId', '');
+  app.addHook('onRequest', authOnRequest);
 
   // 🔴 R-C：钩子必须在注册路由之前挂 —— onSend 只作用于之后注册的路由
   await refreshGuardWindows(app);
@@ -55,6 +62,8 @@ export async function buildServer() {
   });
 
   await app.register(healthRoutes);
+  await app.register(authRoutes);
+  await app.register(accountRoutes);
   await app.register(turnRoutes);
   await app.register(metricsRoutes);
   await app.register(assessmentRoutes);

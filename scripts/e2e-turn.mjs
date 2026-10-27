@@ -26,6 +26,7 @@
  * 退出码：0 = 通过；1 = 失败
  */
 import pg from 'pg';
+import { loginDemo } from './lib/login.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const url = process.env.DATABASE_URL ?? 'postgres://knowfit:knowfit@localhost:5432/knowfit';
@@ -47,12 +48,22 @@ const bad = (m) => {
 
 console.log('\n=== know-fit 端到端往返 ===\n');
 
+let cookie;
+try {
+  cookie = await loginDemo(BASE);
+  ok('demo 账号登录成功');
+} catch (e) {
+  bad(e.message);
+  bad('dev server 起了吗？迁移 0009 跑了吗？（demo 账号由它建）');
+  process.exit(1);
+}
+
 /** 发一轮，返回 body；失败返回 null */
 async function post(message) {
   try {
     const res = await fetch(`${BASE}/api/turns`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ message }),
     });
     if (!res.ok) {
@@ -137,7 +148,7 @@ if (first?.card?.kind === 'workout') {
 // B1b：容量读路由 —— 现算的容量与肌群分摊
 if (firstId) {
   try {
-    const res = await fetch(`${BASE}/api/sessions/${firstId}/volume`);
+    const res = await fetch(`${BASE}/api/sessions/${firstId}/volume`, { headers: { cookie } });
     const v = res.ok ? await res.json() : null;
     if (v?.total_volume_kg === 2500 && v?.working_sets === 5 && v?.warmup_sets === 2) {
       ok(`GET /api/sessions/:id/volume → 2500kg（正式 5 组 / 热身 2 组）`);
