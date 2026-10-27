@@ -87,9 +87,10 @@ try {
 }
 
 async function insertExercise(sessionId, rawName, sets) {
+  // exercise_id 必须给，否则肌群量恒为 0（由 seed 里的 id 决定，不靠 raw_name 反查）
   const entry = await client.query(
-    `INSERT INTO exercise_entry (session_id, "order", raw_name, name_confidence)
-     VALUES ($1, 0, $2, 'high') RETURNING id`,
+    `INSERT INTO exercise_entry (session_id, "order", raw_name, exercise_id, name_confidence)
+     VALUES ($1, 0, $2, 'bench_press', 'high') RETURNING id`,
     [sessionId, rawName],
   );
   const entryId = entry.rows[0].id;
@@ -262,7 +263,7 @@ try {
     mine?.exercise_count === 1 &&
     mine?.working_sets === 2 &&
     mine?.volume_kg === 1120 &&
-    mine?.exercise_names?.includes('卧推') &&
+    mine?.exercise_names?.includes('杠铃卧推') &&
     empty?.status === 'incomplete' &&
     empty?.missing_fields?.includes('reps')
   ) {
