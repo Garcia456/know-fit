@@ -65,7 +65,7 @@ export function AssessmentCardView({ card }: { card: AssessmentCard }) {
   );
 }
 
-function SourceBlock({ citation }: { citation: Citation }) {
+export function SourceBlock({ citation }: { citation: Citation }) {
   const ts = formatMmSs(citation.start_ts);
   return (
     <div className="src">

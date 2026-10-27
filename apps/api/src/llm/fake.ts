@@ -1,6 +1,7 @@
 import { EMPTY_WORKOUT, EXTRACTION_FIXTURES, GOLDEN_INTENTS } from './fixtures.js';
 import { classifyClaimType } from '../kb/claimJudge.js';
 import { NO_SOURCE_SYSTEM } from '../assessment/prompts.js';
+import { KNOWLEDGE_NO_SOURCE_SYSTEM } from '../knowledge/prompts.js';
 import type { ChatRequest, LlmClient } from './client.js';
 import type { Intent } from '../contracts/extraction.js';
 
@@ -16,7 +17,8 @@ export const FAKE_UNSUPPORTED_MARK = '【不支撑】';
 
 // 顺序有讲究：先判闲聊 —— 「我不太想练了」同时含「练」，但不该被当记录
 // ⚠️ 关键词只能是**子串**：「不想」匹配不到「不太想」（中间隔了个「太」）
-const CHAT_HINTS = ['不太想', '懒得', '没动力', '心情', '烦', '累', '放弃', 'emo', '休息'];
+const CHAT_HINTS = ['不太想', '懒得', '没动力', '心情', '烦', '累', '放弃', 'emo', '休息', 'hi', 'hello', '你好', '嗨', '在吗', '你是谁', '你能干嘛', '你能做什么'];
+const KNOWLEDGE_HINTS = ['推荐动作', '有什么动作', '怎么练', '练法', '动作要领', '训练计划', '新手', '组间休息', '做标准', '替代动作'];
 const ASSESS_HINTS = ['够不够', '怎么样', '行不行', '够吗', '看下', '看看', '帮我看', '评估', '建议'];
 const RECORD_HINTS = [
   '卧推', '深蹲', '硬拉', '飞鸟', '划船', '推', '拉', '蹲', '练', '组', '次',
@@ -31,6 +33,7 @@ function classifyIntent(input: string): Intent {
   if (golden) return golden;
 
   if (has(input, CHAT_HINTS)) return 'chat';
+  if (has(input, KNOWLEDGE_HINTS)) return 'knowledge';
   const assess = has(input, ASSESS_HINTS);
   const record = has(input, RECORD_HINTS);
   if (assess && record) return 'mixed';
@@ -106,6 +109,8 @@ export function createFakeClient(): LlmClient {
               ],
             }
           : { claims: [personal] };
+      } else if (req.name === 'draft_knowledge') {
+        raw = { claims: [{ claim: '先把动作做标准，再逐步加重量', source_index: 0 }] };
       } else if (req.name === 'verify_citation') {
         raw = gateFixture(input);
       } else {
@@ -120,8 +125,17 @@ export function createFakeClient(): LlmClient {
       if (req.system === NO_SOURCE_SYSTEM) {
         return '这次训练容量比上次同 split 低，先把动作质量和组数稳住，下一轮再考虑加重量。';
       }
+      if (req.system === KNOWLEDGE_NO_SOURCE_SYSTEM) {
+        return '练胸可以先从卧推、上斜哑铃卧推和飞鸟入手，先把动作轨迹做稳，再逐步加重量。';
+      }
+      if (/你是谁|你能干嘛|你能做什么|介绍一下你/.test(req.input)) {
+        return '我是枝链，你的健身/训练助手。我可以帮你记录训练和饮食、评估训练量，也能回答动作和练法。';
+      }
+      if (/^(hi|hello|你好|嗨|哈喽|在吗)/i.test(req.input.trim())) {
+        return '你好，我是枝链。想记训练、看看练得够不够，或者问动作怎么练，都可以直接说。';
+      }
       if (req.input.includes('不太想')) return '不想练就歇一天，明天状态回来了再上 —— 少练一次不影响结果。';
-      return '收到。想聊就聊，想练了我帮你记。';
+      return '我在。想记训练、看评估，或者问动作怎么练，都可以直接说。';
     },
   };
 }

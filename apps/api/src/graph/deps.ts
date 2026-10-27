@@ -1,7 +1,8 @@
 import type { AssessmentCard } from '../contracts/assessment.js';
 import type { MissingField, RecordStatus } from '../contracts/extraction.js';
 import type { VolumeHook } from '../contracts/metrics.js';
-import type { WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
+import type { KnowledgeCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
+import type { TurnHistoryItem } from './state.js';
 import type { LlmClient } from '../llm/client.js';
 
 /** 落库原料 —— 规范化后的动作 + 已换算的组 */
@@ -62,5 +63,14 @@ export interface TurnDeps {
    * 所以这条通道失败只降级成一条 notice，不影响卡片。
    */
   assess?: (input: AssessInput) => Promise<AssessOutput>;
+  /**
+   * 知识问答由调用方注入 —— 它要检索知识库，同样不归图管。
+   * 不注入时退化成一条说明。
+   */
+  answerKnowledge?: (input: {
+    user_id: string;
+    query: string;
+    history: TurnHistoryItem[];
+  }) => Promise<KnowledgeCard>;
   now?: () => Date;
 }

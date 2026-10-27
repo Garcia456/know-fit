@@ -51,8 +51,16 @@ export const MealSchema = z.object({
 
 export const ExtractionSchema = z.discriminatedUnion('kind', [WorkoutSchema, MealSchema]);
 
-/** 六类意图 */
-export const IntentSchema = z.enum(['record', 'assess', 'mixed', 'chat', 'reject', 'boundary']);
+/** 七类意图 */
+export const IntentSchema = z.enum([
+  'record',
+  'assess',
+  'mixed',
+  'knowledge',
+  'chat',
+  'reject',
+  'boundary',
+]);
 
 /** 缺什么 —— 由代码算，不由 LLM 输出 */
 export const MissingFieldSchema = z.enum(['exercises', 'reps', 'weight_kg']);

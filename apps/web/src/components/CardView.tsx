@@ -11,6 +11,7 @@ import { describeSets, exerciseName, isMissingValue } from '../lib/exercise';
 import { formatKg, formatMonthDay } from '../lib/format';
 import { CheckIcon, InfoIcon, RefreshIcon, WarnIcon } from './Icons';
 import { VolumeHookView } from './VolumeHookView';
+import { KnowledgeCardView } from './KnowledgeCardView';
 
 const MISSING_LABEL: Record<MissingField, string> = {
   exercises: '动作',
@@ -48,6 +49,8 @@ export function CardView({ card, onAssess, assessingSessionId, onComplete, onQui
       return <MealCardView card={card} />;
     case 'chat':
       return <p className="agent-text">{card.reply}</p>;
+    case 'knowledge':
+      return <KnowledgeCardView card={card} />;
     case 'refusal':
       return <RefusalCardView reply={card.reply} onQuickAsk={onQuickAsk} />;
     case 'boundary':

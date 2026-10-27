@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { databaseUrl } from './db/client.js';
 import { responseGuard } from './guardrails/rc.js';
 import { assessmentRoutes } from './routes/assessments.js';
+import { conversationRoutes } from './routes/conversations.js';
 import { healthRoutes } from './routes/health.js';
 import { metricsRoutes } from './routes/metrics.js';
 import { nudgeRoutes } from './routes/nudges.js';
@@ -56,6 +57,7 @@ export async function buildServer() {
 
   await app.register(healthRoutes);
   await app.register(turnRoutes);
+  await app.register(conversationRoutes);
   await app.register(metricsRoutes);
   await app.register(assessmentRoutes);
   await app.register(sessionRoutes);

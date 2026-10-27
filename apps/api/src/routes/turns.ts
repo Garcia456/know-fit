@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { TurnRequestSchema, type TurnResponse } from '../contracts/turn.js';
+import { ConversationNotFoundError } from '../services/conversation.js';
 import { handleTurn } from '../services/turn.js';
 
 /**
@@ -14,9 +15,20 @@ export async function turnRoutes(app: FastifyInstance): Promise<void> {
   app.post('/turns', async (request, reply): Promise<TurnResponse | undefined> => {
     const parsed = TurnRequestSchema.safeParse(request.body);
     if (!parsed.success) {
-      await reply.code(400).send({ error: '请求体需要 { message: string }' });
+      await reply.code(400).send({ error: '请求体需要 { message: string, conversation_id?: string }' });
       return undefined;
     }
-    return handleTurn({ message: parsed.data.message });
+    try {
+      return await handleTurn({
+        message: parsed.data.message,
+        conversation_id: parsed.data.conversation_id ?? null,
+      });
+    } catch (e) {
+      if (e instanceof ConversationNotFoundError) {
+        await reply.code(404).send({ error: '会话不存在' });
+        return undefined;
+      }
+      throw e;
+    }
   });
 }

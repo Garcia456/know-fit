@@ -1,7 +1,8 @@
 import { LazyMotion, domAnimation } from 'motion/react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router';
 import { HistoryDrawer } from './components/HistoryDrawer';
+import { readConversationId, writeConversationId } from './lib/conversation';
 import { PageSwipe } from './components/PageSwipe';
 import { TopNav } from './components/TopNav';
 import { ChatPage } from './pages/ChatPage';
@@ -10,10 +11,27 @@ import { ProfilePage } from './pages/ProfilePage';
 import { StatsPage } from './pages/StatsPage';
 
 /** 四页路由；resetToken 传给聊天页做「新会话」。 */
-export function AppRoutes({ resetToken = 0 }: { resetToken?: number }) {
+export function AppRoutes({
+  resetToken = 0,
+  activeConversationId = null,
+  onConversationChange,
+}: {
+  resetToken?: number;
+  activeConversationId?: string | null;
+  onConversationChange?: (id: string | null) => void;
+}) {
   return (
     <Routes>
-      <Route path="/" element={<ChatPage resetToken={resetToken} />} />
+      <Route
+        path="/"
+        element={
+          <ChatPage
+            resetToken={resetToken}
+            activeConversationId={activeConversationId}
+            onConversationChange={onConversationChange}
+          />
+        }
+      />
       <Route path="/stats" element={<StatsPage />} />
       <Route path="/data" element={<DataPage />} />
       <Route path="/profile" element={<ProfilePage />} />
@@ -25,10 +43,32 @@ export function AppRoutes({ resetToken = 0 }: { resetToken?: number }) {
 export function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [resetToken, setResetToken] = useState(0);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(readConversationId);
   const navigate = useNavigate();
+
+  const onConversationChange = useCallback((id: string | null) => {
+    setActiveConversationId(id);
+  }, []);
 
   function newConversation() {
     setDrawerOpen(false);
+    writeConversationId(null);
+    setActiveConversationId(null);
+    setResetToken((n) => n + 1);
+    navigate('/');
+  }
+
+  function selectConversation(id: string) {
+    setDrawerOpen(false);
+    writeConversationId(id);
+    setActiveConversationId(id);
+    navigate('/');
+  }
+
+  function conversationDeleted(id: string) {
+    if (id !== activeConversationId) return;
+    writeConversationId(null);
+    setActiveConversationId(null);
     setResetToken((n) => n + 1);
     navigate('/');
   }
@@ -41,15 +81,18 @@ export function AppShell() {
           onNewConversation={newConversation}
         />
         <PageSwipe>
-          <AppRoutes resetToken={resetToken} />
+          <AppRoutes
+            resetToken={resetToken}
+            activeConversationId={activeConversationId}
+            onConversationChange={onConversationChange}
+          />
         </PageSwipe>
         <HistoryDrawer
           open={drawerOpen}
+          activeConversationId={activeConversationId}
           onClose={() => setDrawerOpen(false)}
-          onSelectDate={(date) => {
-            setDrawerOpen(false);
-            navigate(`/data?date=${date}`);
-          }}
+          onSelectConversation={selectConversation}
+          onDeleted={conversationDeleted}
           onNewConversation={newConversation}
         />
       </div>

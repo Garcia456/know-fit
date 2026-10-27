@@ -3,7 +3,7 @@
  * 🔴 不出现 text / content / transcript —— 界面没有渲染全文的通道（ADR-008）。
  */
 
-export type Intent = 'record' | 'assess' | 'mixed' | 'chat' | 'reject' | 'boundary';
+export type Intent = 'record' | 'assess' | 'mixed' | 'knowledge' | 'chat' | 'reject' | 'boundary';
 export type RecordStatus = 'complete' | 'incomplete';
 export type MissingField = 'exercises' | 'reps' | 'weight_kg';
 export type RefusalReason = 'medical' | 'medication' | 'extreme_diet' | 'off_topic';
@@ -97,6 +97,20 @@ export interface ChatCard {
   reply: string;
 }
 
+export interface KnowledgeClaim {
+  claim: string;
+  citation_id: string | null;
+}
+
+export interface KnowledgeCard {
+  kind: 'knowledge';
+  answer: string;
+  claims: KnowledgeClaim[];
+  citations: Citation[];
+  has_source: boolean;
+  no_source_notice: string | null;
+}
+
 export interface RefusalCard {
   kind: 'refusal';
   reply: string;
@@ -126,6 +140,7 @@ export type TurnCard =
   | WorkoutCard
   | MealCard
   | ChatCard
+  | KnowledgeCard
   | RefusalCard
   | BoundaryCard
   | CorrectionCard;
@@ -137,6 +152,7 @@ export interface AssessmentLookup {
 
 export interface TurnResponse {
   turn_id: string;
+  conversation_id: string;
   intent: Intent;
   card: TurnCard | null;
   assessment: AssessmentCard | null;
@@ -278,4 +294,29 @@ export interface Nudge {
 
 export interface NudgeNextResponse {
   nudge: Nudge | null;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  last_message: string | null;
+}
+
+export interface ConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  intent: Intent | null;
+  response: TurnResponse | null;
+  created_at: string;
+}
+
+export interface ConversationDetail extends ConversationSummary {
+  messages: ConversationMessage[];
+}
+
+export interface ConversationListResponse {
+  conversations: ConversationSummary[];
 }

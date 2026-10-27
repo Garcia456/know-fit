@@ -61,7 +61,7 @@ export function draftInput(verdict: VolumeHook, candidates: AssessmentCandidate[
 }
 
 export function gateInput(
-  verdict: VolumeHook,
+  verdict: VolumeHook | null,
   claims: { claim_id: string; claim: string; candidate_id: string; windows: GateWindow[] }[],
 ): string {
   const blocks = claims.flatMap((c) => [
@@ -70,7 +70,8 @@ export function gateInput(
     ...c.windows.map((w) => `<窗口 i="${w.index}">${w.text}</窗口>`),
     '</候选>',
   ]);
-  return [`判定：${JSON.stringify(verdict)}`, ...blocks].join('\n');
+  // 知识问答没有判定 —— 不写空判定行，免得模型去找不存在的数字
+  return [...(verdict === null ? [] : [`判定：${JSON.stringify(verdict)}`]), ...blocks].join('\n');
 }
 
 export function noSourceInput(verdict: VolumeHook): string {

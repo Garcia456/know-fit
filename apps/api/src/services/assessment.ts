@@ -354,6 +354,17 @@ export async function findRecentHookAssessment(input: {
   return row ? cardFromRow(row) : null;
 }
 
+/** 知识问答复用同一条检索链路（embedding → pgvector → rerank） */
+export async function retrieveKnowledge(input: {
+  user_id: string;
+  query: string;
+}): Promise<RetrieveResult> {
+  return createAssessmentRepo({
+    embedder: createEmbeddingClient(),
+    reranker: createRerankClient(),
+  }).retrieve(input);
+}
+
 export interface AssessRecordInput {
   user_id: string;
   related_record_id: string | null;
