@@ -10,7 +10,24 @@ import { CHAT_SYSTEM, EXTRACTION_SYSTEM, INTENT_SYSTEM } from '../llm/prompts.js
 import type { PersistExerciseInput, TurnDeps } from './deps.js';
 import { checkGuard } from './guard.js';
 import { boundaryReply, composeNotice, refusalReply } from './replies.js';
-import { TurnState } from './state.js';
+import { TurnState, type TurnHistoryItem } from './state.js';
+
+/** 空抽取的确定性追问 —— 不交给模型，免得它换个说法又落成记录 */
+export const EMPTY_EXTRACTION_REPLY = '这句里没听出训练内容 —— 是想问动作，还是想记训练？';
+
+/** 带指代的问题拼上一轮用户消息 —— v1 不改写 query（ADR-049 §1） */
+export function buildKnowledgeQuery(message: string, history: TurnHistoryItem[]): string {
+  const previous = [...history].reverse().find((h) => h.role === 'user')?.content;
+  if (!previous) return message;
+  return /这个|那个|它|这些|那些|还有|再|呢/.test(message) ? `${previous}\n${message}` : message;
+}
+
+/** 对话输入带最近 6 轮；没有历史就是这一句 */
+export function buildChatInput(message: string, history: TurnHistoryItem[]): string {
+  if (history.length === 0) return message;
+  const lines = history.map((h) => `${h.role === 'user' ? '用户' : '助手'}：${h.content}`);
+  return [`最近对话：`, ...lines, `用户：${message}`].join('\n');
+}
 
 /**
  * 录入主图 —— 一句话进来，走到落库与卡片。
@@ -56,6 +73,8 @@ export function buildTurnGraph(deps: TurnDeps) {
         const extracted = state.extracted;
         // 饮食只手握契约：不落库
         if (!extracted || extracted.kind === 'meal') return {};
+        // 🔴 没有动作就不是训练记录 —— 不写库，走追问（ADR-049 §7）
+        if (extracted.exercises.length === 0) return { empty_extraction: true };
 
         const date = resolveDate(extracted.day_hint, now());
         const { status, missing_fields } = computeStatus(extracted);
@@ -124,6 +143,10 @@ export function buildTurnGraph(deps: TurnDeps) {
 
       .addNode('compose_card', async (state) => {
         const extracted = state.extracted;
+
+        if (state.empty_extraction) {
+          return { card: { kind: 'chat' as const, reply: EMPTY_EXTRACTION_REPLY }, notices: [] };
+        }
 
         if (extracted?.kind === 'meal') {
           return {
@@ -199,8 +222,37 @@ export function buildTurnGraph(deps: TurnDeps) {
       })
 
       .addNode('chat_node', async (state) => {
-        const reply = await deps.llm.generate({ system: CHAT_SYSTEM, input: state.message });
+        const reply = await deps.llm.generate({
+          system: CHAT_SYSTEM,
+          input: buildChatInput(state.message, state.history),
+        });
         return { card: { kind: 'chat' as const, reply } };
+      })
+
+      .addNode('knowledge_node', async (state) => {
+        if (!deps.answerKnowledge) {
+          return {
+            card: {
+              kind: 'chat' as const,
+              reply: '知识问答暂时用不了 —— 可以先把问题说得具体一点，我再试试。',
+            },
+          };
+        }
+        try {
+          const card = await deps.answerKnowledge({
+            user_id: state.user_id,
+            query: buildKnowledgeQuery(state.message, state.history),
+            history: state.history,
+          });
+          return { card };
+        } catch {
+          return {
+            card: {
+              kind: 'chat' as const,
+              reply: '这次没连上知识库，稍后再问一次。',
+            },
+          };
+        }
       })
 
       .addNode('reject_node', (state) => {
@@ -223,6 +275,7 @@ export function buildTurnGraph(deps: TurnDeps) {
       .addConditionalEdges('classify_intent', (state) => {
         if (state.intent === 'record' || state.intent === 'mixed') return 'extract_record';
         if (state.intent === 'assess') return 'assess_node';
+        if (state.intent === 'knowledge') return 'knowledge_node';
         if (state.intent === 'chat') return 'chat_node';
         if (state.intent === 'boundary') return 'boundary_node';
         if (state.intent === 'reject') return 'reject_node';
@@ -230,10 +283,11 @@ export function buildTurnGraph(deps: TurnDeps) {
       })
       .addEdge('extract_record', 'persist_record')
       .addEdge('persist_record', 'compose_card')
-      // 混合意图：先给录入卡片，再评估本轮刚落库的那条
+      // 混合意图：先给录入卡片，再评估本轮刚落库的那条（空抽取不评估）
       .addConditionalEdges('compose_card', (state) =>
-        state.intent === 'mixed' ? 'assess_node' : END,
+        state.intent === 'mixed' && state.record_ref?.type === 'workout' ? 'assess_node' : END,
       )
+      .addEdge('knowledge_node', END)
       .addEdge('assess_node', END)
       .addEdge('chat_node', END)
       .addEdge('reject_node', END)

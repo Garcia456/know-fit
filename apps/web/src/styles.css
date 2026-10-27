@@ -169,6 +169,50 @@ select {
   outline-offset: 2px;
 }
 
+.conv-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  border-radius: 8px;
+}
+
+.conv-row.is-active {
+  background: var(--surface-2);
+}
+
+.conv-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.conv-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.conv-edit,
+.conv-del {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1);
+  width: 100%;
+  padding: 6px 2px;
+}
+
+.conv-edit input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.conv-del p {
+  width: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 /* ---------- 列表行按钮 ---------- */
 
 .row-button {

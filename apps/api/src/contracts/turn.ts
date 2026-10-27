@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AssessmentCardSchema } from './assessment.js';
+import { AssessmentCardSchema, CitationSchema } from './assessment.js';
 import {
   IntentSchema,
   MealItemSchema,
@@ -68,6 +68,22 @@ export const ChatCardSchema = z.object({
   reply: z.string(),
 });
 
+/** 知识问答的一条主张 —— citation_id 只指向本卡 citations 里的编号 */
+export const KnowledgeClaimSchema = z.object({
+  claim: z.string(),
+  citation_id: z.string().nullable(),
+});
+
+/** 知识回答 —— 个人判定不是它的前提，故不复用评估卡 */
+export const KnowledgeCardSchema = z.object({
+  kind: z.literal('knowledge'),
+  answer: z.string(),
+  claims: z.array(KnowledgeClaimSchema),
+  citations: z.array(CitationSchema),
+  has_source: z.boolean(),
+  no_source_notice: z.string().nullable(),
+});
+
 export const RefusalCardSchema = z.object({
   kind: z.literal('refusal'),
   reply: z.string(),
@@ -100,6 +116,7 @@ export const TurnCardSchema = z.discriminatedUnion('kind', [
   WorkoutCardSchema,
   MealCardSchema,
   ChatCardSchema,
+  KnowledgeCardSchema,
   RefusalCardSchema,
   BoundaryCardSchema,
   CorrectionCardSchema,
@@ -113,6 +130,8 @@ export const AssessmentLookupSchema = z.object({
 
 export const TurnResponseSchema = z.object({
   turn_id: z.string(),
+  /** 本轮所属会话 —— 刷新后按它恢复 */
+  conversation_id: z.string(),
   intent: IntentSchema,
   /** 没产生卡片的轮次（只求评估 / 红线条目）为 null */
   card: TurnCardSchema.nullable(),
@@ -126,6 +145,7 @@ export const TurnResponseSchema = z.object({
 
 export const TurnRequestSchema = z.object({
   message: z.string().min(1),
+  conversation_id: z.string().uuid().nullable().optional(),
 });
 
 export type RefusalReason = z.infer<typeof RefusalReasonSchema>;
@@ -134,6 +154,8 @@ export type WorkoutCardExercise = z.infer<typeof WorkoutCardExerciseSchema>;
 export type WorkoutCard = z.infer<typeof WorkoutCardSchema>;
 export type MealCard = z.infer<typeof MealCardSchema>;
 export type ChatCard = z.infer<typeof ChatCardSchema>;
+export type KnowledgeClaim = z.infer<typeof KnowledgeClaimSchema>;
+export type KnowledgeCard = z.infer<typeof KnowledgeCardSchema>;
 export type RefusalCard = z.infer<typeof RefusalCardSchema>;
 export type BoundaryCard = z.infer<typeof BoundaryCardSchema>;
 export type CorrectionCard = z.infer<typeof CorrectionCardSchema>;

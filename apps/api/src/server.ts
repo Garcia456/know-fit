@@ -6,6 +6,7 @@ import { authOnRequest } from './plugins/auth.js';
 import { accountRoutes } from './routes/account.js';
 import { assessmentRoutes } from './routes/assessments.js';
 import { authRoutes } from './routes/auth.js';
+import { conversationRoutes } from './routes/conversations.js';
 import { healthRoutes } from './routes/health.js';
 import { metricsRoutes } from './routes/metrics.js';
 import { nudgeRoutes } from './routes/nudges.js';
@@ -65,6 +66,7 @@ export async function buildServer() {
   await app.register(authRoutes);
   await app.register(accountRoutes);
   await app.register(turnRoutes);
+  await app.register(conversationRoutes);
   await app.register(metricsRoutes);
   await app.register(assessmentRoutes);
   await app.register(sessionRoutes);

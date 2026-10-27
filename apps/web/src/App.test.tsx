@@ -37,6 +37,7 @@ const historyItems: HistoryItem[] = [
 
 const chatTurn: TurnResponse = {
   turn_id: 't-1',
+  conversation_id: 'c-1',
   intent: 'chat',
   card: { kind: 'chat', reply: '收到，今天先好好休息。' },
   assessment: null,
@@ -72,10 +73,42 @@ const sessionDetail = {
   },
 };
 
+const conversationSummary = {
+  id: 'c-1',
+  title: '今天休息',
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  last_message: '收到，今天先好好休息。',
+};
+
+const conversationDetail = {
+  ...conversationSummary,
+  messages: [
+    {
+      id: 'm-1',
+      role: 'user',
+      content: '今天休息',
+      intent: 'chat',
+      response: null,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 'm-2',
+      role: 'assistant',
+      content: '收到，今天先好好休息。',
+      intent: 'chat',
+      response: chatTurn,
+      created_at: new Date().toISOString(),
+    },
+  ],
+};
+
 function stubApi(sessions: unknown[] = []) {
   const fetchMock = vi.fn((url: string) => {
     if (url === '/api/turns') return json(chatTurn);
     if (url === '/api/nudges/next') return json({ nudge: null });
+    if (url === '/api/conversations') return json({ conversations: [conversationSummary] });
+    if (url.startsWith('/api/conversations/')) return json(conversationDetail);
     if (url.startsWith('/api/history')) return json({ items: historyItems });
     if (url.startsWith('/api/sessions?')) return json({ sessions });
     if (url.startsWith('/api/sessions/')) return json(sessionDetail);
@@ -186,28 +219,26 @@ describe('顶部导航', () => {
 });
 
 describe('对话历史抽屉', () => {
-  it('打开后按时间分组，行内是记录不是会话标题', async () => {
+  it('打开后按时间分组，行内是会话标题与最后一条消息', async () => {
     renderShell('/');
     fireEvent.click(screen.getByRole('button', { name: '对话历史' }));
 
     const drawer = await screen.findByRole('dialog', { name: '对话历史' });
     expect(await within(drawer).findByText('今天')).toBeDefined();
-    expect(within(drawer).getByText('背日 · 3 个动作 / 12 组')).toBeDefined();
-    expect(within(drawer).getByText('2,780 kg · 今天')).toBeDefined();
+    expect(within(drawer).getByText('今天休息')).toBeDefined();
+    expect(within(drawer).getByText(/收到，今天先好好休息。/)).toBeDefined();
     expect(within(drawer).getByRole('button', { name: '创建新会话' })).toBeDefined();
   });
 
-  it('点行跳到数据页并选中该日期，抽屉关闭', async () => {
-    renderShell('/', [
-      { session_id: 's-today', date: todayKey, split_label: '背日', status: 'complete' },
-    ]);
+  it('点会话恢复消息与卡片，抽屉关闭', async () => {
+    renderShell('/');
     fireEvent.click(screen.getByRole('button', { name: '对话历史' }));
     const drawer = await screen.findByRole('dialog', { name: '对话历史' });
-    fireEvent.click(await within(drawer).findByText('背日 · 3 个动作 / 12 组'));
+    fireEvent.click(await within(drawer).findByText('今天休息'));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    const day = screen.getByRole('button', { name: new RegExp(`${todayKey}.*有训练`) });
-    expect(day.getAttribute('aria-pressed')).toBe('true');
+    expect(await screen.findByText('收到，今天先好好休息。')).toBeDefined();
+    expect(localStorage.getItem('know-fit:conversation-id')).toBe('c-1');
   });
 
   it('关闭按钮与 Escape 都能收起', async () => {

@@ -91,18 +91,41 @@ export const recoveryNudge = pgTable(
   ],
 );
 
+/** 会话。首次发送才创建，不产生空会话。 */
+export const conversation = pgTable(
+  'conversation',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(), // 首条用户消息截断 20 字；可重命名
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('conversation_user_updated_index').on(t.userId, t.updatedAt)],
+);
+
 /** 对话轮次。intent 留痕；linked_record_id 是「说错了怎么改」的定位锚。 */
-export const conversationTurn = pgTable('conversation_turn', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  role: text('role').notNull(), // 'user' | 'assistant'
-  content: text('content').notNull(), // 用户原话 / 卡片文案（不是知识库全文）
-  intent: text('intent'), // 六类意图之一
-  linkedRecordId: uuid('linked_record_id'), // 指向 workout_session.id；饮食没表，故不设外键
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const conversationTurn = pgTable(
+  'conversation_turn',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** 旧数据迁移时回填；新写入必填 */
+    conversationId: uuid('conversation_id').references(() => conversation.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(), // 'user' | 'assistant'
+    content: text('content').notNull(), // 用户原话 / 卡片文案（不是知识库全文）
+    intent: text('intent'), // 七类意图之一
+    /** 助手轮存整份响应 —— 恢复会话时重建卡片 */
+    replyJson: jsonb('reply_json'),
+    linkedRecordId: uuid('linked_record_id'), // 指向 workout_session.id；饮食没表，故不设外键
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('conversation_turn_conversation_index').on(t.conversationId, t.createdAt)],
+);
 
 /** 一次训练。status / missing_fields 由确定性代码算，是 F7 的数据基础。 */
 export const workoutSession = pgTable('workout_session', {

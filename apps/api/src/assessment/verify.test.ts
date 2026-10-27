@@ -98,6 +98,29 @@ describe('verifyClaims', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('知识问答（判定为 null）→ 提示词里没有判定行，但引文校验照旧', async () => {
+    let input = '';
+    const llm = client(async (text) => {
+      input = text;
+      return ok('C0');
+    });
+
+    const out = await verifyClaims(llm, null, [claim('C0')]);
+
+    expect(input).not.toContain('判定：');
+    expect(out[0]!.check.supported).toBe(true);
+  });
+
+  it('判定为 null 时数字仍要能在引文里找到', async () => {
+    const llm = client(async () => ok('C0'));
+    const withNumber = { ...claim('C0'), claim: '每组做 12 次' };
+
+    const out = await verifyClaims(llm, null, [withNumber]);
+
+    expect(out[0]!.check.supported).toBe(false);
+    expect(out[0]!.check.reason).toContain('数字');
+  });
+
   it('闸② 提示词要求 reason 短', async () => {
     let system = '';
     const llm: LlmClient = {

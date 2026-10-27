@@ -16,18 +16,24 @@ export interface LogTurnInput {
   message: string;
   intent: Intent;
   linked_record_id: string | null;
+  conversation_id?: string | null;
+  role?: 'user' | 'assistant';
+  /** 助手轮存整份响应 —— 恢复会话时重建卡片 */
+  response?: unknown;
 }
 
-/** 写一条用户侧轮次；它的 id 就是这一轮的 `turn_id` */
+/** 写一条轮次；用户轮的 id 就是这一轮的 `turn_id` */
 export async function logTurn(input: LogTurnInput): Promise<string> {
   const db = getDb();
   const [row] = await db
     .insert(conversationTurn)
     .values({
       userId: input.user_id,
-      role: 'user',
+      conversationId: input.conversation_id ?? null,
+      role: input.role ?? 'user',
       content: input.message,
       intent: input.intent,
+      replyJson: input.response ?? null,
       linkedRecordId: input.linked_record_id,
     })
     .returning({ id: conversationTurn.id });

@@ -1,7 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { postAssessment, postNudgeAction, postNudgeNext, postTurn } from '../api/client';
-import type { AssessmentCard, Nudge, TurnResponse } from '../api/types';
+import {
+  ApiError,
+  getConversation,
+  postAssessment,
+  postNudgeAction,
+  postNudgeNext,
+  postTurn,
+} from '../api/client';
+import type {
+  AssessmentCard,
+  ConversationMessage,
+  Nudge,
+  TurnResponse,
+} from '../api/types';
+import { writeConversationId } from '../lib/conversation';
 import { AssessmentCardView } from '../components/AssessmentCardView';
 import { CardView } from '../components/CardView';
 import { Composer } from '../components/Composer';
@@ -54,12 +67,42 @@ function makeId(): string {
   return `entry-${nextId}`;
 }
 
+/** 库里的消息还原成屏上的轮次：一条用户消息 + 紧跟的助手响应 */
+function entriesFromMessages(messages: ConversationMessage[]): Entry[] {
+  const entries: Entry[] = [];
+  let user: string | null = null;
+  for (const message of messages) {
+    if (message.role === 'user') {
+      user = message.content;
+      continue;
+    }
+    if (!message.response) continue;
+    entries.push({
+      id: `restored-${message.id}`,
+      user: user ?? '',
+      response: message.response,
+      extraAssessments: [],
+      assessmentNotices: [],
+      assessmentError: null,
+      lowData:
+        message.response.assessment_lookup?.status === 'insufficient'
+          ? message.response.assessment_lookup.missing
+          : null,
+    });
+    user = null;
+  }
+  return entries;
+}
+
 interface Props {
   /** 顶栏「创建新会话」递增；变化即清空视图与草稿 */
   resetToken: number;
+  /** 当前会话 —— 从抽屉选中或刷新恢复时变化 */
+  activeConversationId?: string | null;
+  onConversationChange?: (id: string | null) => void;
 }
 
-export function ChatPage({ resetToken }: Props) {
+export function ChatPage({ resetToken, activeConversationId, onConversationChange }: Props) {
   const [draft, setDraft] = useState(readDraft);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [sending, setSending] = useState(false);
@@ -71,7 +114,9 @@ export function ChatPage({ resetToken }: Props) {
   const [nudgeBusy, setNudgeBusy] = useState(false);
   const [params, setParams] = useSearchParams();
   const nudgeRequested = useRef(false);
-  const firstReset = useRef(true);
+  const lastReset = useRef(resetToken);
+  /** 已经画出来的会话 —— 发送后自己写进来的响应不必再拉一次 */
+  const loadedConversation = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -94,17 +139,46 @@ export function ChatPage({ resetToken }: Props) {
 
   // 新会话 = 只清当前视图与草稿，不删库
   useEffect(() => {
-    if (firstReset.current) {
-      firstReset.current = false;
-      return;
-    }
+    if (lastReset.current === resetToken) return;
+    lastReset.current = resetToken;
     setEntries([]);
     setDraft('');
     writeDraft('');
+    writeConversationId(null);
+    loadedConversation.current = null;
+    onConversationChange?.(null);
     setSendError(null);
     setFailedMessage(null);
     setParams({});
-  }, [resetToken, setParams]);
+  }, [resetToken, setParams, onConversationChange]);
+
+  // 选中 / 刷新恢复：从库里把消息与卡片画回来
+  useEffect(() => {
+    const id = activeConversationId;
+    if (!id || loadedConversation.current === id) return;
+    let alive = true;
+    getConversation(id)
+      .then((detail) => {
+        if (!alive) return;
+        loadedConversation.current = id;
+        setEntries(entriesFromMessages(detail.messages));
+        setSendError(null);
+        setFailedMessage(null);
+      })
+      .catch((error) => {
+        if (!alive) return;
+        loadedConversation.current = null;
+        if (error instanceof ApiError && error.status === 404) {
+          writeConversationId(null);
+          onConversationChange?.(null);
+          return;
+        }
+        setSendError(error instanceof Error ? error.message : '会话读不出来');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [activeConversationId, onConversationChange]);
 
   useEffect(() => {
     const el = bodyRef.current;
@@ -152,7 +226,10 @@ export function ChatPage({ resetToken }: Props) {
     setFailedMessage(null);
 
     try {
-      const response = await postTurn(trimmed);
+      const response = await postTurn(trimmed, activeConversationId);
+      loadedConversation.current = response.conversation_id;
+      writeConversationId(response.conversation_id);
+      onConversationChange?.(response.conversation_id);
       setEntries((prev) => [
         ...prev,
         {

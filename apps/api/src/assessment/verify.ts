@@ -25,7 +25,7 @@ export interface ClaimVerdict {
 
 export async function verifyClaims(
   llm: LlmClient,
-  verdict: VolumeHook,
+  verdict: VolumeHook | null,
   claims: GateClaim[],
 ): Promise<ClaimVerdict[]> {
   return Promise.all(

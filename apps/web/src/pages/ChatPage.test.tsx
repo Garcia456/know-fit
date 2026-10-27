@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +7,7 @@ import { ChatPage } from './ChatPage';
 
 const chatTurn: TurnResponse = {
   turn_id: 't-1',
+  conversation_id: 'c-1',
   intent: 'chat',
   card: { kind: 'chat', reply: '收到，今天先好好休息。' },
   assessment: null,
@@ -15,6 +17,7 @@ const chatTurn: TurnResponse = {
 
 const lowDataTurn: TurnResponse = {
   turn_id: 't-2',
+  conversation_id: 'c-2',
   intent: 'assess',
   card: {
     kind: 'workout',
@@ -153,6 +156,68 @@ describe('聊天页', () => {
     expect(screen.getByText('数据不足')).toBeDefined();
     expect(screen.getByText('还差 2 项才能算趋势')).toBeDefined();
     expect(screen.queryByText(/建议你/)).toBeNull();
+  });
+});
+
+describe('会话恢复（StrictMode 双跑）', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const detail = {
+    id: 'c-1',
+    title: 'hi',
+    created_at: '2026-10-27T00:00:00.000Z',
+    updated_at: '2026-10-27T00:00:00.000Z',
+    last_message: '收到，今天先好好休息。',
+    messages: [
+      {
+        id: 'm-1',
+        role: 'user',
+        content: 'hi',
+        intent: 'chat',
+        response: null,
+        created_at: '2026-10-27T00:00:00.000Z',
+      },
+      {
+        id: 'm-2',
+        role: 'assistant',
+        content: '收到，今天先好好休息。',
+        intent: 'chat',
+        response: chatTurn,
+        created_at: '2026-10-27T00:00:00.000Z',
+      },
+    ],
+  };
+
+  it('挂载不清掉当前会话，并把消息画回来', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => (url === '/api/conversations/c-1' ? detail : { nudge: null }),
+        }),
+      ),
+    );
+    localStorage.setItem('know-fit:conversation-id', 'c-1');
+
+    render(
+      <StrictMode>
+        <MemoryRouter>
+          <ChatPage resetToken={0} activeConversationId="c-1" />
+        </MemoryRouter>
+      </StrictMode>,
+    );
+
+    expect(await screen.findByText('收到，今天先好好休息。')).toBeDefined();
+    expect(localStorage.getItem('know-fit:conversation-id')).toBe('c-1');
   });
 });
 

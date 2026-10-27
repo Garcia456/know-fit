@@ -74,7 +74,7 @@ describe('记录链路：走通 → 落库 → 出卡片', () => {
 
   it('时间状语交给代码解析：昨天 → 前一天', async () => {
     const { graph, calls } = build();
-    await graph.invoke({ message: '昨天练了胸' });
+    await graph.invoke({ message: '推日：卧推先热身两组 40kg×10，然后 100kg×5 五组' });
     expect(calls[0]?.date).toBe('2026-10-12');
   });
 
@@ -86,12 +86,13 @@ describe('记录链路：走通 → 落库 → 出卡片', () => {
     expect(state.notices).toHaveLength(1);
   });
 
-  it('只说部位：「今天练了背」—— 动作数为 0 也要落库，不拦住录入', async () => {
+  it('只说部位：「今天练了背」—— 0 个动作不落库，走确定性追问', async () => {
     const { graph, calls } = build();
     const state = await graph.invoke({ message: '今天练了背' });
-    expect(calls).toHaveLength(1);
-    expect(state.missing_fields).toContain('exercises');
-    expect(state.notices).toHaveLength(1);
+    expect(calls).toHaveLength(0);
+    expect(state.empty_extraction).toBe(true);
+    expect(state.card?.kind).toBe('chat');
+    expect(state.card?.kind === 'chat' ? state.card.reply : '').toContain('没听出训练内容');
   });
 
   it('混合意图：「…帮我看下够不够」先落库出卡片（评估接线另测）', async () => {

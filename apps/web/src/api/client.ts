@@ -3,6 +3,9 @@ import type {
   AccountInput,
   AssessmentResponse,
   ClearTrainingResult,
+  ConversationDetail,
+  ConversationListResponse,
+  ConversationSummary,
   HistoryResponse,
   NudgeNextResponse,
   Profile,
@@ -51,6 +54,8 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     throw new ApiError(response.status, detail);
   }
 
+  // 204 没有 body —— 例如删除会话
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -92,11 +97,36 @@ export function deleteAccount(): Promise<{ ok: true }> {
   return request('/api/account', { method: 'DELETE' });
 }
 
-export function postTurn(message: string): Promise<TurnResponse> {
+export function postTurn(message: string, conversationId?: string | null): Promise<TurnResponse> {
   return request('/api/turns', {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      ...(conversationId ? { conversation_id: conversationId } : {}),
+    }),
   });
+}
+
+export function getConversations(): Promise<ConversationListResponse> {
+  return request('/api/conversations', { method: 'GET' });
+}
+
+export function getConversation(id: string): Promise<ConversationDetail> {
+  return request(`/api/conversations/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export function renameConversation(
+  id: string,
+  title: string,
+): Promise<{ conversation: ConversationSummary }> {
+  return request(`/api/conversations/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function deleteConversation(id: string): Promise<void> {
+  return request(`/api/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function postAssessment(

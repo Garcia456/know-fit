@@ -176,6 +176,10 @@ export const GOLDEN_INTENTS: Record<string, Intent> = {
   '卧推 70kg×8 四组，帮我看下够不够': 'mixed',
   '推日：卧推 70kg×5 五组，帮我看下够不够': 'mixed',
   '我不太想练了': 'chat',
+  'hi': 'chat',
+  '你是谁': 'chat',
+  '练胸有什么推荐动作': 'knowledge',
+  '深蹲怎么练才标准': 'knowledge',
   '膝盖疼还能练吗': 'reject',
   '我 14 岁，能练吗': 'boundary',
 };

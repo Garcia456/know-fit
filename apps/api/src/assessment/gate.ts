@@ -64,7 +64,8 @@ export function numbersAllowed(claim: string, allowed: number[]): boolean {
 export function checkGateResult(input: {
   result: { claim_id: string; candidate_id: string; supported: boolean; from_window: number; reason: string };
   claim: GateClaim;
-  verdict: VolumeHook;
+  /** null = 知识问答：没有个人判定，只核验片段是否支撑这句话 */
+  verdict: VolumeHook | null;
 }): GateCheck {
   const { result, claim, verdict } = input;
   const fail = (reason: string): GateCheck => ({
@@ -92,7 +93,7 @@ export function checkGateResult(input: {
     return fail('窗口偏移与片段原文对不上');
   }
 
-  // 数字守卫：建议里的数字必须来自判定或引文
+  // 数字守卫：建议里的数字必须来自判定或引文（知识问答没有判定）
   if (!numbersAllowed(claim.claim, [...numbersIn(verdict), ...numbersIn(quote)])) {
     return fail('建议里有判定与引文都没有的数字');
   }

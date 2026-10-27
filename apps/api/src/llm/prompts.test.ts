@@ -56,4 +56,8 @@ describe('INTENT_SYSTEM 点名了 intent', () => {
   it('intent', () => {
     expect(named(INTENT_SYSTEM, 'intent')).toBe(true);
   });
+
+  it('带 JSON 字样 —— jsonMode 的硬要求', () => {
+    expect(INTENT_SYSTEM).toMatch(/JSON/);
+  });
 });
