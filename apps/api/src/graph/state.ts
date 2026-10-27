@@ -13,7 +13,7 @@ import { GuardVerdictSchema } from './guard.js';
  * 评估是独立字段（不是卡片 union 的一员）；chunk 全文**不进**这里。
  */
 
-/** v1 单用户 —— 迁移里种下的那个固定 id */
+/** demo 账号 id —— 迁移 0009 后它的邮箱是 demo@knowfit.local；只给测试 / e2e / 本地工具用。 */
 export const SINGLE_USER_ID = '00000000-0000-4000-8000-000000000001';
 
 export const TrainingBandSchema = z.enum(['lt_3m', '3m_2y', 'gt_2y']);

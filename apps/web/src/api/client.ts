@@ -1,5 +1,8 @@
 import type {
+  Account,
+  AccountInput,
   AssessmentResponse,
+  ClearTrainingResult,
   HistoryResponse,
   NudgeNextResponse,
   Profile,
@@ -41,10 +44,52 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     } catch {
       // 非 JSON 错误体，保留状态码
     }
+    // 会话过期：让 AuthProvider 统一退回登录页；登录接口自己的 401 不算
+    if (response.status === 401 && !path.startsWith('/api/auth/')) {
+      window.dispatchEvent(new Event('kf:unauthorized'));
+    }
     throw new ApiError(response.status, detail);
   }
 
   return (await response.json()) as T;
+}
+
+export function getMe(): Promise<{ user: Account }> {
+  return request('/api/auth/me', { method: 'GET' });
+}
+
+export function postLogin(email: string, password: string): Promise<{ user: Account }> {
+  return request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function postRegister(input: {
+  email: string;
+  password: string;
+  nickname: string;
+}): Promise<{ user: Account }> {
+  return request('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function postLogout(): Promise<{ ok: true }> {
+  return request('/api/auth/logout', { method: 'POST' });
+}
+
+export function patchAccount(input: AccountInput): Promise<{ user: Account }> {
+  return request('/api/account', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function clearTrainingRecords(): Promise<{ ok: true; cleared: ClearTrainingResult }> {
+  return request('/api/account/training-records', { method: 'DELETE' });
+}
+
+export function deleteAccount(): Promise<{ ok: true }> {
+  return request('/api/account', { method: 'DELETE' });
 }
 
 export function postTurn(message: string): Promise<TurnResponse> {

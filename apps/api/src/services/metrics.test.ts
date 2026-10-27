@@ -102,7 +102,7 @@ describe('sessionVolume：现算容量与肌群分摊', () => {
       workout({ split, date: '2026-09-01', volume: 2500, sets: 5, withWarmup: true, withAmbiguous: true }),
     );
 
-    const v = await sessionVolume(session_id);
+    const v = await sessionVolume({ user_id: SINGLE_USER_ID, session_id });
     expect(v).not.toBeNull();
     expect(v?.total_volume_kg).toBe(2500); // 2 组热身（各 400）不算
     expect(v?.working_sets).toBe(5);
@@ -113,7 +113,7 @@ describe('sessionVolume：现算容量与肌群分摊', () => {
   });
 
   it('不存在的记录 → null', async () => {
-    expect(await sessionVolume(MISSING)).toBeNull();
+    expect(await sessionVolume({ user_id: SINGLE_USER_ID, session_id: MISSING })).toBeNull();
   });
 });
 
@@ -176,7 +176,7 @@ describe('weeklyVolume：按周一起算的自然周', () => {
   const now = new Date('2026-10-21T12:00:00'); // 周三 → 本周一 = 10-19
 
   beforeAll(async () => {
-    await getDb().insert(user).values({ id: WEEK_USER }).onConflictDoNothing();
+    await getDb().insert(user).values({ id: WEEK_USER, email: `${WEEK_USER}@test.local`, passwordHash: 'scrypt$locked$locked', nickname: '测试' }).onConflictDoNothing();
   });
 
   afterAll(async () => {
@@ -231,7 +231,7 @@ describe('weightHistory：只取有记录的日子', () => {
   const now = new Date('2026-10-21T12:00:00');
 
   beforeAll(async () => {
-    await getDb().insert(user).values({ id: WEIGHT_USER }).onConflictDoNothing();
+    await getDb().insert(user).values({ id: WEIGHT_USER, email: `${WEIGHT_USER}@test.local`, passwordHash: 'scrypt$locked$locked', nickname: '测试' }).onConflictDoNothing();
     await getDb()
       .insert(bodyMetric)
       .values([
@@ -256,7 +256,7 @@ describe('weightHistory：只取有记录的日子', () => {
 
   it('单点 → 差值为 null', async () => {
     const one = '00000000-0000-4000-8000-0000000000e3';
-    await getDb().insert(user).values({ id: one }).onConflictDoNothing();
+    await getDb().insert(user).values({ id: one, email: `${one}@test.local`, passwordHash: 'scrypt$locked$locked', nickname: '测试' }).onConflictDoNothing();
     await getDb()
       .insert(bodyMetric)
       .values({ userId: one, date: '2026-10-15', weightKg: 70 })
@@ -281,7 +281,7 @@ const STATS_USER = '00000000-0000-4000-8000-0000000000e4';
 
 describe('statsRange：任意日期范围聚合', () => {
   beforeAll(async () => {
-    await getDb().insert(user).values({ id: STATS_USER }).onConflictDoNothing();
+    await getDb().insert(user).values({ id: STATS_USER, email: `${STATS_USER}@test.local`, passwordHash: 'scrypt$locked$locked', nickname: '测试' }).onConflictDoNothing();
   });
 
   afterAll(async () => {

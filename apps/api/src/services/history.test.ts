@@ -150,7 +150,7 @@ const HIST_USER = '00000000-0000-4000-8000-0000000000e4';
 
 describe('listHistory', () => {
   beforeAll(async () => {
-    await getDb().insert(user).values({ id: HIST_USER }).onConflictDoNothing();
+    await getDb().insert(user).values({ id: HIST_USER, email: `${HIST_USER}@test.local`, passwordHash: 'scrypt$locked$locked', nickname: '测试' }).onConflictDoNothing();
 
     await persistWorkout({
       user_id: HIST_USER,

@@ -1,6 +1,6 @@
 import { TurnResponseSchema, type TurnResponse } from '../contracts/turn.js';
 import { buildTurnGraph } from '../graph/turn.js';
-import { SINGLE_USER_ID, TurnState } from '../graph/state.js';
+import { TurnState } from '../graph/state.js';
 import { createLlmClient } from '../llm/index.js';
 import type { LlmClient } from '../llm/client.js';
 import { assessRecord } from './assessment.js';
@@ -14,7 +14,7 @@ import { volumeHookFor } from './metrics.js';
 
 export interface TurnInput {
   message: string;
-  user_id?: string;
+  user_id: string;
 }
 
 let cached: ReturnType<typeof buildTurnGraph> | null = null;
@@ -31,7 +31,7 @@ function turnGraph(llm: LlmClient) {
 }
 
 export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
-  const user_id = input.user_id ?? SINGLE_USER_ID;
+  const user_id = input.user_id;
 
   // 窄修正先走确定性路径 —— 不进 LLM，不猜动作
   const correction = parseWeightCorrection(input.message);

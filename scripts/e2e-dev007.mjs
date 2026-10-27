@@ -16,6 +16,7 @@
  * 退出码：0 = 通过；1 = 失败
  */
 import pg from 'pg';
+import { loginDemo } from './lib/login.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const API = `${BASE}/api`;
@@ -55,12 +56,15 @@ function hasForbiddenKey(value, path = '$') {
   return null;
 }
 
+let cookie = '';
+
 async function call(path, init) {
   const res = await fetch(`${API}${path}`, {
     ...init,
     headers: {
       ...(init?.body === undefined ? {} : { 'content-type': 'application/json' }),
       ...(init?.headers ?? {}),
+      cookie,
     },
   });
   const body = await res.json().catch(() => null);
@@ -68,6 +72,12 @@ async function call(path, init) {
 }
 
 const client = new pg.Client({ connectionString: url, connectionTimeoutMillis: 5000 });
+try {
+  cookie = await loginDemo(BASE);
+} catch (e) {
+  console.error(`  \x1b[31m✗\x1b[0m ${e.message}`);
+  process.exit(1);
+}
 const today = todayLocal();
 const oldDate = daysAgoLocal(10);
 const correctionDate = '2099-01-05';

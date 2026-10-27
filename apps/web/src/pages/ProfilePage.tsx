@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { getProfile, putProfile } from '../api/client';
-import type { Goal } from '../api/types';
+import type { Account, Goal } from '../api/types';
+import { useAuthUser } from '../auth/AuthContext';
 import { InfoIcon, WarnIcon } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
 import { OptionField } from '../components/OptionField';
@@ -25,8 +27,23 @@ const EMPTY_VALUES: ProfileFormValues = {
   months: null,
 };
 
-/** 个人信息页：四字段读写。不做乐观更新 —— 显示「已保存」之前必须真的写成功。 */
+/** 账号摘要：年龄按生日算好了，签名跟在后面。 */
+function accountSummary(user: Account): string {
+  const bits: string[] = [];
+  if (user.age !== null) bits.push(`${user.age} 岁`);
+  if (user.gender) bits.push(user.gender);
+  if (user.bio) bits.push(user.bio);
+  return bits.length ? bits.join(' · ') : '账号资料还没填';
+}
+
+function avatarText(user: Account): string {
+  const first = Array.from(user.nickname.trim())[0];
+  return first ?? '我';
+}
+
+/** 个人信息页：账号摘要 + 身体档案四字段读写。显示「已保存」之前必须真的写成功。 */
 export function ProfilePage() {
+  const user = useAuthUser();
   const [values, setValues] = useState<ProfileFormValues | null>(null);
   const [weightDate, setWeightDate] = useState<string | null>(null);
   const [errors, setErrors] = useState<Partial<Record<'height' | 'weight', string>>>({});
@@ -106,12 +123,12 @@ export function ProfilePage() {
 
   return (
     <div className="body page-body">
-      <div className="profile">
+      <div className="profile profile--account">
         <span className="avatar" aria-hidden="true">
-          我
+          {user ? avatarText(user) : '我'}
         </span>
         <div>
-          <h2>我的档案</h2>
+          <h2>{user?.nickname ?? '我的档案'}</h2>
           <p>
             {loadError
               ? '档案没读出来'
@@ -121,7 +138,13 @@ export function ProfilePage() {
                     : `训练 ${formatTraining(values.years, values.months)}`
                 }`}
           </p>
+          {user ? <p className="profile-bio">{accountSummary(user)}</p> : null}
         </div>
+        {user ? (
+          <Link to="/settings" className="profile-settings">
+            设置
+          </Link>
+        ) : null}
       </div>
 
       {loadError ? (

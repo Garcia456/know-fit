@@ -64,6 +64,13 @@
       "when": 1793015320650,
       "tag": "0008_training_started_on",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793088000000,
+      "tag": "0009_user_auth",
+      "breakpoints": true
     }
   ]
 }

@@ -151,7 +151,8 @@ fi
 #   D. 检索与引用（dev-005）—— 造源 → 检索过滤 → 闸② → 引用偏移 → R-C 计数。
 #   E. 历史 / 档案 / 提示（dev-006）—— 档案往返 → 体重落 body_metric → 提示只出现一次。
 #   F. 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正（dev-007）—— 与前端四页消费同一批接口。
-bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引 + 检索引用 + 档案提示 + 读聚合修正）"
+#   G. 用户系统（dev-008）—— 注册 / 隔离 / 改资料 / 清空训练 / 注销，全部走会话 cookie。
+bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引 + 检索引用 + 档案提示 + 读聚合修正 + 用户系统）"
 if [ "$FAILED" -eq 0 ]; then
   if node scripts/e2e-turn.mjs; then
     ok "端到端往返通过"
@@ -174,6 +175,14 @@ if [ "$FAILED" -eq 0 ]; then
   else
     bad "读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正失败"
     hint "0007 迁移跑了吗？pnpm db:migrate"
+  fi
+
+  # 用户系统（dev-008）—— 注册 → 隔离 → 改资料 → 清空训练 → 注销；收尾自删测试账号。
+  if node scripts/e2e-dev008.mjs; then
+    ok "用户系统端到端通过"
+  else
+    bad "用户系统端到端失败"
+    hint "0009 迁移跑了吗？pnpm db:migrate"
   fi
 
   # 采集转写（dev-004）—— 走替身 provider：不联网、不加载模型。

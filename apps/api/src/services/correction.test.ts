@@ -55,7 +55,7 @@ beforeAll(async () => {
     });
   }
   for (const id of USERS) {
-    await getDb().insert(user).values({ id }).onConflictDoNothing();
+    await getDb().insert(user).values({ id: id, email: `${id}@test.local`, passwordHash: 'scrypt$locked$locked', nickname: '测试' }).onConflictDoNothing();
   }
 });
 

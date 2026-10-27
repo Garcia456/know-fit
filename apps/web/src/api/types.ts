@@ -253,6 +253,34 @@ export interface SessionDetail {
   hook: VolumeHook;
 }
 
+export type Gender = '男' | '女' | '其他';
+
+/** 账号资料 —— 与身体档案（Profile）是两件事。 */
+export interface Account {
+  id: string;
+  email: string;
+  nickname: string;
+  birthday: string | null;
+  gender: Gender | null;
+  bio: string | null;
+  age: number | null;
+  created_at: string;
+}
+
+export interface AccountInput {
+  nickname: string;
+  birthday: string | null;
+  gender: Gender | null;
+  bio: string | null;
+}
+
+export interface ClearTrainingResult {
+  sessions: number;
+  assessments: number;
+  turns: number;
+  nudges: number;
+}
+
 export type Goal = '增肌' | '减脂' | '维持' | '增肌+减脂';
 
 export interface Profile {

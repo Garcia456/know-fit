@@ -1,11 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { ProfileInputSchema, type Profile } from '../contracts/sessions.js';
-import { SINGLE_USER_ID } from '../graph/state.js';
 import { getProfile, saveProfile } from '../services/profile.js';
 
 /** `/api/profile` —— 读与写。留空（null）是合法值。 */
 export async function profileRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/profile', async (): Promise<Profile> => getProfile(SINGLE_USER_ID));
+  app.get('/profile', async (request): Promise<Profile> => getProfile(request.userId));
 
   app.put('/profile', async (request, reply): Promise<Profile | undefined> => {
     const parsed = ProfileInputSchema.safeParse(request.body ?? {});
@@ -15,6 +14,6 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
       });
       return undefined;
     }
-    return saveProfile({ user_id: SINGLE_USER_ID, profile: parsed.data });
+    return saveProfile({ user_id: request.userId, profile: parsed.data });
   });
 }

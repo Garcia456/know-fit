@@ -17,6 +17,6 @@ export async function turnRoutes(app: FastifyInstance): Promise<void> {
       await reply.code(400).send({ error: '请求体需要 { message: string }' });
       return undefined;
     }
-    return handleTurn({ message: parsed.data.message });
+    return handleTurn({ message: parsed.data.message, user_id: request.userId });
   });
 }

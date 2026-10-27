@@ -13,6 +13,7 @@
  * 退出码：0 = 通过；1 = 失败
  */
 import pg from 'pg';
+import { loginDemo } from './lib/login.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const API = `${BASE}/api`;
@@ -31,12 +32,15 @@ function todayLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+let cookie = '';
+
 async function call(path, init) {
   const res = await fetch(`${API}${path}`, {
     ...init,
     headers: {
       ...(init?.body === undefined ? {} : { 'content-type': 'application/json' }),
       ...(init?.headers ?? {}),
+      cookie,
     },
   });
   const body = await res.json().catch(() => null);
@@ -57,6 +61,14 @@ try {
 }
 
 console.log('\n=== dev-006 端到端 ===\n');
+
+try {
+  cookie = await loginDemo(BASE);
+  ok('demo 账号登录成功');
+} catch (e) {
+  bad(e.message);
+  process.exit(1);
+}
 
 try {
   // 先留底，收尾时原样还原
