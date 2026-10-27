@@ -187,7 +187,7 @@ describe('评估接线', () => {
       assess: async (input) => {
         calls.push(input);
         if (fail) throw new Error('boom');
-        return { card: null, notices: ['评估桩'] };
+        return { card: null, notices: ['评估桩'], lookup_status: 'ok' as const, missing: [] };
       },
       now: () => NOW,
     });

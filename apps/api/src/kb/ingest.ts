@@ -61,7 +61,21 @@ if (process.env.KB_CREATOR?.trim()) {
 
 let failed = false;
 try {
-  const { robots, sources, skipped } = await ingestAll(whitelist, { fetcher, asr });
+  // 没有进度输出的话，20 条视频跑一两个小时，终端看起来和卡死一样
+  const { robots, sources, skipped } = await ingestAll(whitelist, {
+    fetcher,
+    asr,
+    onProgress: (e) => {
+      if (e.stage === 'listed') {
+        console.log(`—— 博主「${e.creator}」：候选 ${e.candidates} 条（${e.pages} 页） → 采 ${e.picked} 条`);
+        for (const t of e.excluded) console.log(`   ⛔ 排除词挡下：「${t}」`);
+        for (const t of e.music_excluded) console.log(`   🎵 配乐片挡下：「${t}」`);
+      }
+      if (e.stage === 'transcribe') console.log(`   ⏳ 下载 + 转写 ${e.platform_video_key}「${e.title}」…`);
+      if (e.stage === 'done') console.log(`   ✓ 落库 ${e.platform_video_key}：${e.segments} 段`);
+      if (e.stage === 'skipped') console.log(`   ⛔ 跳过 ${e.platform_video_key}「${e.title}」：${e.reason}`);
+    },
+  });
 
   console.log(`robots 检查：checked_at = ${robots.checked_at.toISOString()}`);
   console.log(`  结论 allowed = ${robots.allowed === null ? 'null（检查过，结论不适用）' : robots.allowed}`);

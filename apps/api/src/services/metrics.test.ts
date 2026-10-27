@@ -1,9 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { PersistExerciseInput, PersistWorkoutInput } from '../graph/deps.js';
 import { SINGLE_USER_ID } from '../graph/state.js';
-import { closeDb, getPool } from './pool.js';
+import { bodyMetric, user } from '../db/schema.js';
+import { closeDb, getDb, getPool } from './pool.js';
 import { persistWorkout } from './record.js';
-import { prevSameSplitVolume, sessionVolume, volumeHookFor } from './metrics.js';
+import {
+  prevSameSplitVolume,
+  sessionVolume,
+  statsRange,
+  volumeHookFor,
+  weeklyVolume,
+  weightHistory,
+} from './metrics.js';
 
 /**
  * 训练量的读与算 —— 必须连真库（现算不落库，基线要从历史记录里挑）。
@@ -146,6 +154,8 @@ describe('volumeHookFor：给卡片的钩子', () => {
             set_type: 'working' as const,
             is_inferred: false,
           })),
+          volume_kg: 2000,
+          working_sets: 5,
         },
       ],
     });
@@ -155,5 +165,181 @@ describe('volumeHookFor：给卡片的钩子', () => {
     expect(hook.delta_pct).toBe(-20);
     expect(hook.baseline_kind).toBe('prev_same_split');
     void a;
+  });
+});
+
+/** 周聚合没有 split 过滤 —— 用独立用户隔离，别让别的测试记录混进来 */
+const WEEK_USER = '00000000-0000-4000-8000-0000000000e1';
+const WEIGHT_USER = '00000000-0000-4000-8000-0000000000e2';
+
+describe('weeklyVolume：按周一起算的自然周', () => {
+  const now = new Date('2026-10-21T12:00:00'); // 周三 → 本周一 = 10-19
+
+  beforeAll(async () => {
+    await getDb().insert(user).values({ id: WEEK_USER }).onConflictDoNothing();
+  });
+
+  afterAll(async () => {
+    await getPool().query('DELETE FROM "user" WHERE id = $1', [WEEK_USER]);
+  });
+
+  it('空用户 → 全 0，算不出环比', async () => {
+    const out = await weeklyVolume({ user_id: WEEK_USER, weeks: 4, now });
+    expect(out.weeks.map((w) => w.week_start)).toEqual([
+      '2026-09-28',
+      '2026-10-05',
+      '2026-10-12',
+      '2026-10-19',
+    ]);
+    expect(out.weeks.every((w) => w.total_volume_kg === 0 && w.working_sets === 0)).toBe(true);
+    expect(out.this_week_kg).toBe(0);
+    expect(out.last_week_kg).toBe(0);
+    expect(out.delta_pct).toBeNull();
+  });
+
+  it('跨月归到各自自然周；本周与上周差值按上周算', async () => {
+    const rows = [
+      { date: '2026-09-28', volume: 1000, sets: 2 }, // 周一，窗口第一周
+      { date: '2026-10-04', volume: 500, sets: 1 }, // 周日，仍属第一周
+      { date: '2026-10-06', volume: 2000, sets: 4 },
+      { date: '2026-10-13', volume: 3000, sets: 6 },
+      { date: '2026-10-19', volume: 2500, sets: 5 },
+    ];
+    for (const r of rows) {
+      await persistWorkout({ ...workout({ split: `${BASE}周`, ...r }), user_id: WEEK_USER });
+    }
+
+    const out = await weeklyVolume({ user_id: WEEK_USER, weeks: 4, now });
+    expect(out.weeks.map((w) => w.total_volume_kg)).toEqual([1500, 2000, 3000, 2500]);
+    expect(out.weeks.map((w) => w.working_sets)).toEqual([3, 4, 6, 5]);
+    expect(out.this_week_kg).toBe(2500);
+    expect(out.last_week_kg).toBe(3000);
+    expect(out.delta_pct).toBe(-16.67);
+  });
+
+  it('窗口外的记录不计入', async () => {
+    await persistWorkout({
+      ...workout({ split: `${BASE}周`, date: '2026-09-20', volume: 9999, sets: 9 }),
+      user_id: WEEK_USER,
+    });
+    const out = await weeklyVolume({ user_id: WEEK_USER, weeks: 4, now });
+    expect(out.weeks[0]?.total_volume_kg).toBe(1500);
+  });
+});
+
+describe('weightHistory：只取有记录的日子', () => {
+  const now = new Date('2026-10-21T12:00:00');
+
+  beforeAll(async () => {
+    await getDb().insert(user).values({ id: WEIGHT_USER }).onConflictDoNothing();
+    await getDb()
+      .insert(bodyMetric)
+      .values([
+        { userId: WEIGHT_USER, date: '2026-09-30', weightKg: 80 },
+        { userId: WEIGHT_USER, date: '2026-10-10', weightKg: 79.2 },
+        { userId: WEIGHT_USER, date: '2026-10-20', weightKg: 78.4 },
+        { userId: WEIGHT_USER, date: '2026-08-01', weightKg: 82 }, // 窗口外
+      ])
+      .onConflictDoNothing();
+  });
+
+  afterAll(async () => {
+    await getPool().query('DELETE FROM "user" WHERE id = $1', [WEIGHT_USER]);
+  });
+
+  it('升序点、最新值、首尾差值；窗口外的不算', async () => {
+    const out = await weightHistory({ user_id: WEIGHT_USER, weeks: 8, now });
+    expect(out.points.map((p) => p.date)).toEqual(['2026-09-30', '2026-10-10', '2026-10-20']);
+    expect(out.latest).toEqual({ date: '2026-10-20', weight_kg: 78.4 });
+    expect(out.delta_kg).toBe(-1.6);
+  });
+
+  it('单点 → 差值为 null', async () => {
+    const one = '00000000-0000-4000-8000-0000000000e3';
+    await getDb().insert(user).values({ id: one }).onConflictDoNothing();
+    await getDb()
+      .insert(bodyMetric)
+      .values({ userId: one, date: '2026-10-15', weightKg: 70 })
+      .onConflictDoNothing();
+
+    const out = await weightHistory({ user_id: one, weeks: 8, now });
+    expect(out.points).toHaveLength(1);
+    expect(out.delta_kg).toBeNull();
+    await getPool().query('DELETE FROM "user" WHERE id = $1', [one]);
+  });
+
+  it('没有点 → latest 为 null', async () => {
+    const out = await weightHistory({ user_id: WEEK_USER, weeks: 8, now });
+    expect(out.points).toEqual([]);
+    expect(out.latest).toBeNull();
+    expect(out.delta_kg).toBeNull();
+  });
+});
+
+/** 统计页范围聚合 —— 独立用户，避免别的记录混进范围 */
+const STATS_USER = '00000000-0000-4000-8000-0000000000e4';
+
+describe('statsRange：任意日期范围聚合', () => {
+  beforeAll(async () => {
+    await getDb().insert(user).values({ id: STATS_USER }).onConflictDoNothing();
+  });
+
+  afterAll(async () => {
+    await getPool().query('DELETE FROM "user" WHERE id = $1', [STATS_USER]);
+  });
+
+  it('空范围 → 不补零、无体重点', async () => {
+    const out = await statsRange({ user_id: STATS_USER, from: '2026-03-01', to: '2026-03-31' });
+    expect(out.days).toEqual([]);
+    expect(out.total_volume_kg).toBe(0);
+    expect(out.working_sets).toBe(0);
+    expect(out.training_days).toBe(0);
+    expect(out.weight_points).toEqual([]);
+    expect(out.weight_latest).toBeNull();
+    expect(out.weight_delta_kg).toBeNull();
+  });
+
+  it('跨月：逐日容量、总量、训练天数、肌群分摊、体重首尾差', async () => {
+    const rows = [
+      { date: '2026-03-31', volume: 1000, sets: 2 },
+      { date: '2026-04-02', volume: 1500, sets: 3 },
+      { date: '2026-04-02', volume: 500, sets: 1 }, // 同日第二次训练，合到同一天
+      { date: '2026-02-27', volume: 9999, sets: 9 }, // 范围外
+    ];
+    for (const r of rows) {
+      await persistWorkout({ ...workout({ split: `${BASE}统计`, ...r }), user_id: STATS_USER });
+    }
+    await getDb()
+      .insert(bodyMetric)
+      .values([
+        { userId: STATS_USER, date: '2026-03-31', weightKg: 80 },
+        { userId: STATS_USER, date: '2026-02-01', weightKg: 85 }, // 范围外
+        { userId: STATS_USER, date: '2026-04-02', weightKg: 79 },
+      ])
+      .onConflictDoNothing();
+
+    const out = await statsRange({ user_id: STATS_USER, from: '2026-03-31', to: '2026-04-02' });
+    expect(out.days).toEqual([
+      { date: '2026-03-31', total_volume_kg: 1000, working_sets: 2 },
+      { date: '2026-04-02', total_volume_kg: 2000, working_sets: 4 },
+    ]);
+    expect(out.total_volume_kg).toBe(3000);
+    expect(out.working_sets).toBe(6);
+    expect(out.training_days).toBe(2);
+    // 卧推：胸 1.0，前三角 / 三头各 0.5
+    expect(out.by_muscle.chest).toBe(3000);
+    expect(out.by_muscle.delt_ant).toBe(1500);
+    expect(out.by_muscle.triceps).toBe(1500);
+    expect(out.weight_points.map((p) => p.date)).toEqual(['2026-03-31', '2026-04-02']);
+    expect(out.weight_latest).toEqual({ date: '2026-04-02', weight_kg: 79 });
+    expect(out.weight_delta_kg).toBe(-1);
+  });
+
+  it('单日范围 + 单个体重点 → 差值为 null', async () => {
+    const out = await statsRange({ user_id: STATS_USER, from: '2026-03-31', to: '2026-03-31' });
+    expect(out.days).toHaveLength(1);
+    expect(out.training_days).toBe(1);
+    expect(out.weight_points).toHaveLength(1);
+    expect(out.weight_delta_kg).toBeNull();
   });
 });

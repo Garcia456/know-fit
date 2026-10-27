@@ -109,6 +109,13 @@ else
   bad "pnpm verify 失败"
 fi
 
+# 前端构建（ADR-019 补注）—— 类型过了不代表打得出来；构建失败 = 闸门失败。
+if pnpm --filter @know-fit/web build; then
+  ok "web 构建通过（pnpm --filter @know-fit/web build）"
+else
+  bad "web 构建失败"
+fi
+
 # ── 3/4 前后端能起：pnpm dev + 探活 ───────────────────────────────────
 bold "3/4  pnpm dev 起前后端，并探活"
 if command -v curl >/dev/null 2>&1; then
@@ -122,8 +129,11 @@ if command -v curl >/dev/null 2>&1; then
   LLM_PROVIDER=fake EMBEDDING_PROVIDER=fake RERANK_PROVIDER=fake pnpm dev >/tmp/knowfit-dev.log 2>&1 &
   DEV_PID=$!
 
-  wait_for_http "$WEB_URL"   "web 首页 GET /" 40
-  wait_for_http "$HEALTH_URL" "api 健康检查 GET /api/health" 20
+  wait_for_http "$WEB_URL"            "web 聊天页 GET /" 40
+  wait_for_http "${WEB_URL}stats"     "web 统计页 GET /stats" 10
+  wait_for_http "${WEB_URL}data"      "web 历史页 GET /data" 10
+  wait_for_http "${WEB_URL}profile"   "web 档案页 GET /profile" 10
+  wait_for_http "$HEALTH_URL"         "api 健康检查 GET /api/health" 20
 else
   bad "找不到 curl —— 无法探活"
 fi
@@ -139,13 +149,31 @@ fi
 #      正文没漏出去、下架通道通。走**替身 provider**（不联网、不加载模型）。
 #   C. 切片与索引（dev-004b）—— 真跑 kb:index → 片落对、重跑幂等、下架带走片。
 #   D. 检索与引用（dev-005）—— 造源 → 检索过滤 → 闸② → 引用偏移 → R-C 计数。
-bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引 + 检索引用）"
+#   E. 历史 / 档案 / 提示（dev-006）—— 档案往返 → 体重落 body_metric → 提示只出现一次。
+#   F. 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正（dev-007）—— 与前端四页消费同一批接口。
+bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引 + 检索引用 + 档案提示 + 读聚合修正）"
 if [ "$FAILED" -eq 0 ]; then
   if node scripts/e2e-turn.mjs; then
     ok "端到端往返通过"
   else
     bad "端到端往返失败"
     hint "dev server 起了吗？vite 代理的 /api 重写对了吗？"
+  fi
+
+  # 历史 / 档案 / F7（dev-006）—— 走 5173 代理，再用裸 SQL 验落库。
+  if node scripts/e2e-dev006.mjs; then
+    ok "档案读写 / 历史读取 / 提示去重通过"
+  else
+    bad "档案读写 / 历史读取 / 提示去重失败"
+    hint "0007 迁移跑了吗？pnpm db:migrate"
+  fi
+
+  # 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正（dev-007）—— 走 5173 代理，裸 SQL 验落库。
+  if node scripts/e2e-dev007.mjs; then
+    ok "读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正通过"
+  else
+    bad "读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正失败"
+    hint "0007 迁移跑了吗？pnpm db:migrate"
   fi
 
   # 采集转写（dev-004）—— 走替身 provider：不联网、不加载模型。

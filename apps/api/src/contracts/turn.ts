@@ -36,6 +36,9 @@ export const WorkoutCardExerciseSchema = z.object({
   region_fallback: z.string().nullable(), // 歧义动作的部位兜底
   name_confidence: z.enum(['high', 'low']),
   sets: z.array(WorkoutCardSetSchema),
+  /** 该动作容量（正式组 Σ 重量 × 次数）—— 代码算，展示层不重算 */
+  volume_kg: z.number(),
+  working_sets: z.number().int(),
 });
 
 export const WorkoutCardSchema = z.object({
@@ -46,6 +49,8 @@ export const WorkoutCardSchema = z.object({
   status: RecordStatusSchema,
   missing_fields: z.array(MissingFieldSchema),
   exercises: z.array(WorkoutCardExerciseSchema),
+  volume_kg: z.number(),
+  working_sets: z.number().int(),
   note: z.string().nullable(),
   /** 数据钩子 —— 记录完成后带的判定（已算好的数）。算不出基线时也出现，只是不带数字 */
   hook: VolumeHookSchema.nullable(),
@@ -75,13 +80,36 @@ export const BoundaryCardSchema = z.object({
   reply: z.string(),
 });
 
+/** 窄修正：最近一次记录里只有旧重量 Y 的动作被改成了 X（措辞与友好文案在展示层） */
+export const CorrectionCardSchema = z.object({
+  kind: z.literal('correction'),
+  session_id: z.string(),
+  date: z.string(),
+  split_label: z.string().nullable(),
+  /** 被改的那一行在 exercises 里的下标 —— 展示层画删除线旧值 */
+  exercise_index: z.number().int(),
+  old_weight_kg: z.number(),
+  new_weight_kg: z.number(),
+  corrected_sets: z.number().int(),
+  exercises: z.array(WorkoutCardExerciseSchema),
+  volume_kg: z.number(),
+  working_sets: z.number().int(),
+});
+
 export const TurnCardSchema = z.discriminatedUnion('kind', [
   WorkoutCardSchema,
   MealCardSchema,
   ChatCardSchema,
   RefusalCardSchema,
   BoundaryCardSchema,
+  CorrectionCardSchema,
 ]);
+
+/** 评估查到哪一步 —— 屏 11 靠它区分「没记录 / 数据不足」 */
+export const AssessmentLookupSchema = z.object({
+  status: z.enum(['ok', 'none', 'not_found', 'insufficient']),
+  missing: z.array(z.string()),
+});
 
 export const TurnResponseSchema = z.object({
   turn_id: z.string(),
@@ -90,6 +118,8 @@ export const TurnResponseSchema = z.object({
   card: TurnCardSchema.nullable(),
   /** 评估是独立字段，不塞进卡片 union —— 混合意图时 card 与 assessment 同时有值 */
   assessment: AssessmentCardSchema.nullable(),
+  /** 本轮要了评估时，带上查找结果；没要评估为 null */
+  assessment_lookup: AssessmentLookupSchema.nullable(),
   /** 补充提示，至多 1 条；后置、可选，不拦截录入 */
   notices: z.array(z.string()),
 });
@@ -106,6 +136,8 @@ export type MealCard = z.infer<typeof MealCardSchema>;
 export type ChatCard = z.infer<typeof ChatCardSchema>;
 export type RefusalCard = z.infer<typeof RefusalCardSchema>;
 export type BoundaryCard = z.infer<typeof BoundaryCardSchema>;
+export type CorrectionCard = z.infer<typeof CorrectionCardSchema>;
+export type AssessmentLookup = z.infer<typeof AssessmentLookupSchema>;
 export type TurnCard = z.infer<typeof TurnCardSchema>;
 export type TurnResponse = z.infer<typeof TurnResponseSchema>;
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;

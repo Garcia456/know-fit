@@ -24,6 +24,8 @@ export default tseslint.config(
       '**/coverage/**',
       'apps/api/drizzle/**',
       'docs/**',
+      // 本地 worktree 是另一份完整仓库，扫进来会让 tsconfigRootDir 判不出来
+      '**/.claude/**',
     ],
   },
 

@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { AssessmentCardSchema } from '../contracts/assessment.js';
 import { ExtractionSchema, IntentSchema, MissingFieldSchema, RecordStatusSchema } from '../contracts/extraction.js';
-import { TurnCardSchema, WorkoutCardExerciseSchema } from '../contracts/turn.js';
+import {
+  AssessmentLookupSchema,
+  TurnCardSchema,
+  WorkoutCardExerciseSchema,
+} from '../contracts/turn.js';
 import { GuardVerdictSchema } from './guard.js';
 
 /**
@@ -34,6 +38,8 @@ export const TurnState = z.object({
   card: TurnCardSchema.nullable().default(null),
   /** 纯评估 / 混合意图的评估结果；没有评估时为 null */
   assessment: AssessmentCardSchema.nullable().default(null),
+  /** 评估查到哪一步（屏 11 用）；没要评估时为 null */
+  assessment_lookup: AssessmentLookupSchema.nullable().default(null),
   notices: z.array(z.string()).default([]),
 });
 

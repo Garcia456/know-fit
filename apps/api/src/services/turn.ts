@@ -4,6 +4,7 @@ import { SINGLE_USER_ID, TurnState } from '../graph/state.js';
 import { createLlmClient } from '../llm/index.js';
 import type { LlmClient } from '../llm/client.js';
 import { assessRecord } from './assessment.js';
+import { applyWeightCorrection, parseWeightCorrection } from './correction.js';
 import { loadTrainingBand, logTurn, persistWorkout } from './record.js';
 import { volumeHookFor } from './metrics.js';
 
@@ -31,6 +32,29 @@ function turnGraph(llm: LlmClient) {
 
 export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
   const user_id = input.user_id ?? SINGLE_USER_ID;
+
+  // 窄修正先走确定性路径 —— 不进 LLM，不猜动作
+  const correction = parseWeightCorrection(input.message);
+  if (correction) {
+    const result = await applyWeightCorrection({ user_id, ...correction });
+    const card =
+      result.status === 'applied' ? result.card : { kind: 'chat' as const, reply: result.reply };
+    const turn_id = await logTurn({
+      user_id,
+      message: input.message,
+      intent: 'record',
+      linked_record_id: result.status === 'applied' ? result.card.session_id : null,
+    });
+    return TurnResponseSchema.parse({
+      turn_id,
+      intent: 'record',
+      card,
+      assessment: null,
+      assessment_lookup: null,
+      notices: [],
+    });
+  }
+
   const training_years_band = await loadTrainingBand(user_id);
 
   const final = await turnGraph(createLlmClient()).invoke({
@@ -56,6 +80,7 @@ export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
     intent: state.intent,
     card: state.card,
     assessment: state.assessment,
+    assessment_lookup: state.assessment_lookup,
     notices,
   });
 }

@@ -155,6 +155,32 @@ try {
   } else {
     bad('knowledge_chunk 上缺 HNSW（cosine）索引 —— 0004 迁移没跑：pnpm db:migrate');
   }
+
+  // 8. dev-006 的三处 —— 档案身高 / 体重历史 / F7 提示留痕
+  const dev006 = await client.query(
+    `SELECT table_name, column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND (
+          (table_name = 'user_profile' AND column_name IN ('height_cm', 'training_started_on'))
+          OR table_name IN ('body_metric', 'recovery_nudge')
+        )`,
+  );
+  const dev006Have = new Set(dev006.rows.map((r) => `${r.table_name}.${r.column_name}`));
+  const needDev006 = [
+    'user_profile.height_cm',
+    'user_profile.training_started_on',
+    'body_metric.weight_kg',
+    'body_metric.date',
+    'recovery_nudge.session_id',
+    'recovery_nudge.action',
+  ];
+  const missingDev006 = needDev006.filter((c) => !dev006Have.has(c));
+  if (missingDev006.length > 0) {
+    bad(`dev-006 的表 / 列缺：${missingDev006.join('、')} —— 0007 迁移没跑：pnpm db:migrate`);
+  } else {
+    ok('user_profile.height_cm / training_started_on、body_metric、recovery_nudge 都在');
+  }
 } finally {
   await client.end();
 }

@@ -11,11 +11,18 @@ const OFFSETS: { keywords: string[]; days: number }[] = [
 ];
 
 /** 用本地时区拼 'YYYY-MM-DD'，不走 toISOString（那是 UTC，会差一天） */
-function toLocalDate(d: Date): string {
+export function toLocalDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/** 整月差（只看年月）；开始晚于当前月按 0 算。 */
+export function monthsSince(startDate: string, now: Date): number {
+  const [y, m] = startDate.split('-').map(Number);
+  if (!y || !m) return 0;
+  return Math.max(0, (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m));
 }
 
 export function resolveDate(dayHint: string | null, now: Date = new Date()): string {

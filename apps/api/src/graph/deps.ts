@@ -41,6 +41,8 @@ export interface AssessInput {
 export interface AssessOutput {
   card: AssessmentCard | null;
   notices: string[];
+  lookup_status: 'ok' | 'none' | 'not_found' | 'insufficient';
+  missing: string[];
 }
 
 export interface TurnDeps {

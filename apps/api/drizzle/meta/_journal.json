@@ -50,6 +50,20 @@
       "when": 1792961800000,
       "tag": "0006_assessment_citation",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792963000000,
+      "tag": "0007_dev006_history_profile_nudge",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793015320650,
+      "tag": "0008_training_started_on",
+      "breakpoints": true
     }
   ]
 }

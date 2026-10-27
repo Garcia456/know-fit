@@ -44,6 +44,10 @@ export const AssessmentRequestSchema = z.object({
 export const AssessmentResponseSchema = z.object({
   card: AssessmentCardSchema.nullable(),
   notices: z.array(z.string()),
+  /** 查到了哪一步：屏 11 据此决定是否画「数据不足」卡 */
+  lookup_status: z.enum(['ok', 'none', 'not_found', 'insufficient']),
+  /** 算不出判定时缺什么（sets / split_label / baseline），由后端说 */
+  missing: z.array(z.string()),
 });
 
 export type Citation = z.infer<typeof CitationSchema>;

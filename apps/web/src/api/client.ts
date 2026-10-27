@@ -1,0 +1,134 @@
+import type {
+  AssessmentResponse,
+  HistoryResponse,
+  NudgeNextResponse,
+  Profile,
+  ProfileInput,
+  SessionDetail,
+  SessionListResponse,
+  StatsRange,
+  TurnResponse,
+  WeeklyVolume,
+  WeightHistory,
+} from './types';
+
+/** 接口失败时界面只拿这一层信息，不猜后端内部原因。 */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function request<T>(path: string, init: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    // 只有带 body 才设 JSON 头 —— 空 body + content-type 会被 Fastify 判成 400
+    headers: {
+      ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...init.headers,
+    },
+  });
+
+  if (!response.ok) {
+    let detail = `请求失败（${response.status}）`;
+    try {
+      const body = (await response.json()) as { error?: unknown };
+      if (typeof body.error === 'string' && body.error) detail = body.error;
+    } catch {
+      // 非 JSON 错误体，保留状态码
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  return (await response.json()) as T;
+}
+
+export function postTurn(message: string): Promise<TurnResponse> {
+  return request('/api/turns', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
+export function postAssessment(
+  relatedRecordId: string,
+  trigger: 'explicit' | 'hook' = 'hook',
+): Promise<AssessmentResponse> {
+  return request('/api/assessments', {
+    method: 'POST',
+    body: JSON.stringify({ related_record_id: relatedRecordId, trigger }),
+  });
+}
+
+export function getSessions(from: string, to: string): Promise<SessionListResponse> {
+  return request(`/api/sessions?from=${from}&to=${to}`, { method: 'GET' });
+}
+
+export function getSession(id: string): Promise<SessionDetail> {
+  return request(`/api/sessions/${encodeURIComponent(id)}`, { method: 'GET' });
+}
+
+export function getWeeklyVolume(weeks = 4): Promise<WeeklyVolume> {
+  return request(`/api/metrics/weekly?weeks=${weeks}`, { method: 'GET' });
+}
+
+export function getWeightHistory(weeks = 8): Promise<WeightHistory> {
+  return request(`/api/metrics/weight?weeks=${weeks}`, { method: 'GET' });
+}
+
+export function getHistory(limit = 20): Promise<HistoryResponse> {
+  return request(`/api/history?limit=${limit}`, { method: 'GET' });
+}
+
+export function getStats(from: string, to: string): Promise<StatsRange> {
+  return request(`/api/stats?from=${from}&to=${to}`, { method: 'GET' });
+}
+
+export function getProfile(): Promise<Profile> {
+  return request('/api/profile', { method: 'GET' });
+}
+
+export function putProfile(input: ProfileInput): Promise<Profile> {
+  return request('/api/profile', { method: 'PUT', body: JSON.stringify(input) });
+}
+
+export function postNudgeNext(): Promise<NudgeNextResponse> {
+  return request('/api/nudges/next', { method: 'POST' });
+}
+
+export function postNudgeAction(
+  id: string,
+  action: '补全' | '忽略' | '未响应',
+): Promise<{ ok: true }> {
+  return request(`/api/nudges/${encodeURIComponent(id)}/action`, {
+    method: 'POST',
+    body: JSON.stringify({ action }),
+  });
+}
+
+export interface PatchSetInput {
+  weight_kg: number | null;
+  reps: number | null;
+  set_type: 'warmup' | 'working';
+  is_inferred: boolean;
+}
+
+export interface PatchExerciseInput {
+  raw_name: string;
+  sets: PatchSetInput[];
+}
+
+export function patchSession(
+  id: string,
+  exercises: PatchExerciseInput[],
+  note?: string,
+): Promise<SessionDetail> {
+  return request(`/api/sessions/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ exercises, ...(note ? { note } : {}) }),
+  });
+}

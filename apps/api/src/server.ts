@@ -5,6 +5,9 @@ import { responseGuard } from './guardrails/rc.js';
 import { assessmentRoutes } from './routes/assessments.js';
 import { healthRoutes } from './routes/health.js';
 import { metricsRoutes } from './routes/metrics.js';
+import { nudgeRoutes } from './routes/nudges.js';
+import { profileRoutes } from './routes/profile.js';
+import { sessionRoutes } from './routes/sessions.js';
 import { turnRoutes } from './routes/turns.js';
 import { loadAllChunkTexts } from './services/chunks.js';
 import { closeDb, getPool } from './services/pool.js';
@@ -55,6 +58,9 @@ export async function buildServer() {
   await app.register(turnRoutes);
   await app.register(metricsRoutes);
   await app.register(assessmentRoutes);
+  await app.register(sessionRoutes);
+  await app.register(profileRoutes);
+  await app.register(nudgeRoutes);
   return app;
 }
 

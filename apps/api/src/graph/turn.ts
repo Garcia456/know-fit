@@ -3,6 +3,7 @@ import { ExtractionSchema, IntentResultSchema } from '../contracts/extraction.js
 import type { WorkoutCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
 import { resolveDate } from '../extraction/dates.js';
 import { normalizeExerciseName } from '../extraction/normalize.js';
+import { computeVolume } from '../metrics/volume.js';
 import { computeStatus } from '../extraction/status.js';
 import { toKilograms } from '../extraction/units.js';
 import { CHAT_SYSTEM, EXTRACTION_SYSTEM, INTENT_SYSTEM } from '../llm/prompts.js';
@@ -75,6 +76,7 @@ export function buildTurnGraph(deps: TurnDeps) {
             };
           });
 
+          const exerciseVolume = computeVolume(sets);
           cards.push({
             raw_name: ex.raw_name,
             exercise_id: norm.exercise_id,
@@ -87,6 +89,8 @@ export function buildTurnGraph(deps: TurnDeps) {
               set_type: s.set_type,
               is_inferred: s.is_inferred,
             })),
+            volume_kg: exerciseVolume.total_kg,
+            working_sets: exerciseVolume.working_sets,
           });
 
           rows.push({
@@ -149,6 +153,7 @@ export function buildTurnGraph(deps: TurnDeps) {
             })
           : null;
 
+        const summary = computeVolume(state.card_exercises.flatMap((e) => e.sets));
         const card: WorkoutCard = {
           kind: 'workout',
           session_id: ref.id,
@@ -157,6 +162,8 @@ export function buildTurnGraph(deps: TurnDeps) {
           status: state.record_status ?? 'incomplete',
           missing_fields: state.missing_fields,
           exercises: state.card_exercises,
+          volume_kg: summary.total_kg,
+          working_sets: summary.working_sets,
           note: extracted?.note ?? null,
           hook,
         };
@@ -165,17 +172,29 @@ export function buildTurnGraph(deps: TurnDeps) {
 
       .addNode('assess_node', async (state) => {
         if (!deps.assess) {
-          return { assessment: null, notices: [...state.notices, '评估暂时没生成出来，稍后再试'] };
+          return {
+            assessment: null,
+            assessment_lookup: null,
+            notices: [...state.notices, '评估暂时没生成出来，稍后再试'],
+          };
         }
         // 混合意图评估的是本轮刚落库的那条；纯评估评估最近一次（v1 不解析「上周那次」）
         const related =
           state.intent === 'mixed' && state.record_ref?.type === 'workout' ? state.record_ref.id : null;
         try {
           const out = await deps.assess({ user_id: state.user_id, related_record_id: related, trigger: 'explicit' });
-          return { assessment: out.card, notices: [...state.notices, ...out.notices] };
+          return {
+            assessment: out.card,
+            assessment_lookup: { status: out.lookup_status, missing: out.missing },
+            notices: [...state.notices, ...out.notices],
+          };
         } catch {
           // 🔴 录入可用性 > 评估可用性：评估挂了也要把卡片还回去
-          return { assessment: null, notices: [...state.notices, '评估暂时没生成出来，稍后再试'] };
+          return {
+            assessment: null,
+            assessment_lookup: null,
+            notices: [...state.notices, '评估暂时没生成出来，稍后再试'],
+          };
         }
       })
 

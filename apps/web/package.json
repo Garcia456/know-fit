@@ -10,6 +10,9 @@
     "build": "vite build"
   },
   "dependencies": {
+    "body-muscles": "1.0.0",
+    "embla-carousel-react": "8.6.0",
+    "motion": "14.6.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router": "8.4.0"

@@ -3,6 +3,7 @@ import { conversationTurn, exerciseEntry, setEntry, userProfile, workoutSession 
 import type { Intent } from '../contracts/extraction.js';
 import type { PersistWorkoutInput } from '../graph/deps.js';
 import type { TrainingBand } from '../graph/state.js';
+import { monthsSince } from '../extraction/dates.js';
 import { getDb } from './pool.js';
 
 /**
@@ -36,16 +37,21 @@ export async function logTurn(input: LogTurnInput): Promise<string> {
 }
 
 /** 边界判定要用的训练年限档 —— 读不到就按「练了 3 个月以上」算（少拦比多拦轻） */
-export async function loadTrainingBand(userId: string): Promise<TrainingBand> {
+export async function loadTrainingBand(userId: string, now: Date = new Date()): Promise<TrainingBand> {
   const db = getDb();
   const rows = await db
-    .select({ band: userProfile.trainingYearsBand })
+    .select({ startedOn: userProfile.trainingStartedOn })
     .from(userProfile)
     .where(eq(userProfile.userId, userId))
     .limit(1);
 
-  const band = rows[0]?.band;
-  return band === 'lt_3m' || band === 'gt_2y' ? band : '3m_2y';
+  const start = rows[0]?.startedOn;
+  if (!start) return '3m_2y';
+
+  const total = monthsSince(start, now);
+  if (total < 3) return 'lt_3m';
+  if (total > 24) return 'gt_2y';
+  return '3m_2y';
 }
 
 /** 一次训练整套落库 —— 三步一个事务，因为半条记录比没记录更难收拾 */

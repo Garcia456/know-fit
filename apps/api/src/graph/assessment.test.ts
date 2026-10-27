@@ -223,6 +223,8 @@ describe('不出卡的情况', () => {
     });
     const state = await invoke(repo);
     expect(state.card).toBeNull();
+    expect(state.lookup_status).toBe('insufficient');
+    expect(state.missing).toEqual(['sets', 'baseline']);
     expect(state.notices.join('')).toContain('有效组');
     expect(state.notices.join('')).toContain('第一次');
     expect(persisted).toHaveLength(0);

@@ -36,6 +36,9 @@ const POLL_MAX_ATTEMPTS = 60;
 /** 列表每页要多少条 —— dtk 的抖音上限是 50；要给得多只会多翻几页 */
 const PAGE_SIZE = 50;
 
+/** 音频下载最多试几次（网络抖动重试，4xx 不重试） */
+const DOWNLOAD_ATTEMPTS = 3;
+
 /** v5 的统一信封 —— 成功失败都长这样 */
 interface Envelope {
   success?: boolean;
@@ -260,17 +263,37 @@ export function createDouyinFetcher(opts: DouyinFetcherOptions = {}): Fetcher {
   const tmpRoot = opts.tmpRoot ?? tmpdir();
   const PLATFORM = 'douyin';
 
-  /** 音频落地 —— 静态 CDN，免 cookie 免 referer（实测） */
+  /** 音频落地 —— 静态 CDN，免 cookie 免 referer（实测）。网络抖动重试两次，病因要带出来 */
   async function downloadAudio(audioUrl: string): Promise<string> {
-    const res = await fetch(audioUrl);
-    if (!res.ok) throw new Error(`音频下载失败：HTTP ${res.status}（${audioUrl.slice(0, 96)}…）`);
-    const buf = Buffer.from(await res.arrayBuffer());
+    let last: unknown;
+    for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+      let retryable = true;
+      try {
+        const res = await fetch(audioUrl);
+        if (!res.ok) {
+          retryable = res.status >= 500 || res.status === 429;
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const buf = Buffer.from(await res.arrayBuffer());
 
-    const dir = await mkdtemp(join(tmpRoot, 'knowfit-audio-'));
-    const ext = extname(new URL(audioUrl).pathname) || '.m4a';
-    const audio_path = join(dir, `audio${ext}`);
-    await writeFile(audio_path, buf);
-    return audio_path;
+        const dir = await mkdtemp(join(tmpRoot, 'knowfit-audio-'));
+        const ext = extname(new URL(audioUrl).pathname) || '.m4a';
+        const audio_path = join(dir, `audio${ext}`);
+        await writeFile(audio_path, buf);
+        return audio_path;
+      } catch (e) {
+        last = e;
+        if (!retryable || attempt === DOWNLOAD_ATTEMPTS) break;
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+      }
+    }
+
+    // 与 getJson 同样的理由：undici 把真因藏在 `error.cause` 里，只报 `fetch failed` 够不着病因
+    const cause = (last as { cause?: { code?: string; message?: string } }).cause;
+    throw new Error(
+      `音频下载失败：${cause?.code ?? cause?.message ?? (last as Error).message}（${audioUrl.slice(0, 96)}…）`,
+      { cause: last },
+    );
   }
 
   return {

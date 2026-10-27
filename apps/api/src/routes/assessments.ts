@@ -38,6 +38,11 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
       return undefined;
     }
 
-    return { card: result.card, notices: result.notices };
+    return {
+      card: result.card,
+      notices: result.notices,
+      lookup_status: result.lookup_status,
+      missing: result.missing,
+    };
   });
 }

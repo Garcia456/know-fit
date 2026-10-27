@@ -1,11 +1,18 @@
-import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
-import { exerciseEntry, setEntry, workoutSession } from '../db/schema.js';
-import type { SessionVolume, VolumeHook } from '../contracts/metrics.js';
+import { and, asc, desc, eq, gte, isNull, lt, lte, or } from 'drizzle-orm';
+import { bodyMetric, exerciseEntry, setEntry, workoutSession } from '../db/schema.js';
+import type {
+  SessionVolume,
+  StatsRange,
+  VolumeHook,
+  WeeklyVolume,
+  WeightHistory,
+} from '../contracts/metrics.js';
+import { toLocalDate } from '../extraction/dates.js';
 import type { HookInput } from '../graph/deps.js';
 import { loadSeed, type Seed } from '../seed/load.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 import { allocateMuscleVolume, type AllocExercise } from '../metrics/regions.js';
-import { computeVolume } from '../metrics/volume.js';
+import { computeVolume, type VolumeSet } from '../metrics/volume.js';
 import { getDb } from './pool.js';
 
 /**
@@ -22,6 +29,11 @@ function seed(): Seed {
 /** 19 块肌群及 coarse 归类 —— 检索 query 聚部位用 */
 export function muscleRegions() {
   return seed().muscle_regions;
+}
+
+/** 动作 id → 中文名；读历史时补展示名，不改落库值。 */
+export function exerciseNames(): Map<string, string> {
+  return new Map(seed().exercises.map((e) => [e.id, e.name_zh]));
 }
 
 async function loadExercises(sessionId: string): Promise<AllocExercise[]> {
@@ -150,4 +162,208 @@ export async function volumeHookFor(input: HookInput): Promise<VolumeHook> {
     exclude_session_id: input.session_id,
   });
   return buildVolumeHook({ current, baseline, split_label: input.split_label });
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function addDays(d: Date, days: number): Date {
+  const c = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  c.setDate(c.getDate() + days);
+  return c;
+}
+
+/** 所在周的周一（本地时区，周一为一周起点） */
+function mondayOf(d: Date): Date {
+  const c = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  c.setDate(c.getDate() - ((c.getDay() + 6) % 7));
+  return c;
+}
+
+function weekStartOf(dateKey: string): string {
+  return toLocalDate(mondayOf(new Date(`${dateKey}T00:00:00`)));
+}
+
+function clampWeeks(n: number): number {
+  return Math.min(Math.max(Math.trunc(n), 1), 26);
+}
+
+/** 近 N 个自然周的容量 —— 正式组 Σ 重量 × 次数，与单次容量同一算法。 */
+export async function weeklyVolume(input: {
+  user_id: string;
+  weeks: number;
+  now?: Date;
+}): Promise<WeeklyVolume> {
+  const weeks = clampWeeks(input.weeks);
+  const firstMonday = addDays(mondayOf(input.now ?? new Date()), -7 * (weeks - 1));
+  const from = toLocalDate(firstMonday);
+
+  const rows = await getDb()
+    .select({
+      date: workoutSession.date,
+      weightKg: setEntry.weightKg,
+      reps: setEntry.reps,
+      setType: setEntry.setType,
+      isInferred: setEntry.isInferred,
+    })
+    .from(setEntry)
+    .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
+    .innerJoin(workoutSession, eq(exerciseEntry.sessionId, workoutSession.id))
+    .where(and(eq(workoutSession.userId, input.user_id), gte(workoutSession.date, from)));
+
+  const byWeek = new Map<string, VolumeSet[]>();
+  for (const r of rows) {
+    const key = weekStartOf(r.date);
+    const bucket = byWeek.get(key) ?? [];
+    bucket.push({
+      weight_kg: r.weightKg,
+      reps: r.reps,
+      set_type: r.setType === 'warmup' ? 'warmup' : 'working',
+      is_inferred: r.isInferred,
+    });
+    byWeek.set(key, bucket);
+  }
+
+  const points = Array.from({ length: weeks }, (_, i) => {
+    const weekStart = toLocalDate(addDays(firstMonday, i * 7));
+    const summary = computeVolume(byWeek.get(weekStart) ?? []);
+    return {
+      week_start: weekStart,
+      total_volume_kg: summary.total_kg,
+      working_sets: summary.working_sets,
+    };
+  });
+
+  const thisWeek = points.at(-1)!;
+  const lastKg = points.at(-2)?.total_volume_kg ?? 0;
+
+  return {
+    weeks: points,
+    this_week_kg: thisWeek.total_volume_kg,
+    last_week_kg: lastKg,
+    delta_pct: lastKg === 0 ? null : round2(((thisWeek.total_volume_kg - lastKg) / lastKg) * 100),
+  };
+}
+
+/** 近 N 周体重历史 —— 只取有记录的日子，不插值、不拿最近值补空。 */
+export async function weightHistory(input: {
+  user_id: string;
+  weeks: number;
+  now?: Date;
+}): Promise<WeightHistory> {
+  const weeks = clampWeeks(input.weeks);
+  const from = toLocalDate(addDays(mondayOf(input.now ?? new Date()), -7 * (weeks - 1)));
+
+  const rows = await getDb()
+    .select({ date: bodyMetric.date, weightKg: bodyMetric.weightKg })
+    .from(bodyMetric)
+    .where(and(eq(bodyMetric.userId, input.user_id), gte(bodyMetric.date, from)))
+    .orderBy(asc(bodyMetric.date));
+
+  const points = rows.map((r) => ({ date: r.date, weight_kg: r.weightKg }));
+  const latest = points.at(-1) ?? null;
+  const first = points[0];
+
+  return {
+    points,
+    latest,
+    delta_kg: points.length >= 2 && latest && first ? round2(latest.weight_kg - first.weight_kg) : null,
+  };
+}
+
+/** 任意日期范围的容量 / 肌群 / 体重 —— 统计页一次取全（ADR-045） */
+export async function statsRange(input: {
+  user_id: string;
+  from: string;
+  to: string;
+}): Promise<StatsRange> {
+  const db = getDb();
+  const { user_id, from, to } = input;
+  const inRange = and(
+    eq(workoutSession.userId, user_id),
+    gte(workoutSession.date, from),
+    lte(workoutSession.date, to),
+  );
+
+  const rows = await db
+    .select({
+      sessionDate: workoutSession.date,
+      entryId: exerciseEntry.id,
+      exerciseId: exerciseEntry.exerciseId,
+      regionFallback: exerciseEntry.regionFallback,
+      weightKg: setEntry.weightKg,
+      reps: setEntry.reps,
+      setType: setEntry.setType,
+      isInferred: setEntry.isInferred,
+    })
+    .from(setEntry)
+    .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
+    .innerJoin(workoutSession, eq(exerciseEntry.sessionId, workoutSession.id))
+    .where(inRange);
+
+  const entries = new Map<string, AllocExercise & { date: string }>();
+  for (const r of rows) {
+    const entry = entries.get(r.entryId) ?? {
+      date: r.sessionDate,
+      exercise_id: r.exerciseId,
+      region_fallback: r.regionFallback,
+      sets: [],
+    };
+    entry.sets.push({
+      weight_kg: r.weightKg,
+      reps: r.reps,
+      set_type: r.setType === 'warmup' ? 'warmup' : 'working',
+      is_inferred: r.isInferred,
+    });
+    entries.set(r.entryId, entry);
+  }
+
+  const byDate = new Map<string, { total: number; sets: number }>();
+  for (const entry of entries.values()) {
+    const summary = computeVolume(entry.sets);
+    const bucket = byDate.get(entry.date) ?? { total: 0, sets: 0 };
+    bucket.total += summary.total_kg;
+    bucket.sets += summary.working_sets;
+    byDate.set(entry.date, bucket);
+  }
+
+  const days = Array.from(byDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, v]) => ({
+      date,
+      total_volume_kg: round2(v.total),
+      working_sets: v.sets,
+    }));
+
+  const muscle = allocateMuscleVolume(Array.from(entries.values()), seed());
+
+  const weightRows = await db
+    .select({ date: bodyMetric.date, weightKg: bodyMetric.weightKg })
+    .from(bodyMetric)
+    .where(
+      and(
+        eq(bodyMetric.userId, user_id),
+        gte(bodyMetric.date, from),
+        lte(bodyMetric.date, to),
+      ),
+    )
+    .orderBy(asc(bodyMetric.date));
+  const weightPoints = weightRows.map((r) => ({ date: r.date, weight_kg: r.weightKg }));
+  const weightLatest = weightPoints.at(-1) ?? null;
+  const weightFirst = weightPoints[0];
+
+  return {
+    from,
+    to,
+    days,
+    total_volume_kg: round2(days.reduce((sum, d) => sum + d.total_volume_kg, 0)),
+    working_sets: days.reduce((sum, d) => sum + d.working_sets, 0),
+    training_days: days.length,
+    by_muscle: muscle.by_muscle,
+    weight_points: weightPoints,
+    weight_latest: weightLatest,
+    weight_delta_kg:
+      weightPoints.length >= 2 && weightLatest && weightFirst
+        ? round2(weightLatest.weight_kg - weightFirst.weight_kg)
+        : null,
+  };
 }

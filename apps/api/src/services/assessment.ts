@@ -364,6 +364,7 @@ export interface AssessActionResult {
   card: AssessmentCard | null;
   notices: string[];
   lookup_status: 'ok' | 'none' | 'not_found' | 'insufficient';
+  missing: string[];
 }
 
 /** 全链路上限（定义文档 §1.12）：到点掐断在途调用，按生成失败返回 */
@@ -389,7 +390,7 @@ export async function assessRecord(input: AssessRecordInput): Promise<AssessActi
       user_id: input.user_id,
       related_record_id: input.related_record_id,
     });
-    if (cached) return { card: cached, notices: [], lookup_status: 'ok' };
+    if (cached) return { card: cached, notices: [], lookup_status: 'ok', missing: [] };
   }
 
   try {
@@ -406,8 +407,13 @@ export async function assessRecord(input: AssessRecordInput): Promise<AssessActi
       }),
     );
     const state = AssessmentState.parse(final);
-    return { card: state.card, notices: state.notices, lookup_status: state.lookup_status };
+    return {
+      card: state.card,
+      notices: state.notices,
+      lookup_status: state.lookup_status,
+      missing: state.missing,
+    };
   } catch {
-    return { card: null, notices: [GENERATION_FAILURE_NOTICE], lookup_status: 'ok' };
+    return { card: null, notices: [GENERATION_FAILURE_NOTICE], lookup_status: 'ok', missing: [] };
   }
 }

@@ -13,15 +13,52 @@ export const user = pgTable('user', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** 档案表。training_years_band 是「是否 < 3 个月」那个边界判定的依据。 */
+/** 档案表。training_started_on 是「是否 < 3 个月」那个边界判定的依据。 */
 export const userProfile = pgTable('user_profile', {
   userId: uuid('user_id')
     .primaryKey()
     .references(() => user.id, { onDelete: 'cascade' }),
-  goal: text('goal'),
-  trainingYearsBand: text('training_years_band'), // 'lt_3m' | '3m_2y' | 'gt_2y'
+  heightCm: real('height_cm'),
+  goal: text('goal'), // '增肌' | '减脂' | '维持' | '增肌+减脂'
+  /** 开始训练的月份（当月 1 日）；读时按月折算年 / 月 */
+  trainingStartedOn: date('training_started_on'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** 体重历史 —— 同一天覆盖，跨天保留。 */
+export const bodyMetric = pgTable(
+  'body_metric',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    weightKg: real('weight_kg').notNull(),
+    bodyFatPct: real('body_fat_pct'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('body_metric_user_date_unique').on(t.userId, t.date)],
+);
+
+/** F7 提示留痕 —— 同一断点只出现一次。 */
+export const recoveryNudge = pgTable(
+  'recovery_nudge',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').references(() => workoutSession.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(), // '补全' | '断流'
+    shownAt: timestamp('shown_at', { withTimezone: true }).notNull().defaultNow(),
+    action: text('action'), // '补全' | '忽略' | '未响应'
+  },
+  (t) => [
+    index('recovery_nudge_user_shown_index').on(t.userId, t.shownAt),
+    uniqueIndex('recovery_nudge_user_type_session_unique').on(t.userId, t.type, t.sessionId),
+  ],
+);
 
 /** 对话轮次。intent 留痕；linked_record_id 是「说错了怎么改」的定位锚。 */
 export const conversationTurn = pgTable('conversation_turn', {

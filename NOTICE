@@ -1,0 +1,15 @@
+know-fit
+=======
+
+本项目使用以下第三方软件。各组件版权归其作者，按原许可证使用。
+
+body-muscles
+------------
+Body Muscles
+Copyright 2024 Ivan Vulović
+
+Licensed under the Apache License, Version 2.0.
+https://github.com/vulovix/body-muscles
+
+用途：热力图的人体解剖路径数据（`FRONT_MUSCLES` / `BACK_MUSCLES`）。
+本项目只取路径数据自行渲染，未使用其 `BodyChart` 组件与配色。
