@@ -210,7 +210,7 @@ describe('listHistory', () => {
       exercise_count: 1,
       working_sets: 0, // 缺重量的组不计入容量
       volume_kg: 0,
-      exercise_names: ['杠铃卧推'],
+      exercise_names: ['卧推'], // 展示按用户原话
     });
     expect(pull).toMatchObject({
       split_label: '背日',

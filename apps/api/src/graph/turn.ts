@@ -4,6 +4,7 @@ import type { WorkoutCard, WorkoutCardExercise, WorkoutCardSet } from '../contra
 import { resolveDate } from '../extraction/dates.js';
 import { normalizeExerciseName } from '../extraction/normalize.js';
 import { computeVolume } from '../metrics/volume.js';
+import { isBodyweightExercise } from '../metrics/bodyweight.js';
 import { computeStatus } from '../extraction/status.js';
 import { toKilograms } from '../extraction/units.js';
 import { CHAT_SYSTEM, EXTRACTION_SYSTEM, INTENT_SYSTEM } from '../llm/prompts.js';
@@ -77,37 +78,56 @@ export function buildTurnGraph(deps: TurnDeps) {
         if (extracted.exercises.length === 0) return { empty_extraction: true };
 
         const date = resolveDate(extracted.day_hint, now());
-        const { status, missing_fields } = computeStatus(extracted);
+
+        const normalized = extracted.exercises.map((ex) => {
+          const norm = normalizeExerciseName(ex.raw_name);
+          return { ex, norm, isBodyweight: isBodyweightExercise(norm.exercise_id) };
+        });
+
+        // 自重动作按「体重 + 额外负重」算容量；查不到体重就只记自重、不编数
+        const bodyweightKg = normalized.some((e) => e.isBodyweight) && deps.bodyweightFor
+          ? await deps.bodyweightFor({ user_id: state.user_id, date })
+          : null;
 
         const rows: PersistExerciseInput[] = [];
         const cards: WorkoutCardExercise[] = [];
 
-        for (const [i, ex] of extracted.exercises.entries()) {
-          const norm = normalizeExerciseName(ex.raw_name);
+        for (const [i, { ex, norm, isBodyweight }] of normalized.entries()) {
           const sets: (WorkoutCardSet & { order: number })[] = ex.mentioned_sets.map((s, j) => {
             const conv = toKilograms(s.weight_kg, s.weight_unit, s.is_inferred);
+            const drops = s.drops?.length
+              ? s.drops.map((d) => toKilograms(d.weight_kg, s.weight_unit, s.is_inferred))
+              : null;
             return {
               order: j,
               weight_kg: conv.weight_kg,
               reps: s.reps,
               set_type: s.set_type,
               is_inferred: conv.is_inferred,
+              bodyweight_kg: isBodyweight ? bodyweightKg : null,
+              tags: s.tags ?? [],
+              drops: drops?.map((d, k) => ({ weight_kg: d.weight_kg, reps: s.drops![k]!.reps ?? null })) ?? null,
             };
           });
 
           const exerciseVolume = computeVolume(sets);
+          const cardSets = sets.map((s) => ({
+            weight_kg: s.weight_kg,
+            reps: s.reps,
+            set_type: s.set_type,
+            is_inferred: s.is_inferred,
+            bodyweight_kg: s.bodyweight_kg,
+            tags: s.tags,
+            drops: s.drops,
+          }));
           cards.push({
-            raw_name: ex.raw_name,
+            raw_name: ex.raw_name, // 展示按用户原话，不换成别名归一后的名字
             exercise_id: norm.exercise_id,
             name_zh: norm.name_zh,
             region_fallback: norm.region_fallback,
             name_confidence: ex.name_confidence,
-            sets: sets.map((s) => ({
-              weight_kg: s.weight_kg,
-              reps: s.reps,
-              set_type: s.set_type,
-              is_inferred: s.is_inferred,
-            })),
+            is_bodyweight: isBodyweight,
+            sets: cardSets,
             volume_kg: exerciseVolume.total_kg,
             working_sets: exerciseVolume.working_sets,
           });
@@ -118,9 +138,14 @@ export function buildTurnGraph(deps: TurnDeps) {
             exercise_id: norm.exercise_id,
             name_confidence: ex.name_confidence,
             region_fallback: norm.region_fallback,
+            is_bodyweight: isBodyweight,
             sets,
           });
         }
+
+        const { status, missing_fields } = computeStatus(
+          cards.map((c) => ({ is_bodyweight: c.is_bodyweight === true, sets: c.sets })),
+        );
 
         const { session_id } = await deps.persistWorkout({
           user_id: state.user_id,

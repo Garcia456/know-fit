@@ -152,6 +152,7 @@ export const exerciseEntry = pgTable('exercise_entry', {
   exerciseId: text('exercise_id'), // null = 不强行归并，不是错误
   nameConfidence: text('name_confidence'), // 'high' | 'low'
   regionFallback: text('region_fallback'), // 歧义动作的部位兜底，如 'region_back'
+  isBodyweight: boolean('is_bodyweight').notNull().default(false), // seed equipment 含「自重」
 });
 
 /** 一组。容量计算的源数据 —— 这里只写，不算。 */
@@ -161,10 +162,16 @@ export const setEntry = pgTable('set_entry', {
     .notNull()
     .references(() => exerciseEntry.id, { onDelete: 'cascade' }),
   order: integer('order').notNull(),
-  weightKg: real('weight_kg'), // 已换算为 kg
+  weightKg: real('weight_kg'), // 已换算为 kg；自重动作里是「额外负重」
   reps: integer('reps'),
   setType: text('set_type').notNull(), // 'warmup' | 'working'
   isInferred: boolean('is_inferred').notNull().default(false), // 系统推测的值
+  /** 自重动作算容量时叠加的体重；非自重动作为 null */
+  bodyweightKg: real('bodyweight_kg'),
+  /** 'failure' 力竭 | 'drop' 递减 */
+  tags: text('tags').array().notNull().default([]),
+  /** 递减段的每一小段；非递减组为 null */
+  drops: jsonb('drops').$type<{ weight_kg: number | null; reps: number | null }[]>(),
 });
 
 /**

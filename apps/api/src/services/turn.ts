@@ -13,6 +13,7 @@ import {
 } from './conversation.js';
 import { applyWeightCorrection, parseWeightCorrection } from './correction.js';
 import { loadTrainingBand, logTurn, persistWorkout } from './record.js';
+import { bodyweightOn } from './profile.js';
 import { volumeHookFor } from './metrics.js';
 
 /**
@@ -34,6 +35,7 @@ function turnGraph(llm: LlmClient) {
     computeHook: volumeHookFor,
     assess: assessRecord,
     answerKnowledge: (input) => answerKnowledge({ user_id: input.user_id, query: input.query }),
+    bodyweightFor: (input) => bodyweightOn(input.user_id, input.date),
     now: () => new Date(),
   });
   return cached;

@@ -64,6 +64,12 @@ async function cleanup(): Promise<void> {
       WHERE related_record_id IN (SELECT id FROM workout_session WHERE notes = 'rag-check-fixture')`,
   );
   await client.query("DELETE FROM workout_session WHERE notes = 'rag-check-fixture'");
+  // 混合意图那条是走 HTTP 落的库、notes 为空 —— 按 split 标记清，否则失败一次就污染下次基线
+  await client.query(
+    'DELETE FROM assessment WHERE related_record_id IN (SELECT id FROM workout_session WHERE split_label = $1)',
+    [SPLIT],
+  );
+  await client.query('DELETE FROM workout_session WHERE split_label = $1', [SPLIT]);
   await client.query(
     'DELETE FROM assessment WHERE related_record_id = ANY($1::uuid[])',
     [createdSessions],
@@ -429,7 +435,11 @@ try {
     '混合意图：card.kind=workout 且 assessment 有值',
     `混合意图返回 card=${String(mixedCard?.kind)} / assessment=${String(mixedAssessment?.kind)}`,
   );
-  expect(mixedAssessment?.has_source === true, '混合意图的评估走完有源路径', '混合意图的评估没有来源');
+  expect(
+    mixedAssessment?.has_source === true,
+    '混合意图的评估走完有源路径',
+    `混合意图的评估没有来源：${JSON.stringify({ assessment: mixedAssessment, notices: mixed.json?.notices })}`,
+  );
 
   const pure = await postJson('/api/turns', { message: '帮我评估一下' });
   expect(

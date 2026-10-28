@@ -159,6 +159,76 @@ export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
     meal_type: 'lunch',
     items: [{ raw_desc: '米饭', qty: 2, unit: '碗', qty_confidence: 'high', estimation_basis: null }],
   },
+
+  // 自重动作：没说重量 = 自重，不算缺
+  '引体向上四组每组八个': {
+    kind: 'workout',
+    day_hint: null,
+    split_label: '背',
+    note: null,
+    exercises: [{ raw_name: '引体向上', name_confidence: 'high', mentioned_sets: working(4, null, null, 8) }],
+  },
+
+  // 自重 + 负重：weight_kg 只记额外负重
+  '引体向上负重 10kg 四组每组六个': {
+    kind: 'workout',
+    day_hint: null,
+    split_label: '背',
+    note: null,
+    exercises: [{ raw_name: '引体向上', name_confidence: 'high', mentioned_sets: working(4, 10, 'kg', 6) }],
+  },
+
+  // 动作名逐字保留：不能被归一成「高位下拉」
+  '对握高位下拉 60kg×10 三组': {
+    kind: 'workout',
+    day_hint: null,
+    split_label: '背',
+    note: null,
+    exercises: [
+      { raw_name: '对握高位下拉', name_confidence: 'high', mentioned_sets: working(3, 60, 'kg', 10) },
+    ],
+  },
+
+  // 力竭组：最后一组带 failure
+  '卧推 100kg×8 三组，最后一组力竭': {
+    kind: 'workout',
+    day_hint: null,
+    split_label: '推-e2e',
+    note: null,
+    exercises: [
+      {
+        raw_name: '卧推',
+        name_confidence: 'high',
+        mentioned_sets: [
+          ...working(2, 100, 'kg', 8),
+          { weight_kg: 100, weight_unit: 'kg', reps: 8, set_type: 'working', is_inferred: false, tags: ['failure'] },
+        ],
+      },
+    ],
+  },
+
+  // 递减组：一段里 3 个小段，weight/reps 记第一段
+  '侧平举 12kg×10 递减到 8kg×10 再 6kg×12 三组': {
+    kind: 'workout',
+    day_hint: null,
+    split_label: '肩-e2e',
+    note: null,
+    exercises: [
+      {
+        raw_name: '侧平举',
+        name_confidence: 'high',
+        mentioned_sets: working(3, 12, 'kg', 10).map((s) => ({
+          ...s,
+          tags: ['drop'] as ('failure' | 'drop')[],
+          drops: [
+            { weight_kg: 12, reps: 10 },
+            { weight_kg: 8, reps: 10 },
+            { weight_kg: 6, reps: 12 },
+          ],
+        })),
+      },
+    ],
+  },
 };
 
 /** 黄金集里非抽取类的输入（闲聊 / 红线 / 非目标）—— 给真实 smoke 算意图准确率用 */
@@ -173,6 +243,11 @@ export const GOLDEN_INTENTS: Record<string, Intent> = {
   '飞鸟 15kg 三组十二次': 'record',
   '昨天练了胸': 'record',
   '午饭吃了两碗米饭': 'record',
+  '引体向上四组每组八个': 'record',
+  '引体向上负重 10kg 四组每组六个': 'record',
+  '对握高位下拉 60kg×10 三组': 'record',
+  '卧推 100kg×8 三组，最后一组力竭': 'record',
+  '侧平举 12kg×10 递减到 8kg×10 再 6kg×12 三组': 'record',
   '卧推 70kg×8 四组，帮我看下够不够': 'mixed',
   '推日：卧推 70kg×5 五组，帮我看下够不够': 'mixed',
   '我不太想练了': 'chat',

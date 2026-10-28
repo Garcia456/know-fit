@@ -8,13 +8,26 @@ import { z } from 'zod';
  * 🔴 可空字段一律 nullable()：LangChain 的 jsonSchema 通道对 optional() 支持不好。
  */
 
+/** 组标签：力竭 / 递减 */
+export const SetTagSchema = z.enum(['failure', 'drop']);
+
+/** 递减组的一小段 */
+export const SetDropSchema = z.object({
+  weight_kg: z.number().nullable(),
+  reps: z.number().int().nullable(),
+});
+
 /** 一组 */
 export const SetSchema = z.object({
   weight_kg: z.number().nullable(), // 用户说的那个数字；换算成 kg 由代码做
   weight_unit: z.enum(['kg', 'lb']).nullable(), // 原文单位；null = 没提，按 kg 记并标记推测
   reps: z.number().int().nullable(),
   set_type: z.enum(['warmup', 'working']),
-  is_inferred: z.boolean(), // 系统推测出来的值
+  is_inferred: z.boolean().default(false), // 系统推测出来的值；模型漏填按「用户原话」处理
+  /** 缺省 = 无标签（模型没提） */
+  tags: z.array(SetTagSchema).optional(),
+  /** 递减组的每段重量×次数；非递减组为空 */
+  drops: z.array(SetDropSchema).nullable().optional(),
 });
 
 /** 一个动作 */
@@ -72,6 +85,8 @@ export const RecordStatusSchema = z.enum(['complete', 'incomplete']);
 export const IntentResultSchema = z.object({ intent: IntentSchema });
 
 export type Set = z.infer<typeof SetSchema>;
+export type SetTag = z.infer<typeof SetTagSchema>;
+export type SetDrop = z.infer<typeof SetDropSchema>;
 export type Exercise = z.infer<typeof ExerciseSchema>;
 export type Workout = z.infer<typeof WorkoutSchema>;
 export type MealItem = z.infer<typeof MealItemSchema>;

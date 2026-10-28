@@ -273,7 +273,7 @@ try {
     mine?.exercise_count === 1 &&
     mine?.working_sets === 2 &&
     mine?.volume_kg === 1120 &&
-    mine?.exercise_names?.includes('杠铃卧推') &&
+    mine?.exercise_names?.includes('卧推') &&
     empty?.status === 'incomplete' &&
     empty?.missing_fields?.includes('reps')
   ) {

@@ -31,6 +31,10 @@ export function muscleRegions() {
   return seed().muscle_regions;
 }
 
+function asTags(values: string[]): ('failure' | 'drop')[] {
+  return values.filter((v): v is 'failure' | 'drop' => v === 'failure' || v === 'drop');
+}
+
 /** 动作 id → 中文名；读历史时补展示名，不改落库值。 */
 export function exerciseNames(): Map<string, string> {
   return new Map(seed().exercises.map((e) => [e.id, e.name_zh]));
@@ -58,6 +62,9 @@ async function loadExercises(sessionId: string): Promise<AllocExercise[]> {
       reps: setEntry.reps,
       setType: setEntry.setType,
       isInferred: setEntry.isInferred,
+      bodyweightKg: setEntry.bodyweightKg,
+      tags: setEntry.tags,
+      drops: setEntry.drops,
     })
     .from(setEntry)
     .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
@@ -72,6 +79,9 @@ async function loadExercises(sessionId: string): Promise<AllocExercise[]> {
       reps: r.reps,
       set_type: r.setType === 'warmup' ? 'warmup' : 'working',
       is_inferred: r.isInferred,
+      bodyweight_kg: r.bodyweightKg,
+      tags: asTags(r.tags),
+      drops: r.drops,
     });
     byEntry.set(r.exerciseEntryId, bucket);
   }
@@ -208,6 +218,9 @@ export async function weeklyVolume(input: {
       reps: setEntry.reps,
       setType: setEntry.setType,
       isInferred: setEntry.isInferred,
+      bodyweightKg: setEntry.bodyweightKg,
+      tags: setEntry.tags,
+      drops: setEntry.drops,
     })
     .from(setEntry)
     .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
@@ -223,6 +236,9 @@ export async function weeklyVolume(input: {
       reps: r.reps,
       set_type: r.setType === 'warmup' ? 'warmup' : 'working',
       is_inferred: r.isInferred,
+      bodyweight_kg: r.bodyweightKg,
+      tags: asTags(r.tags),
+      drops: r.drops,
     });
     byWeek.set(key, bucket);
   }
@@ -298,6 +314,9 @@ export async function statsRange(input: {
       reps: setEntry.reps,
       setType: setEntry.setType,
       isInferred: setEntry.isInferred,
+      bodyweightKg: setEntry.bodyweightKg,
+      tags: setEntry.tags,
+      drops: setEntry.drops,
     })
     .from(setEntry)
     .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
@@ -317,6 +336,9 @@ export async function statsRange(input: {
       reps: r.reps,
       set_type: r.setType === 'warmup' ? 'warmup' : 'working',
       is_inferred: r.isInferred,
+      bodyweight_kg: r.bodyweightKg,
+      tags: asTags(r.tags),
+      drops: r.drops,
     });
     entries.set(r.entryId, entry);
   }

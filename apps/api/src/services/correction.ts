@@ -63,12 +63,16 @@ interface EntrySets {
   exerciseId: string | null;
   regionFallback: string | null;
   nameConfidence: 'high' | 'low' | null;
+  isBodyweight: boolean;
   sets: {
     id: string;
     weightKg: number | null;
     reps: number | null;
     setType: 'warmup' | 'working';
     isInferred: boolean;
+    bodyweightKg: number | null;
+    tags: ('failure' | 'drop')[];
+    drops: { weight_kg: number | null; reps: number | null }[] | null;
   }[];
 }
 
@@ -96,6 +100,9 @@ async function loadSessionEntries(sessionId: string): Promise<EntrySets[]> {
       reps: r.reps,
       setType: r.setType === 'warmup' ? 'warmup' : 'working',
       isInferred: r.isInferred,
+      bodyweightKg: r.bodyweightKg,
+      tags: r.tags.filter((t): t is 'failure' | 'drop' => t === 'failure' || t === 'drop'),
+      drops: r.drops,
     });
     byEntry.set(r.exerciseEntryId, bucket);
   }
@@ -108,6 +115,7 @@ async function loadSessionEntries(sessionId: string): Promise<EntrySets[]> {
     regionFallback: e.regionFallback,
     nameConfidence:
       e.nameConfidence === 'high' || e.nameConfidence === 'low' ? e.nameConfidence : null,
+    isBodyweight: e.isBodyweight,
     sets: byEntry.get(e.id) ?? [],
   }));
 }
@@ -118,6 +126,9 @@ function asVolumeSets(entry: EntrySets): VolumeSet[] {
     reps: s.reps,
     set_type: s.setType,
     is_inferred: s.isInferred,
+    bodyweight_kg: s.bodyweightKg,
+    tags: s.tags,
+    drops: s.drops,
   }));
 }
 
@@ -130,6 +141,7 @@ function toCardExercises(entries: EntrySets[], names: Map<string, string>): Work
       name_zh: e.exerciseId ? (names.get(e.exerciseId) ?? null) : null,
       region_fallback: e.regionFallback,
       name_confidence: e.nameConfidence ?? 'high',
+      is_bodyweight: e.isBodyweight,
       sets: asVolumeSets(e),
       volume_kg: summary.total_kg,
       working_sets: summary.working_sets,

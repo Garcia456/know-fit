@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MissingFieldSchema, RecordStatusSchema } from './extraction.js';
+import { MissingFieldSchema, RecordStatusSchema, SetDropSchema, SetTagSchema } from './extraction.js';
 import { SessionVolumeSchema, VolumeHookSchema } from './metrics.js';
 
 /**
@@ -30,6 +30,9 @@ export const SessionSetSchema = z.object({
   reps: z.number().int().nullable(),
   set_type: z.enum(['warmup', 'working']),
   is_inferred: z.boolean(),
+  bodyweight_kg: z.number().nullable().optional(),
+  tags: z.array(SetTagSchema).optional(),
+  drops: z.array(SetDropSchema).nullable().optional(),
 });
 
 export const SessionExerciseSchema = z.object({
@@ -38,6 +41,7 @@ export const SessionExerciseSchema = z.object({
   name_zh: z.string().nullable(),
   region_fallback: z.string().nullable(),
   name_confidence: z.enum(['high', 'low']).nullable(),
+  is_bodyweight: z.boolean().optional(),
   sets: z.array(SessionSetSchema),
 });
 

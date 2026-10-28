@@ -25,16 +25,19 @@ function missingCells(detail: SessionDetail): MissingCell[] {
   const cells: MissingCell[] = [];
   detail.exercises.forEach((ex, exerciseIndex) => {
     ex.sets.forEach((set, setIndex) => {
-      if (set.reps !== null && set.weight_kg !== null) return;
+      const repsMissing = set.reps === null;
+      // 自重动作没写重量是常态，不叫缺
+      const weightMissing = !ex.is_bodyweight && set.weight_kg === null;
+      if (!repsMissing && !weightMissing) return;
       cells.push({
         key: `${exerciseIndex}-${setIndex}`,
         exerciseIndex,
         setIndex,
-        label: `${ex.name_zh ?? ex.raw_name} 第 ${setIndex + 1} 组`,
+        label: `${ex.raw_name} 第 ${setIndex + 1} 组`,
         reps: '',
         weight: '',
-        repsMissing: set.reps === null,
-        weightMissing: set.weight_kg === null,
+        repsMissing,
+        weightMissing,
       });
     });
   });
@@ -42,7 +45,7 @@ function missingCells(detail: SessionDetail): MissingCell[] {
 }
 
 function exerciseName(ex: SessionExercise): string {
-  return ex.name_zh ?? ex.raw_name;
+  return ex.raw_name;
 }
 
 /**

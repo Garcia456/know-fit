@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lte } from 'drizzle-orm';
 import type { Profile, ProfileInput } from '../contracts/sessions.js';
 import { bodyMetric, userProfile } from '../db/schema.js';
 import { monthsSince, toLocalDate } from '../extraction/dates.js';
@@ -117,6 +117,20 @@ export async function weightOn(user_id: string, date: string): Promise<number | 
     .select({ weightKg: bodyMetric.weightKg })
     .from(bodyMetric)
     .where(and(eq(bodyMetric.userId, user_id), eq(bodyMetric.date, date)))
+    .limit(1);
+  return rows[0]?.weightKg ?? null;
+}
+
+/**
+ * 算自重动作容量用的体重：训练日当天或之前最近一次记录。
+ * 没有体重记录时返回 null —— 不拿「之后的体重」倒推历史。
+ */
+export async function bodyweightOn(user_id: string, date: string): Promise<number | null> {
+  const rows = await getDb()
+    .select({ weightKg: bodyMetric.weightKg })
+    .from(bodyMetric)
+    .where(and(eq(bodyMetric.userId, user_id), lte(bodyMetric.date, date)))
+    .orderBy(desc(bodyMetric.date))
     .limit(1);
   return rows[0]?.weightKg ?? null;
 }

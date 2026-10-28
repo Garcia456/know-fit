@@ -8,6 +8,11 @@ export type RecordStatus = 'complete' | 'incomplete';
 export type MissingField = 'exercises' | 'reps' | 'weight_kg';
 export type RefusalReason = 'medical' | 'medication' | 'extreme_diet' | 'off_topic';
 export type SetType = 'warmup' | 'working';
+export type SetTag = 'failure' | 'drop';
+export interface SetDrop {
+  weight_kg: number | null;
+  reps: number | null;
+}
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export interface VolumeHook {
@@ -51,6 +56,10 @@ export interface WorkoutCardSet {
   reps: number | null;
   set_type: SetType;
   is_inferred: boolean;
+  /** 自重动作叠加的体重 */
+  bodyweight_kg?: number | null;
+  tags?: SetTag[];
+  drops?: SetDrop[] | null;
 }
 
 export interface WorkoutCardExercise {
@@ -59,6 +68,7 @@ export interface WorkoutCardExercise {
   name_zh: string | null;
   region_fallback: string | null;
   name_confidence: 'high' | 'low';
+  is_bodyweight?: boolean;
   sets: WorkoutCardSet[];
   volume_kg: number;
   working_sets: number;
@@ -184,6 +194,7 @@ export interface SessionExercise {
   name_zh: string | null;
   region_fallback: string | null;
   name_confidence: 'high' | 'low' | null;
+  is_bodyweight?: boolean;
   sets: WorkoutCardSet[];
 }
 

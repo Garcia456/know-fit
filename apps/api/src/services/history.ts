@@ -11,7 +11,9 @@ import { exerciseEntry, setEntry, workoutSession } from '../db/schema.js';
 import { getDb } from './pool.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 import { computeVolume, type VolumeSet } from '../metrics/volume.js';
+import { isBodyweightExercise } from '../metrics/bodyweight.js';
 import { exerciseNames, prevSameSplitVolume, sessionVolume } from './metrics.js';
+import { bodyweightOn } from './profile.js';
 
 /** 日历与某天详情 —— 容量不落库，读时现算。 */
 
@@ -19,6 +21,16 @@ function asMissingFields(values: string[]): MissingField[] {
   return values.filter(
     (f): f is MissingField => f === 'exercises' || f === 'reps' || f === 'weight_kg',
   );
+}
+
+function asTags(values: string[]): ('failure' | 'drop')[] {
+  return values.filter((v): v is 'failure' | 'drop' => v === 'failure' || v === 'drop');
+}
+
+function asDrops(
+  value: { weight_kg: number | null; reps: number | null }[] | null,
+): { weight_kg: number | null; reps: number | null }[] | null {
+  return value ?? null;
 }
 
 /** 对话抽屉用的记录级历史 —— 按日期倒序，容量现算。 */
@@ -63,6 +75,9 @@ export async function listHistory(input: {
           reps: setEntry.reps,
           setType: setEntry.setType,
           isInferred: setEntry.isInferred,
+          bodyweightKg: setEntry.bodyweightKg,
+          tags: setEntry.tags,
+          drops: setEntry.drops,
         })
         .from(setEntry)
         .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
@@ -80,6 +95,9 @@ export async function listHistory(input: {
       reps: row.reps,
       set_type: row.setType === 'warmup' ? 'warmup' : 'working',
       is_inferred: row.isInferred,
+      bodyweight_kg: row.bodyweightKg,
+      tags: asTags(row.tags),
+      drops: asDrops(row.drops),
     });
     setsBySession.set(sessionId, bucket);
   }
@@ -91,7 +109,6 @@ export async function listHistory(input: {
     entriesBySession.set(entry.sessionId, bucket);
   }
 
-  const names = exerciseNames();
   return sessions.map((session) => {
     const summary = computeVolume(setsBySession.get(session.id) ?? []);
     const sessionEntries = entriesBySession.get(session.id) ?? [];
@@ -104,9 +121,8 @@ export async function listHistory(input: {
       exercise_count: sessionEntries.length,
       working_sets: summary.working_sets,
       volume_kg: summary.total_kg,
-      exercise_names: sessionEntries.map(
-        (e) => (e.exerciseId ? names.get(e.exerciseId) : null) ?? e.rawName,
-      ),
+      // 展示按用户原话；归一后的中文名只用于肌群归类
+      exercise_names: sessionEntries.map((e) => e.rawName),
     };
   });
 }
@@ -177,6 +193,9 @@ export async function getSessionDetail(input: {
       reps: row.set_entry.reps,
       set_type: row.set_entry.setType === 'warmup' ? 'warmup' : 'working',
       is_inferred: row.set_entry.isInferred,
+      bodyweight_kg: row.set_entry.bodyweightKg,
+      tags: asTags(row.set_entry.tags),
+      drops: asDrops(row.set_entry.drops),
     });
     byEntry.set(row.set_entry.exerciseEntryId, bucket);
   }
@@ -207,6 +226,7 @@ export async function getSessionDetail(input: {
         entry.nameConfidence === 'high' || entry.nameConfidence === 'low'
           ? entry.nameConfidence
           : null,
+      is_bodyweight: entry.isBodyweight,
       sets: byEntry.get(entry.id) ?? [],
     })),
     volume,
@@ -245,6 +265,7 @@ export async function appendToSession(input: {
       .orderBy(asc(exerciseEntry.order));
 
     let nextOrder = existing.reduce((max, e) => Math.max(max, e.order), -1) + 1;
+    const bodyweightKg = await bodyweightOn(input.user_id, session.date);
 
     for (const patchExercise of input.patch.exercises) {
       const match = existing.find((e) => e.rawName === patchExercise.raw_name);
@@ -283,12 +304,16 @@ export async function appendToSession(input: {
               reps: s.reps,
               setType: s.set_type,
               isInferred: s.is_inferred,
+              bodyweightKg: match.isBodyweight ? bodyweightKg : null,
+              tags: [],
+              drops: null,
             })),
           );
         }
         continue;
       }
 
+      const isBodyweight = isBodyweightExercise(patchExercise.exercise_id ?? null);
       const [created] = await tx
         .insert(exerciseEntry)
         .values({
@@ -298,6 +323,7 @@ export async function appendToSession(input: {
           exerciseId: patchExercise.exercise_id ?? null,
           nameConfidence: 'high',
           regionFallback: patchExercise.region_fallback ?? null,
+          isBodyweight,
         })
         .returning({ id: exerciseEntry.id });
       if (!created) throw new Error('exercise_entry 插入没有返回 id');
@@ -311,6 +337,9 @@ export async function appendToSession(input: {
           reps: s.reps,
           setType: s.set_type,
           isInferred: s.is_inferred,
+          bodyweightKg: isBodyweight ? bodyweightKg : null,
+          tags: [],
+          drops: null,
         })),
       );
     }
@@ -324,6 +353,7 @@ export async function appendToSession(input: {
           .select({
             weightKg: setEntry.weightKg,
             reps: setEntry.reps,
+            isBodyweight: exerciseEntry.isBodyweight,
           })
           .from(setEntry)
           .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
@@ -333,7 +363,7 @@ export async function appendToSession(input: {
     const missing: MissingField[] = [];
     if (allEntries.length === 0) missing.push('exercises');
     if (allSets.some((s) => s.reps === null)) missing.push('reps');
-    if (allSets.some((s) => s.weightKg === null)) missing.push('weight_kg');
+    if (allSets.some((s) => !s.isBodyweight && s.weightKg === null)) missing.push('weight_kg');
 
     const note = session.notes === null && input.patch.note ? input.patch.note : session.notes;
 

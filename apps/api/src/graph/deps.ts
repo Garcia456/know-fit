@@ -12,6 +12,7 @@ export interface PersistExerciseInput {
   exercise_id: string | null;
   name_confidence: 'high' | 'low';
   region_fallback: string | null;
+  is_bodyweight?: boolean;
   sets: (WorkoutCardSet & { order: number })[];
 }
 
@@ -72,5 +73,7 @@ export interface TurnDeps {
     query: string;
     history: TurnHistoryItem[];
   }) => Promise<KnowledgeCard>;
+  /** 自重动作算容量时要叠加的体重（训练日当天或之前最近一次） */
+  bodyweightFor?: (input: { user_id: string; date: string }) => Promise<number | null>;
   now?: () => Date;
 }

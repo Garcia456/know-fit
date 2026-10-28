@@ -309,7 +309,7 @@ function DayCard({ item, detail }: { item: HistoryItem; detail: SessionDetail | 
           <ul className="exercise-list">
             {detail.exercises.map((ex, exIndex) => (
               <li key={`${ex.raw_name}-${exIndex}`} className="exercise">
-                <div className="exercise__name">{ex.name_zh ?? ex.raw_name}</div>
+                <div className="exercise__name">{ex.raw_name}</div>
                 <ul className="set-list">
                   {ex.sets.map((set, i) => (
                     <li key={i}>

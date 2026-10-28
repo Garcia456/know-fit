@@ -5,6 +5,8 @@ import {
   MealItemSchema,
   MissingFieldSchema,
   RecordStatusSchema,
+  SetDropSchema,
+  SetTagSchema,
 } from './extraction.js';
 import { VolumeHookSchema } from './metrics.js';
 
@@ -23,10 +25,14 @@ export const RefusalReasonSchema = z.enum([
 ]);
 
 export const WorkoutCardSetSchema = z.object({
-  weight_kg: z.number().nullable(),
+  weight_kg: z.number().nullable(), // 自重动作里是「额外负重」
   reps: z.number().int().nullable(),
   set_type: z.enum(['warmup', 'working']),
   is_inferred: z.boolean(),
+  /** 自重动作算容量时叠加的体重；旧卡 / 旧记录可能没有 */
+  bodyweight_kg: z.number().nullable().optional(),
+  tags: z.array(SetTagSchema).optional(),
+  drops: z.array(SetDropSchema).nullable().optional(),
 });
 
 export const WorkoutCardExerciseSchema = z.object({
@@ -35,6 +41,8 @@ export const WorkoutCardExerciseSchema = z.object({
   name_zh: z.string().nullable(), // 命中 seed 时的中文名
   region_fallback: z.string().nullable(), // 歧义动作的部位兜底
   name_confidence: z.enum(['high', 'low']),
+  /** seed equipment 含「自重」—— 没说重量不等于缺数据 */
+  is_bodyweight: z.boolean().optional(),
   sets: z.array(WorkoutCardSetSchema),
   /** 该动作容量（正式组 Σ 重量 × 次数）—— 代码算，展示层不重算 */
   volume_kg: z.number(),

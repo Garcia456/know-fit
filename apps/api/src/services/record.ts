@@ -89,6 +89,7 @@ export async function persistWorkout(input: PersistWorkoutInput): Promise<{ sess
           exerciseId: ex.exercise_id,
           nameConfidence: ex.name_confidence,
           regionFallback: ex.region_fallback,
+          isBodyweight: ex.is_bodyweight ?? false,
         })
         .returning({ id: exerciseEntry.id });
 
@@ -104,6 +105,9 @@ export async function persistWorkout(input: PersistWorkoutInput): Promise<{ sess
           reps: s.reps,
           setType: s.set_type,
           isInferred: s.is_inferred,
+          bodyweightKg: s.bodyweight_kg,
+          tags: s.tags,
+          drops: s.drops,
         })),
       );
     }
