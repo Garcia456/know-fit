@@ -3,13 +3,38 @@
  * 这里只写设计系统没有的：外壳、日历、热力图、表单输入、抽屉与列表的按钮化。
  */
 
+/* 全局中文字体：只带 400 / 500，600–700 复用 Medium，少两个 1MB 文件 */
+@font-face {
+  font-family: "PingFang SC";
+  src:
+    local("PingFang SC"),
+    url("/fonts/PingFangSC-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "PingFang SC";
+  src:
+    local("PingFang SC Medium"),
+    url("/fonts/PingFangSC-Medium.woff2") format("woff2");
+  font-weight: 500 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  /* 热力图 5 档：0 = 中性灰，1–4 由浅到深 */
-  --heat-0: #f0f0f0;
-  --heat-1: #d9d9d9;
-  --heat-2: #ababab;
-  --heat-3: #6e6e6e;
-  --heat-4: #2c2c2c;
+  --font:
+    "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  /* 热力图 5 档：0 = 未练，1–4 由浅到深（暖色，一眼看出练没练） */
+  --heat-0: #ece8e1; /* 未练 = 头部/身体底色，整块一个色 */
+  --heat-1: #d6e7d0;
+  --heat-2: #a7ce9c;
+  --heat-3: #6fac64;
+  --heat-4: #3d7c38;
+  --body-base: #ece8e1;
 }
 
 html,
@@ -60,6 +85,40 @@ select {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* 等待回复：气泡先出现，下面转圈 */
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line-2);
+  border-top-color: var(--ink-2);
+  border-radius: 50%;
+  animation: kf-spin 0.8s linear infinite;
+}
+
+@keyframes kf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+.foot-note.is-disclaimer {
+  font-style: italic;
 }
 
 .notice {
@@ -240,6 +299,13 @@ select {
 }
 
 /* ---------- 训练卡细节 ---------- */
+
+/* 动作名列：至少 104px、不折行，名字再长也能自己撑开；饮食行仍用固定列宽 */
+.ex-list:not(.is-meal) dt {
+  width: auto;
+  min-width: 104px;
+  white-space: nowrap;
+}
 
 .ex-list.is-meal dt {
   width: 96px;
@@ -548,12 +614,19 @@ select {
 }
 
 .body-silhouette {
-  fill: var(--heat-0);
+  fill: var(--body-base);
+  stroke: var(--body-base);
+  stroke-width: 0.12;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
+/* 分割线保留，转角收圆 */
 .body-region path {
   stroke: var(--surface);
-  stroke-width: 0.1;
+  stroke-width: 0.12;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
 .heat-0 {

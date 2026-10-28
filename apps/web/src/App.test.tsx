@@ -261,7 +261,9 @@ describe('创建新会话', () => {
     const input = screen.getByLabelText('训练、饮食或提问') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '今天休息' } });
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
-    expect(await screen.findByText('收到，今天先好好休息。')).toBeDefined();
+    expect(
+      await screen.findByText('收到，今天先好好休息。', undefined, { timeout: 3000 }),
+    ).toBeDefined();
 
     fireEvent.change(input, { target: { value: '下一条草稿' } });
     fireEvent.click(screen.getByRole('button', { name: '创建新会话' }));

@@ -1,5 +1,4 @@
 import type { KnowledgeCard } from '../api/types';
-import { InfoIcon } from './Icons';
 import { SourceBlock } from './AssessmentCardView';
 
 /** 知识回答：有源挂出处，无源显式标注 —— 不暗示有来源。 */
@@ -8,14 +7,6 @@ export function KnowledgeCardView({ card }: { card: KnowledgeCard }) {
 
   return (
     <article className="card" aria-label="知识回答">
-      <div className="card-hd">
-        <InfoIcon />
-        <h3>知识回答</h3>
-        <span className={card.has_source ? 'tag' : 'tag tag--dashed'}>
-          {card.has_source ? '有来源' : '无来源'}
-        </span>
-      </div>
-
       {card.claims.length > 0 ? (
         <ol className="advice">
           {card.claims.map((item, i) => {
@@ -35,10 +26,15 @@ export function KnowledgeCardView({ card }: { card: KnowledgeCard }) {
         <p className="adv">{card.answer}</p>
       )}
 
-      <p className="foot-note">
-        {card.no_source_notice ??
-          '回答基于检索到的博主内容，可点回原片自己判断。'}
-      </p>
+      {card.has_source ? (
+        <p className="foot-note">
+          {card.no_source_notice ?? '回答基于检索到的博主内容，可点回原片自己判断。'}
+        </p>
+      ) : (
+        <p className="foot-note is-disclaimer">
+          本回答由 AI 生成，内容仅供参考，请仔细甄别。
+        </p>
+      )}
     </article>
   );
 }

@@ -13,6 +13,7 @@ import { nudgeRoutes } from './routes/nudges.js';
 import { profileRoutes } from './routes/profile.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { turnRoutes } from './routes/turns.js';
+import { resolveProvider } from './llm/index.js';
 import { loadAllChunkTexts } from './services/chunks.js';
 import { closeDb, getPool } from './services/pool.js';
 
@@ -77,6 +78,13 @@ export async function buildServer() {
 
 async function main(): Promise<void> {
   const app = await buildServer();
+
+  // 替身模式下聊天回复是固定 fixture —— 启动时就说清楚，免得被当成模型输出
+  if (resolveProvider() === 'fake') {
+    app.log.warn(
+      'LLM_PROVIDER=fake —— 聊天回复来自替身 fixture，不是真实模型；本地真实对话请把 .env 改成 openai 后重启',
+    );
+  }
 
   // 数据库可达性检查 —— 连不上要给人看得懂的报错，不是一串栈。
   // ⚠️ 连不上不退出：/health 不依赖库，而库的问题由 pnpm db:check 单独报。

@@ -136,8 +136,27 @@ describe('训练 / 饮食 / 闲聊 / 拒答卡片', () => {
     expect(screen.getByText('已更正')).toBeDefined();
     expect(screen.getByText('容量已重算')).toBeDefined();
     expect(screen.getByText('70kg')).toBeDefined();
-    expect(screen.getByText(/75kg × 8/)).toBeDefined();
+    expect(screen.getByText(/75kg · 8 次 · 4 组/)).toBeDefined();
     expect(screen.getByText('4 组 · 2,400 kg')).toBeDefined();
+  });
+
+  it('knowledge：不显示卡片头；无来源换成斜体 AI 提示', () => {
+    render(
+      <CardView
+        card={{
+          kind: 'knowledge',
+          answer: '上斜卧推先沉肩。',
+          claims: [],
+          citations: [],
+          has_source: false,
+          no_source_notice: '知识库里没有找到可直接支撑的博主原话。',
+        }}
+      />,
+    );
+    expect(screen.queryByText('知识回答')).toBeNull();
+    expect(screen.queryByText('无来源')).toBeNull();
+    const note = screen.getByText('本回答由 AI 生成，内容仅供参考，请仔细甄别。');
+    expect(note.className).toContain('is-disclaimer');
   });
 
   it('数据不足卡：只说缺什么，不给建议', () => {

@@ -16,7 +16,7 @@ export function isMissingValue(exercise: {
   );
 }
 
-/** 「4 组 · 70kg × 8」—— 组数按正式组算，缺值就说缺，不补 0；自重动作不把空重量叫缺 */
+/** 「70kg · 8 次 · 4 组」—— 重量 / 次数 / 组数，缺值就说缺，不补 0；自重动作不把空重量叫缺 */
 export function describeSets(exercise: {
   is_bodyweight?: boolean;
   sets: WorkoutCardSet[];
@@ -29,21 +29,16 @@ export function describeSets(exercise: {
   const reps = new Set(working.map((s) => s.reps));
   const missingWeightLabel = bodyweight ? '自重' : '重量待补';
 
-  let text: string;
-  if (weights.size === 1 && !weights.has(null) && reps.size === 1 && !reps.has(null)) {
-    text = `${working.length} 组 · ${[...weights][0]}kg × ${[...reps][0]}`;
-  } else if (weights.size === 1 && weights.has(null) && reps.size === 1 && !reps.has(null)) {
-    // 自重动作的常见形态：没说重量、次数一致
-    text = `${working.length} 组 · ${missingWeightLabel} × ${[...reps][0]}`;
-  } else {
-    const bits = [`${working.length} 组`];
-    if (weights.has(null)) bits.push(missingWeightLabel);
-    else if (weights.size > 1) bits.push(bodyweight ? '多负重' : '多重量');
-    else bits.push(`${[...weights][0]}kg`);
-    if (reps.has(null)) bits.push('次数待补');
-    else if (reps.size > 1) bits.push('次数不一');
-    text = bits.join(' · ');
-  }
+  const weight = weights.has(null)
+    ? missingWeightLabel
+    : weights.size > 1
+      ? bodyweight
+        ? '多负重'
+        : '多重量'
+      : `${[...weights][0]}kg`;
+  const rep = reps.has(null) ? '次数待补' : reps.size > 1 ? '次数不一' : `${[...reps][0]} 次`;
+
+  let text = `${weight} · ${rep} · ${working.length} 组`;
 
   const failure = working.filter((s) => s.tags?.includes('failure')).length;
   const drops = working.filter((s) => s.tags?.includes('drop')).length;

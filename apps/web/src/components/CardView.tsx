@@ -299,7 +299,7 @@ function CorrectionCardView({ card }: { card: CorrectionCard }) {
   );
 }
 
-/** 「4 组 · <s>70kg</s> 75kg × 8」；组内次数不一致时退回普通描述 */
+/** 「<s>70kg</s>75kg · 8 次 · 4 组」；组内次数不一致时退回普通描述 */
 function correctedSetsText(exercise: WorkoutCardExercise, oldKg: number, newKg: number) {
   const working = exercise.sets.filter((s) => s.set_type === 'working');
   const reps = new Set(working.map((s) => s.reps));
@@ -308,8 +308,7 @@ function correctedSetsText(exercise: WorkoutCardExercise, oldKg: number, newKg: 
   }
   return (
     <>
-      {working.length} 组 · <span className="was">{oldKg}kg</span>
-      {newKg}kg × {[...reps][0]}
+      <span className="was">{oldKg}kg</span> {newKg}kg · {[...reps][0]} 次 · {working.length} 组
     </>
   );
 }

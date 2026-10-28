@@ -75,13 +75,43 @@ describe('聊天页', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
 
-    await waitFor(() => expect(screen.getByText('收到，今天先好好休息。')).toBeDefined());
+    await waitFor(() => expect(screen.getByText('收到，今天先好好休息。')).toBeDefined(), {
+      timeout: 3000,
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/turns',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ message: '今天休息' }) }),
     );
     expect((input as HTMLInputElement).value).toBe('');
     expect(localStorage.getItem('know-fit:chat-draft')).toBeNull();
+  });
+
+  it('点发送立刻上屏、清空输入，并显示思考中', async () => {
+    let resolve!: (value: unknown) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(
+        new Promise((r) => {
+          resolve = r;
+        }),
+      ),
+    );
+    renderChat();
+
+    const input = screen.getByLabelText('训练、饮食或提问') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '今天休息' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(input.value).toBe('');
+    expect(screen.getByText('今天休息')).toBeDefined();
+    expect(screen.getByText('思考中...')).toBeDefined();
+    expect(screen.getByRole('status')).toBeDefined();
+
+    resolve({ ok: true, status: 200, json: async () => chatTurn });
+    await waitFor(() => expect(screen.getByText('收到，今天先好好休息。')).toBeDefined(), {
+      timeout: 3000,
+    });
+    expect(screen.queryByText('思考中...')).toBeNull();
   });
 
   it('失败时文字不丢，给出重试', async () => {
@@ -152,7 +182,7 @@ describe('聊天页', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
 
-    expect(await screen.findByText('暂时算不出判定')).toBeDefined();
+    expect(await screen.findByText('暂时算不出判定', undefined, { timeout: 3000 })).toBeDefined();
     expect(screen.getByText('数据不足')).toBeDefined();
     expect(screen.getByText('还差 2 项才能算趋势')).toBeDefined();
     expect(screen.queryByText(/建议你/)).toBeNull();

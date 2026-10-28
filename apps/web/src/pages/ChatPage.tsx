@@ -22,6 +22,8 @@ import { CompletionPanel } from '../components/CompletionPanel';
 import { LowDataCard } from '../components/LowDataCard';
 
 const DRAFT_KEY = 'know-fit:chat-draft';
+/** 「思考中」至少显示这么久，免得一闪而过 */
+const MIN_THINKING_MS = 1000;
 
 /** fill = 填入输入框等用户补全；send = 本身就是完整问题，点了直接发 */
 const QUICK_ASKS: { label: string; mode: 'fill' | 'send' }[] = [
@@ -106,6 +108,8 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
   const [draft, setDraft] = useState(readDraft);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [sending, setSending] = useState(false);
+  /** 已发出、还没回来的那句 —— 先把气泡画出来 */
+  const [pending, setPending] = useState<{ id: string; text: string } | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const [assessingSessionId, setAssessingSessionId] = useState<string | null>(null);
@@ -119,6 +123,7 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
   const loadedConversation = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef(draft);
 
   // 进首页取一次提示；StrictMode 下也不会取两次（第二次会被服务端去重成 null）
   useEffect(() => {
@@ -142,6 +147,8 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
     if (lastReset.current === resetToken) return;
     lastReset.current = resetToken;
     setEntries([]);
+    setPending(null);
+    draftRef.current = '';
     setDraft('');
     writeDraft('');
     writeConversationId(null);
@@ -183,7 +190,7 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
   useEffect(() => {
     const el = bodyRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [entries]);
+  }, [entries, pending]);
 
   const completeId = params.get('complete');
 
@@ -204,6 +211,7 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
   }
 
   function updateDraft(value: string) {
+    draftRef.current = value;
     setDraft(value);
     writeDraft(value);
   }
@@ -221,19 +229,30 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
     const trimmed = message.trim();
     if (!trimmed || sending) return;
 
+    const entryId = makeId();
+    const startedAt = Date.now();
     setSending(true);
     setSendError(null);
     setFailedMessage(null);
+    setPending({ id: entryId, text: trimmed });
+    updateDraft('');
 
     try {
       const response = await postTurn(trimmed, activeConversationId);
+
+      // 回复太快也把「思考中」显示满 1 秒
+      const remain = MIN_THINKING_MS - (Date.now() - startedAt);
+      if (remain > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remain));
+      }
+
       loadedConversation.current = response.conversation_id;
       writeConversationId(response.conversation_id);
       onConversationChange?.(response.conversation_id);
       setEntries((prev) => [
         ...prev,
         {
-          id: makeId(),
+          id: entryId,
           user: trimmed,
           response,
           extraAssessments: [],
@@ -245,9 +264,11 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
               : null,
         },
       ]);
-      updateDraft('');
+      setPending(null);
     } catch (error) {
-      // 失败时文字不丢：输入框与 localStorage 都保留
+      // 失败时文字不丢：输入框还空着才放回去，别盖掉用户新打的字
+      setPending(null);
+      if (!draftRef.current.trim()) updateDraft(trimmed);
       setFailedMessage(trimmed);
       setSendError(error instanceof Error ? error.message : '发送失败，请重试');
     } finally {
@@ -395,6 +416,18 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
             </div>
           );
         })}
+
+        {pending ? (
+          <div className="turn">
+            <div className="msg-user">
+              <p>{pending.text}</p>
+            </div>
+            <div className="thinking" role="status">
+              <span className="spinner" aria-hidden="true" />
+              思考中...
+            </div>
+          </div>
+        ) : null}
 
         {completeId ? (
           <CompletionPanel sessionId={completeId} onDone={() => setParams({})} />
