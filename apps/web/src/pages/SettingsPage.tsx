@@ -8,7 +8,7 @@ import {
 import type { Account, AccountInput, ClearTrainingResult, Gender } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { DateField } from '../components/DateField';
-import { InfoIcon, WarnIcon } from '../components/Icons';
+import { ArrowLeftIcon, InfoIcon, WarnIcon } from '../components/Icons';
 import { OptionField } from '../components/OptionField';
 
 const GENDER_OPTIONS = [
@@ -133,7 +133,7 @@ function SettingsForm({ user }: { user: Account }) {
     <div className="settings-page">
       <header className="settings-hd">
         <Link to="/profile" className="icon-btn" aria-label="返回我的">
-          ←
+          <ArrowLeftIcon />
         </Link>
         <h1>设置</h1>
         <span className="settings-hd__spacer" aria-hidden="true" />

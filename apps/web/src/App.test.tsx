@@ -78,6 +78,7 @@ const conversationSummary = {
   title: '今天休息',
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  pinned_at: null,
   last_message: '收到，今天先好好休息。',
 };
 
@@ -241,17 +242,17 @@ describe('对话历史抽屉', () => {
     expect(localStorage.getItem('know-fit:conversation-id')).toBe('c-1');
   });
 
-  it('关闭按钮与 Escape 都能收起', async () => {
+  it('点遮罩与 Escape 都能收起', async () => {
     renderShell('/');
     fireEvent.click(screen.getByRole('button', { name: '对话历史' }));
-    const drawer = await screen.findByRole('dialog', { name: '对话历史' });
-    fireEvent.click(within(drawer).getByRole('button', { name: '关闭' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await screen.findByRole('dialog', { name: '对话历史' });
+    fireEvent.click(document.querySelector('.scrim') as Element);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     fireEvent.click(screen.getByRole('button', { name: '对话历史' }));
     expect(await screen.findByRole('dialog')).toBeDefined();
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
 

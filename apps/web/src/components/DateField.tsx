@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BottomSheet } from './BottomSheet';
+import { ChevronDownIcon } from './Icons';
 import { WheelPicker } from './WheelPicker';
 
 interface Props {
@@ -91,8 +92,8 @@ export function DateField({
         {compact ? (
           <>
             <span className="field__value">{value || '未填'}</span>
-            <span className="field__chevron" aria-hidden="true">
-              ▾
+            <span className="field__chevron">
+              <ChevronDownIcon />
             </span>
           </>
         ) : (

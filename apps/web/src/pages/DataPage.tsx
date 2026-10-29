@@ -3,7 +3,7 @@ import useEmblaCarousel from 'embla-carousel-react';
 import { Link, useSearchParams } from 'react-router';
 import { getHistory, getSession } from '../api/client';
 import type { HistoryItem, SessionDetail } from '../api/types';
-import { ChartIcon } from '../components/Icons';
+import { ArrowDownIcon, ArrowUpIcon, ChartIcon } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
 import { VolumeHookView } from '../components/VolumeHookView';
 import { addMonths, monthGrid, parseDateKey, startOfMonth, toDateKey } from '../lib/calendar';
@@ -237,7 +237,17 @@ export function DataPage() {
             aria-label={`切换排序，当前${order === 'desc' ? '倒序' : '正序'}`}
             onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
           >
-            {order === 'desc' ? '倒序 ↓' : '正序 ↑'}
+            {order === 'desc' ? (
+              <>
+                倒序
+                <ArrowDownIcon />
+              </>
+            ) : (
+              <>
+                正序
+                <ArrowUpIcon />
+              </>
+            )}
           </button>
         </div>
 

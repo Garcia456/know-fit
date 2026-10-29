@@ -3,7 +3,9 @@
  * 这里只写设计系统没有的：外壳、日历、热力图、表单输入、抽屉与列表的按钮化。
  */
 
-/* 全局中文字体：只带 400 / 500，600–700 复用 Medium，少两个 1MB 文件 */
+/* 全局中文字体：只带 400 / 500 两个文件。
+ * 600–700 故意不再复用 Medium —— 否则「加粗」和正文一个粗度；
+ * 交给浏览器在 Medium 上合成加粗（font-synthesis 默认开），真 Semibold 文件到位后可替换。 */
 @font-face {
   font-family: "PingFang SC";
   src:
@@ -19,7 +21,7 @@
   src:
     local("PingFang SC Medium"),
     url("/fonts/PingFangSC-Medium.woff2") format("woff2");
-  font-weight: 500 700;
+  font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
@@ -48,6 +50,29 @@ button,
 input,
 select {
   font: inherit;
+}
+
+/* 按下态：统一浅灰一层，跟着各自的圆角走；关掉移动端默认的蓝色高亮 */
+button,
+a,
+select,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:active,
+a:active,
+select:active,
+[role="button"]:active,
+.field:active,
+.set-row--button:active,
+.row-button:active,
+.conv:active,
+.tab:active,
+.chip:active,
+.calendar__day:active,
+.sheet-option:active {
+  box-shadow: inset 0 0 0 999px rgba(44, 44, 44, 0.07);
 }
 
 /* ---------- 外壳 ---------- */
@@ -96,6 +121,10 @@ select {
   font-size: 13px;
 }
 
+.thinking-time {
+  font-variant-numeric: tabular-nums;
+}
+
 .spinner {
   width: 14px;
   height: 14px;
@@ -103,6 +132,10 @@ select {
   border-top-color: var(--ink-2);
   border-radius: 50%;
   animation: kf-spin 0.8s linear infinite;
+}
+
+.spin {
+  animation: kf-spin 0.9s linear infinite;
 }
 
 @keyframes kf-spin {
@@ -117,8 +150,15 @@ select {
   }
 }
 
-.foot-note.is-disclaimer {
+/* 知识卡两条脚注：同字号同斜体；AI 免责声明再淡一档 */
+.foot-note.is-note {
+  font-size: 11px;
   font-style: italic;
+  color: var(--faint);
+}
+
+.foot-note.is-disclaimer {
+  color: var(--faint);
 }
 
 .notice {
@@ -182,10 +222,6 @@ select {
   cursor: default;
 }
 
-.pill-sending {
-  font-size: 16px;
-  line-height: 1;
-}
 
 /* ---------- 导航与抽屉 ---------- */
 
@@ -193,6 +229,15 @@ select {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
+}
+
+/* 抽屉要压在顶栏之上：.tab 自带 z-index:1，不给层级会从遮罩上冒出来 */
+.scrim {
+  z-index: 30;
+}
+
+.drawer {
+  z-index: 31;
 }
 
 .drawer-body {
@@ -270,6 +315,103 @@ select {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* 长按会话行：菜单贴着行上方偏右弹出 */
+.conv-menu {
+  position: absolute;
+  z-index: 2;
+  width: 148px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+
+.conv-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.conv-menu button:hover {
+  background: var(--surface-2);
+}
+
+.conv-menu button.is-danger {
+  color: #b3261e;
+}
+
+.drawer-body .group-label {
+  margin-top: 8px;
+}
+
+/* 居中弹窗：重命名 / 删除确认 */
+.modal-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(30, 30, 30, 0.32);
+}
+
+.modal {
+  width: 100%;
+  max-width: 320px;
+  padding: 18px;
+  border-radius: var(--r-4);
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.2);
+}
+
+.modal h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.modal-input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.modal-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 /* ---------- 列表行按钮 ---------- */
@@ -471,6 +613,9 @@ select {
 }
 
 .sort-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   padding: 0;
   border: 0;
   background: none;
@@ -590,7 +735,7 @@ select {
 /* ---------- 热力图 ---------- */
 
 .body-map {
-  margin-top: 4px;
+  margin: 14px 10px 18px;
 }
 
 .body-map--error {
@@ -603,13 +748,13 @@ select {
 
 .body-map__views {
   display: flex;
-  gap: var(--s-2);
+  gap: 36px;
   justify-content: center;
 }
 
 .body-map__svg {
-  width: 50%;
-  max-width: 200px;
+  width: 38%;
+  max-width: 142px;
   height: auto;
 }
 
@@ -780,8 +925,14 @@ body::-webkit-scrollbar,
 }
 
 .field__chevron {
+  display: inline-flex;
   color: var(--muted);
   font-size: 11px;
+}
+
+/* 没有时间点时「看原片」靠右 */
+.src-bot .go {
+  margin-left: auto;
 }
 
 /* 居中卡片弹层：卡片外背景模糊 */
@@ -1079,14 +1230,37 @@ body.sheet-open .page-body {
 }
 
 .profile-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
-  padding: 6px 10px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border: 1px solid var(--line-2);
   border-radius: var(--r-full);
   color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 500;
   text-decoration: none;
+}
+
+.icon-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 图标底边对齐汉字底部（居中会往下探一截） */
+.icon-label svg {
+  transform: translateY(-1px);
+}
+
+/* 说明条：图标跟正文同色，比正文小一档 */
+.note-inline svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--ink-2);
 }
 
 .profile-settings:focus-visible {

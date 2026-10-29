@@ -27,11 +27,11 @@ export function KnowledgeCardView({ card }: { card: KnowledgeCard }) {
       )}
 
       {card.has_source ? (
-        <p className="foot-note">
+        <p className="foot-note is-note">
           {card.no_source_notice ?? '回答基于检索到的博主内容，可点回原片自己判断。'}
         </p>
       ) : (
-        <p className="foot-note is-disclaimer">
+        <p className="foot-note is-note is-disclaimer">
           本回答由 AI 生成，内容仅供参考，请仔细甄别。
         </p>
       )}

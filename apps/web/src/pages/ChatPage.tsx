@@ -20,6 +20,8 @@ import { CardView } from '../components/CardView';
 import { Composer } from '../components/Composer';
 import { CompletionPanel } from '../components/CompletionPanel';
 import { LowDataCard } from '../components/LowDataCard';
+import { ThinkingIndicator } from '../components/ThinkingIndicator';
+import { ChevronRightIcon } from '../components/Icons';
 
 const DRAFT_KEY = 'know-fit:chat-draft';
 /** 「思考中」至少显示这么久，免得一闪而过 */
@@ -323,7 +325,8 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
             <p>{nudge.message}</p>
             {nudge.type === '补全' ? (
               <button type="button" disabled={nudgeBusy} onClick={() => void handleNudge('补全')}>
-                补上 ›
+                补上
+                <ChevronRightIcon />
               </button>
             ) : null}
             <button
@@ -422,10 +425,7 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
             <div className="msg-user">
               <p>{pending.text}</p>
             </div>
-            <div className="thinking" role="status">
-              <span className="spinner" aria-hidden="true" />
-              思考中...
-            </div>
+            <ThinkingIndicator />
           </div>
         ) : null}
 

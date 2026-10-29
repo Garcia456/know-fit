@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDeltaPct, formatKg, formatMmSs } from './format';
+import { formatCitationTs, formatDeltaPct, formatKg, formatMmSs } from './format';
 
 describe('formatMmSs', () => {
   it('格式化常见秒数', () => {
@@ -14,6 +14,20 @@ describe('formatMmSs', () => {
     expect(formatMmSs(undefined)).toBe('—');
     expect(formatMmSs(-1)).toBe('—');
     expect(formatMmSs(Number.NaN)).toBe('—');
+  });
+});
+
+describe('formatCitationTs', () => {
+  it('不足 1 秒不显示时间点', () => {
+    expect(formatCitationTs(0)).toBeNull();
+    expect(formatCitationTs(0.4)).toBeNull();
+    expect(formatCitationTs(0.999)).toBeNull();
+    expect(formatCitationTs(null)).toBeNull();
+  });
+
+  it('满 1 秒起才格式化', () => {
+    expect(formatCitationTs(1)).toBe('0:01');
+    expect(formatCitationTs(61.8)).toBe('1:01');
   });
 });
 

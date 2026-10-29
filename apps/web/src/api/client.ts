@@ -125,6 +125,16 @@ export function renameConversation(
   });
 }
 
+export function setConversationPinned(
+  id: string,
+  pinned: boolean,
+): Promise<{ conversation: ConversationSummary }> {
+  return request(`/api/conversations/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ pinned }),
+  });
+}
+
 export function deleteConversation(id: string): Promise<void> {
   return request(`/api/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

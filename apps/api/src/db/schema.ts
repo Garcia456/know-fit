@@ -102,6 +102,8 @@ export const conversation = pgTable(
     title: text('title').notNull(), // 首条用户消息截断 20 字；可重命名
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** 置顶时间；null = 未置顶 */
+    pinnedAt: timestamp('pinned_at', { withTimezone: true }),
   },
   (t) => [index('conversation_user_updated_index').on(t.userId, t.updatedAt)],
 );

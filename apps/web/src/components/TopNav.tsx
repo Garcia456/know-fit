@@ -1,7 +1,7 @@
 import { m, useReducedMotion } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router';
-import { HistoryIcon, PlusIcon } from './Icons';
+import { HistoryIcon, NewConversationIcon } from './Icons';
 
 interface Props {
   onOpenHistory: () => void;
@@ -70,7 +70,7 @@ export function TopNav({ onOpenHistory, onNewConversation }: Props) {
         aria-label="创建新会话"
         onClick={onNewConversation}
       >
-        <PlusIcon />
+        <NewConversationIcon />
       </button>
     </nav>
   );

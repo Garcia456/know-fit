@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Intent } from '../contracts/extraction.js';
 import type { TurnResponse } from '../contracts/turn.js';
 import type { TurnHistoryItem } from '../graph/state.js';
@@ -29,6 +29,8 @@ export interface ConversationSummary {
   title: string;
   created_at: string;
   updated_at: string;
+  /** 置顶时间；null = 未置顶 */
+  pinned_at: string | null;
   last_message: string | null;
 }
 
@@ -116,10 +118,12 @@ export async function listConversations(userId: string): Promise<ConversationSum
       title: conversation.title,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
+      pinnedAt: conversation.pinnedAt,
     })
     .from(conversation)
     .where(eq(conversation.userId, userId))
-    .orderBy(desc(conversation.updatedAt))
+    // 置顶在前；DESC 默认 NULLS FIRST，必须显式压到后面
+    .orderBy(sql`${conversation.pinnedAt} desc nulls last`, desc(conversation.updatedAt))
     .limit(50);
 
   if (rows.length === 0) return [];
@@ -151,6 +155,7 @@ export async function listConversations(userId: string): Promise<ConversationSum
     title: r.title,
     created_at: r.createdAt.toISOString(),
     updated_at: r.updatedAt.toISOString(),
+    pinned_at: r.pinnedAt?.toISOString() ?? null,
     last_message: last.get(r.id) ?? null,
   }));
 }
@@ -166,6 +171,7 @@ export async function getConversation(
       title: conversation.title,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
+      pinnedAt: conversation.pinnedAt,
     })
     .from(conversation)
     .where(and(eq(conversation.id, conversationId), eq(conversation.userId, userId)))
@@ -207,6 +213,7 @@ export async function getConversation(
     title: head.title,
     created_at: head.createdAt.toISOString(),
     updated_at: head.updatedAt.toISOString(),
+    pinned_at: head.pinnedAt?.toISOString() ?? null,
     last_message: last?.content ?? null,
     messages,
   };
@@ -235,6 +242,7 @@ export async function renameConversation(input: {
       title: conversation.title,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
+      pinnedAt: conversation.pinnedAt,
     });
 
   if (!row) throw new ConversationNotFoundError();
@@ -243,6 +251,41 @@ export async function renameConversation(input: {
     title: row.title,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
+    pinned_at: row.pinnedAt?.toISOString() ?? null,
+    last_message: null,
+  };
+}
+
+/** 置顶 / 取消置顶。只动 pinned_at，不碰 updated_at —— 分组仍按最后说话时间 */
+export async function setConversationPinned(input: {
+  user_id: string;
+  conversation_id: string;
+  pinned: boolean;
+}): Promise<ConversationSummary> {
+  const [row] = await getDb()
+    .update(conversation)
+    .set({ pinnedAt: input.pinned ? new Date() : null })
+    .where(
+      and(
+        eq(conversation.id, input.conversation_id),
+        eq(conversation.userId, input.user_id),
+      ),
+    )
+    .returning({
+      id: conversation.id,
+      title: conversation.title,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+      pinnedAt: conversation.pinnedAt,
+    });
+
+  if (!row) throw new ConversationNotFoundError();
+  return {
+    id: row.id,
+    title: row.title,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+    pinned_at: row.pinnedAt?.toISOString() ?? null,
     last_message: null,
   };
 }

@@ -1,5 +1,5 @@
 import type { FormEvent, RefObject } from 'react';
-import { SendIcon } from './Icons';
+import { LoadingIcon, SendIcon } from './Icons';
 
 interface Props {
   value: string;
@@ -41,7 +41,7 @@ export function Composer({
           aria-label="发送"
           disabled={sending || !value.trim()}
         >
-          {sending ? <span className="pill-sending">…</span> : <SendIcon />}
+          {sending ? <LoadingIcon /> : <SendIcon />}
         </button>
       </div>
     </form>

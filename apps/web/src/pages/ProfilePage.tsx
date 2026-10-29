@@ -3,7 +3,14 @@ import { Link } from 'react-router';
 import { getProfile, putProfile } from '../api/client';
 import type { Account, Goal } from '../api/types';
 import { useAuthUser } from '../auth/AuthContext';
-import { InfoIcon, WarnIcon } from '../components/Icons';
+import {
+  FileTextIcon,
+  FlameIcon,
+  IdCardIcon,
+  InfoIcon,
+  SettingsIcon,
+  WarnIcon,
+} from '../components/Icons';
 import { LoadError } from '../components/LoadError';
 import { OptionField } from '../components/OptionField';
 import { TrainingField } from '../components/TrainingField';
@@ -141,8 +148,8 @@ export function ProfilePage() {
           {user ? <p className="profile-bio">{accountSummary(user)}</p> : null}
         </div>
         {user ? (
-          <Link to="/settings" className="profile-settings">
-            设置
+          <Link to="/settings" className="profile-settings" aria-label="设置">
+            <SettingsIcon />
           </Link>
         ) : null}
       </div>
@@ -156,7 +163,10 @@ export function ProfilePage() {
 
       <form onSubmit={handleSubmit} noValidate>
         <section className="sec" aria-label="身体数据">
-          <p className="group-label">身体数据</p>
+          <p className="group-label icon-label">
+            <IdCardIcon />
+            身体数据
+          </p>
           <div className="list-card">
             <label className="set-row">
               <span className="lbl">身高</span>
@@ -212,7 +222,10 @@ export function ProfilePage() {
         </section>
 
         <section className="sec" aria-label="训练" style={{ marginTop: 16 }}>
-          <p className="group-label">训练</p>
+          <p className="group-label icon-label">
+            <FlameIcon />
+            训练
+          </p>
           <div className="list-card">
             <div className="set-row">
               <span className="lbl">训练年限</span>
@@ -257,7 +270,10 @@ export function ProfilePage() {
         ) : null}
 
         <section className="sec" aria-label="隐私与数据" style={{ marginTop: 16 }}>
-          <p className="group-label">隐私与数据</p>
+          <p className="group-label icon-label">
+            <FileTextIcon />
+            隐私与数据
+          </p>
           <div className="list-card">
             <button
               type="button"

@@ -1,8 +1,8 @@
 import type { AssessmentCard, Citation } from '../api/types';
 import { numberClaims } from '../lib/citations';
-import { formatMmSs } from '../lib/format';
+import { formatCitationTs } from '../lib/format';
 import { verdictSentence } from '../lib/verdict';
-import { ChartIcon, InfoIcon, LinkIcon } from './Icons';
+import { ChartIcon, ChevronRightIcon, InfoIcon, LinkIcon } from './Icons';
 
 /** 评估卡：有源 / 无源靠标签 + 结构区分，不只靠颜色。 */
 export function AssessmentCardView({ card }: { card: AssessmentCard }) {
@@ -66,7 +66,8 @@ export function AssessmentCardView({ card }: { card: AssessmentCard }) {
 }
 
 export function SourceBlock({ citation }: { citation: Citation }) {
-  const ts = formatMmSs(citation.start_ts);
+  // 不足 1 秒的起点没有定位意义，整块时间标签不渲染
+  const ts = formatCitationTs(citation.start_ts);
   return (
     <div className="src">
       <div className="src-top">
@@ -76,15 +77,16 @@ export function SourceBlock({ citation }: { citation: Citation }) {
         <span className="vt">{citation.title}</span>
       </div>
       <div className="src-bot">
-        <span className="ts">{ts}</span>
+        {ts ? <span className="ts">{ts}</span> : null}
         <a
           className="go"
           href={citation.url}
           target="_blank"
           rel="noreferrer"
-          aria-label={`看原片 ${ts}`}
+          aria-label={ts ? `看原片 ${ts}` : '看原片'}
         >
-          看原片<span aria-hidden="true"> ›</span>
+          看原片
+          <ChevronRightIcon size={13} />
         </a>
       </div>
     </div>

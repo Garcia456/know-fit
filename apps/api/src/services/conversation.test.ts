@@ -12,6 +12,7 @@ import {
   normalizeTitle,
   renameConversation,
   resolveConversation,
+  setConversationPinned,
   TITLE_MAX,
 } from './conversation.js';
 import { closeDb, getDb, getPool } from './pool.js';
@@ -169,6 +170,34 @@ describe('重命名', () => {
     await expect(
       renameConversation({ user_id: SINGLE_USER_ID, conversation_id: id, title: '' }),
     ).rejects.toThrow('1–40');
+  });
+});
+
+describe('置顶', () => {
+  it('置顶后排最前，不篡改 updatedAt；取消后回到原位', async () => {
+    const pinned = await newConversation(`${MARK}置顶`);
+    const other = await newConversation(`${MARK}不置顶`);
+    const before = (await getConversation(SINGLE_USER_ID, pinned)).updated_at;
+
+    const on = await setConversationPinned({
+      user_id: SINGLE_USER_ID,
+      conversation_id: pinned,
+      pinned: true,
+    });
+    expect(on.pinned_at).not.toBeNull();
+    expect(on.updated_at).toBe(before);
+
+    const list = await listConversations(SINGLE_USER_ID);
+    const mine = list.filter((c) => c.title.startsWith(MARK));
+    expect(mine[0]?.id).toBe(pinned);
+    expect(mine.findIndex((c) => c.id === other)).toBeGreaterThan(0);
+
+    const off = await setConversationPinned({
+      user_id: SINGLE_USER_ID,
+      conversation_id: pinned,
+      pinned: false,
+    });
+    expect(off.pinned_at).toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatTraining } from '../lib/profile';
 import { BottomSheet } from './BottomSheet';
+import { ChevronDownIcon } from './Icons';
 import { WheelPicker } from './WheelPicker';
 
 interface Props {
@@ -34,8 +35,8 @@ export function TrainingField({ years, months, onChange }: Props) {
         onClick={openSheet}
       >
         <span className="field__value">{formatTraining(years, months)}</span>
-        <span className="field__chevron" aria-hidden="true">
-          ▾
+        <span className="field__chevron">
+          <ChevronDownIcon />
         </span>
       </button>
 

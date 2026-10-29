@@ -85,6 +85,13 @@
       "when": 1793100000000,
       "tag": "0011_bodyweight_and_set_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793247807801,
+      "tag": "0012_conversation_pin",
+      "breakpoints": true
     }
   ]
 }

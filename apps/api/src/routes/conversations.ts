@@ -7,6 +7,7 @@ import {
   listConversations,
   normalizeTitle,
   renameConversation,
+  setConversationPinned,
 } from '../services/conversation.js';
 
 /**
@@ -14,7 +15,10 @@ import {
  * 🔴 删除只删会话与消息，不动训练记录。
  */
 
-const RenameSchema = z.object({ title: z.string() });
+const PatchSchema = z.object({
+  title: z.string().optional(),
+  pinned: z.boolean().optional(),
+});
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -48,18 +52,36 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
       await reply.code(400).send({ error: '会话 id 不是合法 UUID' });
       return undefined;
     }
-    const parsed = RenameSchema.safeParse(request.body);
-    if (!parsed.success) {
-      await reply.code(400).send({ error: '请求体需要 { title: string }' });
-      return undefined;
-    }
-    const title = normalizeTitle(parsed.data.title);
-    if (!title) {
-      await reply.code(400).send({ error: '标题需要 1–40 字' });
+    const parsed = PatchSchema.safeParse(request.body);
+    if (
+      !parsed.success ||
+      (parsed.data.title === undefined && parsed.data.pinned === undefined)
+    ) {
+      await reply.code(400).send({ error: '请求体需要 { title?: string, pinned?: boolean }' });
       return undefined;
     }
     try {
-      return { conversation: await renameConversation({ user_id: request.userId, conversation_id: id, title }) };
+      if (parsed.data.title !== undefined) {
+        const title = normalizeTitle(parsed.data.title);
+        if (!title) {
+          await reply.code(400).send({ error: '标题需要 1–40 字' });
+          return undefined;
+        }
+        return {
+          conversation: await renameConversation({
+            user_id: request.userId,
+            conversation_id: id,
+            title,
+          }),
+        };
+      }
+      return {
+        conversation: await setConversationPinned({
+          user_id: request.userId,
+          conversation_id: id,
+          pinned: parsed.data.pinned === true,
+        }),
+      };
     } catch (e) {
       if (e instanceof ConversationNotFoundError) {
         await reply.code(404).send({ error: '会话不存在' });

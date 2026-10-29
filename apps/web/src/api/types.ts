@@ -340,6 +340,7 @@ export interface ConversationSummary {
   title: string;
   created_at: string;
   updated_at: string;
+  pinned_at: string | null;
   last_message: string | null;
 }
 

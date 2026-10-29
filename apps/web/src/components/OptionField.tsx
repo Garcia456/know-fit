@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BottomSheet } from './BottomSheet';
+import { ChevronDownIcon } from './Icons';
 
 interface Props {
   label: string;
@@ -24,8 +25,8 @@ export function OptionField({ label, value, options, onChange }: Props) {
         onClick={() => setOpen(true)}
       >
         <span className="field__value">{current?.label ?? '未填'}</span>
-        <span className="field__chevron" aria-hidden="true">
-          ▾
+        <span className="field__chevron">
+          <ChevronDownIcon />
         </span>
       </button>
 

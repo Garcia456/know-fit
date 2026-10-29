@@ -9,6 +9,12 @@ export function formatMmSs(seconds: number | null | undefined): string {
   return `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
+/** 引用时间点：不足 1 秒没法定位，返回 null 让调用方不显示 */
+export function formatCitationTs(seconds: number | null | undefined): string | null {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 1) return null;
+  return formatMmSs(seconds);
+}
+
 const kgFormatter = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 });
 
 export function formatKg(value: number): string {

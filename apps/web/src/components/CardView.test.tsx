@@ -206,6 +206,28 @@ describe('评估卡片的有源 / 无源区分', () => {
     expect(screen.queryByText('全程控制，别甩。')).toBeNull();
   });
 
+  it('起点不足 1 秒：不显示 0:00 这类时间点', () => {
+    render(
+      <AssessmentCardView
+        card={{
+          ...baseAssessment,
+          citations: [
+            {
+              citation_id: 'c-1',
+              creator: '谭成义',
+              title: '背部训练要点',
+              url: 'https://example.com/video',
+              start_ts: 0.4,
+              short_quote: '全程控制，别甩。',
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.queryByText('0:00')).toBeNull();
+    expect(screen.getByRole('link', { name: '看原片' })).toBeDefined();
+  });
+
   it('无源：虚线标签 + nosrc 块，无链接', () => {
     render(
       <AssessmentCardView
