@@ -75,5 +75,7 @@ export interface TurnDeps {
   }) => Promise<KnowledgeCard>;
   /** 自重动作算容量时要叠加的体重（训练日当天或之前最近一次） */
   bodyweightFor?: (input: { user_id: string; date: string }) => Promise<number | null>;
+  /** 「记录体重」工具 —— 落库实现由服务层注入，同一天覆盖 */
+  recordWeight?: (input: { user_id: string; date: string; weight_kg: number }) => Promise<void>;
   now?: () => Date;
 }

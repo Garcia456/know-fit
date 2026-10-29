@@ -44,6 +44,10 @@ export const TurnState = z.object({
   /** 规范化后的动作 —— 卡片与落库共用一份，避免两处各归一次 */
   card_exercises: z.array(WorkoutCardExerciseSchema).default([]),
 
+  /** 记体重工具落库后的回执 */
+  weight_kg: z.number().nullable().default(null),
+  weight_date: z.string().nullable().default(null),
+
   card: TurnCardSchema.nullable().default(null),
   /** 纯评估 / 混合意图的评估结果；没有评估时为 null */
   assessment: AssessmentCardSchema.nullable().default(null),

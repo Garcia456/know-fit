@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FocusEvent } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { Link, useSearchParams } from 'react-router';
-import { getHistory, getSession } from '../api/client';
+import { deleteSession, getHistory, getSession, putSession } from '../api/client';
 import type { HistoryItem, SessionDetail } from '../api/types';
-import { ArrowDownIcon, ArrowUpIcon, ChartIcon } from '../components/Icons';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChartIcon,
+  CheckIcon,
+  CloseIcon,
+  SquarePenIcon,
+  TrashIcon,
+} from '../components/Icons';
 import { LoadError } from '../components/LoadError';
 import { VolumeHookView } from '../components/VolumeHookView';
 import { addMonths, monthGrid, parseDateKey, startOfMonth, toDateKey } from '../lib/calendar';
@@ -57,6 +65,36 @@ export function DataPage() {
   function retry() {
     setError(null);
     setReloadTick((n) => n + 1);
+  }
+
+  // 编辑保存后以服务端回读为准：详情换新，列表里的组数 / 容量跟着换
+  function handleSaved(detail: SessionDetail) {
+    setDetails((prev) => ({ ...prev, [detail.session_id]: detail }));
+    setHistory((prev) =>
+      prev
+        ? prev.map((item) =>
+            item.session_id === detail.session_id
+              ? {
+                  ...item,
+                  split_label: detail.split_label,
+                  status: detail.status,
+                  missing_fields: detail.missing_fields,
+                  working_sets: detail.volume.working_sets,
+                  volume_kg: detail.volume.total_volume_kg,
+                }
+              : item,
+          )
+        : prev,
+    );
+  }
+
+  function handleDeleted(id: string) {
+    setHistory((prev) => (prev ? prev.filter((item) => item.session_id !== id) : prev));
+    setDetails((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }
 
   // 抽屉跳过来时按 ?date= 选中
@@ -257,7 +295,13 @@ export function DataPage() {
           </p>
         ) : selected ? (
           visible.map((s) => (
-            <DayCard key={s.session_id} item={s} detail={details[s.session_id]} />
+            <DayCard
+              key={s.session_id}
+              item={s}
+              detail={details[s.session_id]}
+              onSaved={handleSaved}
+              onDeleted={handleDeleted}
+            />
           ))
         ) : (
           <div className="list-card">
@@ -300,15 +344,232 @@ export function DataPage() {
   );
 }
 
-function DayCard({ item, detail }: { item: HistoryItem; detail: SessionDetail | undefined }) {
+interface Props {
+  item: HistoryItem;
+  detail: SessionDetail | undefined;
+  onSaved: (detail: SessionDetail) => void;
+  onDeleted: (id: string) => void;
+}
+
+interface DraftSet {
+  weight: string;
+  reps: string;
+  setType: 'warmup' | 'working';
+  isInferred: boolean;
+}
+
+interface DraftExercise {
+  raw_name: string;
+  sets: DraftSet[];
+}
+
+function toDraft(detail: SessionDetail): DraftExercise[] {
+  return detail.exercises.map((ex) => ({
+    raw_name: ex.raw_name,
+    sets: ex.sets.map((set) => ({
+      weight: set.weight_kg === null ? '' : String(set.weight_kg),
+      reps: set.reps === null ? '' : String(set.reps),
+      setType: set.set_type,
+      isInferred: set.is_inferred,
+    })),
+  }));
+}
+
+/** 聚焦即全选：输入第一个数字时旧值被替换 */
+function selectAll(e: FocusEvent<HTMLInputElement>) {
+  e.currentTarget.select();
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, '');
+}
+
+function decimalText(value: string) {
+  const cleaned = value.replace(/[^\d.]/g, '');
+  const dot = cleaned.indexOf('.');
+  if (dot === -1) return cleaned;
+  return `${cleaned.slice(0, dot)}.${cleaned.slice(dot + 1).replace(/\./g, '')}`;
+}
+
+function DayCard({ item, detail, onSaved, onDeleted }: Props) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<DraftExercise[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const status = detail?.status ?? item.status;
+
+  function startEdit() {
+    if (!detail) return;
+    setDraft(toDraft(detail));
+    setEditing(true);
+    setConfirming(false);
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setDraft([]);
+    setError(null);
+  }
+
+  function patchSet(exIndex: number, setIndex: number, patch: Partial<DraftSet>) {
+    setDraft((prev) =>
+      prev.map((ex, i) =>
+        i === exIndex
+          ? { ...ex, sets: ex.sets.map((set, j) => (j === setIndex ? { ...set, ...patch } : set)) }
+          : ex,
+      ),
+    );
+  }
+
+  async function handleSave() {
+    if (!detail) return;
+    setError(null);
+    const exercises: { raw_name: string; sets: { weight_kg: number | null; reps: number | null }[] }[] =
+      [];
+    for (const ex of draft) {
+      const raw_name = ex.raw_name.trim();
+      if (!raw_name) {
+        setError('动作名不能为空');
+        return;
+      }
+      const sets: { weight_kg: number | null; reps: number | null }[] = [];
+      for (const set of ex.sets) {
+        const weightText = set.weight.trim();
+        const repsText = set.reps.trim();
+        const weight_kg = weightText === '' ? null : Number(weightText);
+        const reps = repsText === '' ? null : Number(repsText);
+        if (weight_kg !== null && (!Number.isFinite(weight_kg) || weight_kg < 0)) {
+          setError('重量要填数字');
+          return;
+        }
+        if (reps !== null && (!Number.isInteger(reps) || reps <= 0)) {
+          setError('次数要填正整数');
+          return;
+        }
+        sets.push({ weight_kg, reps });
+      }
+      exercises.push({ raw_name, sets });
+    }
+
+    setSaving(true);
+    try {
+      const next = await putSession(item.session_id, exercises, detail.note);
+      onSaved(next);
+      setEditing(false);
+      setDraft([]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteSession(item.session_id);
+      onDeleted(item.session_id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除失败');
+      setDeleting(false);
+    }
+  }
+
   return (
     <article className="card">
       <div className="card-hd">
         <h3>{item.split_label ?? '训练'}</h3>
-        <span className={item.status === 'complete' ? 'tag' : 'tag tag--dashed'}>
-          {STATUS_LABELS[item.status]}
+        <span className={status === 'complete' ? 'tag' : 'tag tag--dashed'}>
+          {STATUS_LABELS[status]}
         </span>
+        {detail ? (
+          <div className="card-actions">
+            {editing ? (
+              <>
+                <button
+                  type="button"
+                  className="icon-btn icon-btn--sm"
+                  aria-label="撤销修改"
+                  title="撤销修改"
+                  onClick={cancelEdit}
+                  disabled={saving}
+                >
+                  <CloseIcon />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn icon-btn--sm"
+                  aria-label="保存修改"
+                  title="保存修改"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  <CheckIcon />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="icon-btn icon-btn--sm"
+                  aria-label="编辑这次训练"
+                  title="编辑"
+                  onClick={startEdit}
+                >
+                  <SquarePenIcon />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn icon-btn--sm"
+                  aria-label="删除这次训练"
+                  title="删除"
+                  onClick={() => {
+                    setConfirming(true);
+                    setError(null);
+                  }}
+                >
+                  <TrashIcon />
+                </button>
+              </>
+            )}
+          </div>
+        ) : null}
       </div>
+
+      {confirming ? (
+        <div className="danger-box" role="alertdialog" aria-label="确认删除这次训练">
+          <p>删掉这次训练？训练记录和评估会一起删除，不能恢复。</p>
+          <div className="danger-actions">
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => setConfirming(false)}
+              disabled={deleting}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn btn--danger btn--sm"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? '删除中…' : '确认删除'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {detail ? (
         <>
@@ -316,28 +577,88 @@ function DayCard({ item, detail }: { item: HistoryItem; detail: SessionDetail | 
             <VolumeHookView hook={detail.hook} />
           </div>
 
-          <ul className="exercise-list">
-            {detail.exercises.map((ex, exIndex) => (
-              <li key={`${ex.raw_name}-${exIndex}`} className="exercise">
-                <div className="exercise__name">{ex.raw_name}</div>
-                <ul className="set-list">
-                  {ex.sets.map((set, i) => (
-                    <li key={i}>
-                      {set.weight_kg === null ? '—' : formatKg(set.weight_kg)} ×{' '}
-                      {set.reps === null ? '—' : set.reps}
-                      {set.set_type === 'warmup' ? <span className="tag">热身</span> : null}
-                      {set.is_inferred ? <span className="tag tag--dashed">推测</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
+          {editing ? (
+            <ul className="exercise-list">
+              {draft.map((ex, exIndex) => (
+                <li key={exIndex} className="exercise">
+                  <label className="edit-box edit-box--name">
+                    <input
+                      className="edit-box__input"
+                      aria-label={`第 ${exIndex + 1} 个动作名称`}
+                      value={ex.raw_name}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev.map((row, i) =>
+                            i === exIndex ? { ...row, raw_name: e.target.value } : row,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <ul className="set-list">
+                    {ex.sets.map((set, setIndex) => (
+                      <li key={setIndex} className="edit-set">
+                        <label className="edit-box">
+                          <input
+                            className="edit-box__input"
+                            aria-label={`第 ${exIndex + 1} 个动作第 ${setIndex + 1} 组重量`}
+                            inputMode="decimal"
+                            placeholder="—"
+                            value={set.weight}
+                            onChange={(e) =>
+                              patchSet(exIndex, setIndex, { weight: decimalText(e.target.value) })
+                            }
+                            onFocus={selectAll}
+                          />
+                          <span className="edit-box__unit">kg</span>
+                        </label>
+                        <span className="edit-set__x">×</span>
+                        <label className="edit-box">
+                          <input
+                            className="edit-box__input"
+                            aria-label={`第 ${exIndex + 1} 个动作第 ${setIndex + 1} 组次数`}
+                            inputMode="numeric"
+                            placeholder="—"
+                            value={set.reps}
+                            onChange={(e) =>
+                              patchSet(exIndex, setIndex, { reps: onlyDigits(e.target.value) })
+                            }
+                            onFocus={selectAll}
+                          />
+                          <span className="edit-box__unit">次</span>
+                        </label>
+                        {set.setType === 'warmup' ? <span className="tag">热身</span> : null}
+                        {set.isInferred ? <span className="tag tag--dashed">推测</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="exercise-list">
+              {detail.exercises.map((ex, exIndex) => (
+                <li key={`${ex.raw_name}-${exIndex}`} className="exercise">
+                  <div className="exercise__name">{ex.raw_name}</div>
+                  <ul className="set-list">
+                    {ex.sets.map((set, i) => (
+                      <li key={i}>
+                        {set.weight_kg === null ? '—' : formatKg(set.weight_kg)} ×{' '}
+                        {set.reps === null ? '—' : set.reps}
+                        {set.set_type === 'warmup' ? <span className="tag">热身</span> : null}
+                        {set.is_inferred ? <span className="tag tag--dashed">推测</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
 
           {detail.missing_fields.length > 0 ? (
             <p className="page-hint">
               还缺：{detail.missing_fields.map((f) => MISSING_LABELS[f] ?? f).join('、')}
-              —— 回到会话页可以补
+              {editing ? ' —— 改完保存即可补上' : ' —— 回到会话页可以补'}
             </p>
           ) : null}
           {detail.note ? <p className="card-meta">备注：{detail.note}</p> : null}

@@ -83,7 +83,32 @@ const details: Record<string, SessionDetail> = {
 };
 
 function stubApi(list: HistoryItem[]) {
-  const fetchMock = vi.fn((url: string) => {
+  const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT') {
+      const id = decodeURIComponent(url.slice('/api/sessions/'.length));
+      const base: SessionDetail = details[id] ?? details['s-prev']!;
+      const patch = JSON.parse(String(init.body)) as {
+        exercises: { raw_name: string; sets: { weight_kg: number | null; reps: number | null }[] }[];
+      };
+      const updated: SessionDetail = {
+        ...base,
+        status: 'complete',
+        missing_fields: [],
+        exercises: base.exercises.map((ex, i) => ({
+          ...ex,
+          raw_name: patch.exercises[i]?.raw_name ?? ex.raw_name,
+          sets: ex.sets.map((set, j) => ({
+            ...set,
+            weight_kg: patch.exercises[i]?.sets[j]?.weight_kg ?? set.weight_kg,
+            reps: patch.exercises[i]?.sets[j]?.reps ?? set.reps,
+          })),
+        })),
+      };
+      return Promise.resolve({ ok: true, status: 200, json: async () => updated });
+    }
+    if (init?.method === 'DELETE') {
+      return Promise.resolve({ ok: true, status: 204, json: async () => undefined });
+    }
     let body: unknown = {};
     if (url.startsWith('/api/history')) body = { items: list };
     else if (url.startsWith('/api/sessions/')) {
@@ -190,6 +215,57 @@ describe('历史页', () => {
     expect(screen.queryByText('训练容量')).toBeNull();
     expect(screen.queryByText('体重趋势')).toBeNull();
     expect(screen.queryByLabelText('正面肌肉训练量')).toBeNull();
+  });
+
+  it('编辑训练：改重量与次数后保存，卡片按回读结果刷新', async () => {
+    const fetchMock = stubApi(items);
+    renderPage(`/data?date=${todayKey}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑这次训练' }));
+    expect(screen.queryByRole('button', { name: '删除这次训练' })).toBeNull();
+    const nameInput = screen.getByLabelText('第 1 个动作名称') as HTMLInputElement;
+    expect(nameInput.value).toBe('引体向上');
+    expect((screen.getByLabelText('第 1 个动作第 1 组重量') as HTMLInputElement).value).toBe('70');
+
+    fireEvent.change(screen.getByLabelText('第 1 个动作第 1 组重量'), { target: { value: '80' } });
+    fireEvent.change(screen.getByLabelText('第 1 个动作第 1 组次数'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+    await screen.findByText(/80 kg × 10/);
+    expect(screen.queryByRole('button', { name: '保存修改' })).toBeNull();
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({
+      exercises: [
+        { raw_name: '引体向上', sets: [{ weight_kg: 80, reps: 10 }] },
+      ],
+      note: null,
+    });
+  });
+
+  it('撤销修改不改动卡片', async () => {
+    stubApi(items);
+    renderPage(`/data?date=${todayKey}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑这次训练' }));
+    fireEvent.change(screen.getByLabelText('第 1 个动作第 1 组重量'), { target: { value: '999' } });
+    fireEvent.click(screen.getByRole('button', { name: '撤销修改' }));
+
+    expect(screen.queryByLabelText('第 1 个动作第 1 组重量')).toBeNull();
+    expect(screen.getByText(/70 kg × —/)).toBeDefined();
+  });
+
+  it('删除训练先二次确认，确认后从列表移除', async () => {
+    const fetchMock = stubApi(items);
+    renderPage(`/data?date=${todayKey}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: '删除这次训练' }));
+    const dialog = screen.getByRole('alertdialog', { name: '确认删除这次训练' });
+    expect(dialog.textContent).toContain('不能恢复');
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: '确认删除' }));
+    await screen.findByText('这天没有训练');
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
   });
 
   it('读失败时保留日历与列表骨架，给重试', async () => {

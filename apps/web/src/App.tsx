@@ -4,7 +4,7 @@ import { BrowserRouter, Route, Routes, useNavigate } from 'react-router';
 import { AuthGate } from './auth/AuthGate';
 import { AuthProvider } from './auth/AuthContext';
 import { HistoryDrawer } from './components/HistoryDrawer';
-import { readConversationId, writeConversationId } from './lib/conversation';
+import { writeConversationId } from './lib/conversation';
 import { PageSwipe } from './components/PageSwipe';
 import { TopNav } from './components/TopNav';
 import { ChatPage } from './pages/ChatPage';
@@ -48,7 +48,11 @@ export function AppRoutes({
 export function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [resetToken, setResetToken] = useState(0);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(readConversationId);
+  // 每次进入页面开新会话：不接上次留下的 id，历史要从抽屉里主动选
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
+    writeConversationId(null);
+    return null;
+  });
   const navigate = useNavigate();
 
   const onConversationChange = useCallback((id: string | null) => {

@@ -3,7 +3,14 @@ import { eq } from 'drizzle-orm';
 import { user, workoutSession } from '../db/schema.js';
 import { SINGLE_USER_ID } from '../graph/state.js';
 import type { PersistWorkoutInput } from '../graph/deps.js';
-import { appendToSession, getSessionDetail, listHistory, listSessions } from './history.js';
+import {
+  appendToSession,
+  deleteSession,
+  getSessionDetail,
+  listHistory,
+  listSessions,
+  updateSession,
+} from './history.js';
 import { getDb, getPool, closeDb } from './pool.js';
 import { persistWorkout } from './record.js';
 
@@ -142,6 +149,52 @@ describe('appendToSession', () => {
       },
     });
     expect(result).toBe('not_found');
+  });
+});
+
+describe('updateSession', () => {
+  it('按顺序覆盖重量与次数，status / missing_fields 重算', async () => {
+    const detail = await updateSession({
+      user_id: SINGLE_USER_ID,
+      session_id: sessionId,
+      patch: {
+        exercises: [
+          {
+            raw_name: 'e2e-history-引体向上',
+            sets: [{ weight_kg: 72.5, reps: null }],
+          },
+        ],
+        note: '手动改到 72.5',
+      },
+    });
+    if (detail === 'not_found') throw new Error('session 不见了');
+
+    expect(detail.status).toBe('incomplete');
+    expect(detail.missing_fields).toEqual(['reps']);
+    expect(detail.exercises[0]?.sets[0]?.weight_kg).toBe(72.5);
+    expect(detail.exercises[0]?.sets[0]?.reps).toBeNull();
+    expect(detail.note).toBe('手动改到 72.5');
+  });
+
+  it('不存在返回 not_found', async () => {
+    const detail = await updateSession({
+      user_id: SINGLE_USER_ID,
+      session_id: '00000000-0000-4000-8000-0000000000ff',
+      patch: {
+        exercises: [{ raw_name: 'x', sets: [{ weight_kg: 1, reps: 1 }] }],
+      },
+    });
+    expect(detail).toBe('not_found');
+  });
+});
+
+describe('deleteSession', () => {
+  it('删掉训练后详情读不到，再删返回 false', async () => {
+    expect(await deleteSession({ user_id: SINGLE_USER_ID, session_id: sessionId })).toBe(true);
+    expect(
+      await getSessionDetail({ user_id: SINGLE_USER_ID, session_id: sessionId }),
+    ).toBeNull();
+    expect(await deleteSession({ user_id: SINGLE_USER_ID, session_id: sessionId })).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
 import { END, START, StateGraph } from '@langchain/langgraph';
-import { ExtractionSchema, IntentResultSchema } from '../contracts/extraction.js';
+import { ExtractionSchema, IntentResultSchema, WeightResultSchema } from '../contracts/extraction.js';
 import type { WorkoutCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
 import { resolveDate } from '../extraction/dates.js';
 import { normalizeExerciseName } from '../extraction/normalize.js';
@@ -7,7 +7,7 @@ import { computeVolume } from '../metrics/volume.js';
 import { isBodyweightExercise } from '../metrics/bodyweight.js';
 import { computeStatus } from '../extraction/status.js';
 import { toKilograms } from '../extraction/units.js';
-import { CHAT_SYSTEM, EXTRACTION_SYSTEM, INTENT_SYSTEM } from '../llm/prompts.js';
+import { CHAT_SYSTEM, EXTRACTION_SYSTEM, INTENT_SYSTEM, WEIGHT_SYSTEM } from '../llm/prompts.js';
 import type { PersistExerciseInput, TurnDeps } from './deps.js';
 import { checkGuard } from './guard.js';
 import { boundaryReply, composeNotice, refusalReply } from './replies.js';
@@ -166,6 +166,45 @@ export function buildTurnGraph(deps: TurnDeps) {
         };
       })
 
+      // ── 工具节点：记体重 ──
+      .addNode('record_weight', async (state) => {
+        const out = await deps.llm.structured({
+          system: WEIGHT_SYSTEM,
+          input: state.message,
+          schema: WeightResultSchema,
+          name: 'weight',
+        });
+
+        if (out.weight_kg === null) {
+          return {
+            card: {
+              kind: 'chat' as const,
+              reply: '这句里没听到体重数字 —— 可以说「今天体重 72kg」。',
+            },
+          };
+        }
+        // 20–300kg 之外不像体重：不落库，也不替用户换算
+        if (out.weight_kg < 20 || out.weight_kg > 300) {
+          return {
+            card: {
+              kind: 'chat' as const,
+              reply: '这个数字不太像体重，确认一下单位（kg）再记。',
+            },
+          };
+        }
+        if (!deps.recordWeight) {
+          return { card: { kind: 'chat' as const, reply: '体重记录暂时用不了，稍后再试。' } };
+        }
+
+        const date = resolveDate(out.day_hint, now());
+        await deps.recordWeight({ user_id: state.user_id, date, weight_kg: out.weight_kg });
+        return {
+          weight_kg: out.weight_kg,
+          weight_date: date,
+          card: { kind: 'weight' as const, date, weight_kg: out.weight_kg },
+        };
+      })
+
       .addNode('compose_card', async (state) => {
         const extracted = state.extracted;
 
@@ -300,6 +339,7 @@ export function buildTurnGraph(deps: TurnDeps) {
       .addConditionalEdges('classify_intent', (state) => {
         if (state.intent === 'record' || state.intent === 'mixed') return 'extract_record';
         if (state.intent === 'assess') return 'assess_node';
+        if (state.intent === 'weight') return 'record_weight';
         if (state.intent === 'knowledge') return 'knowledge_node';
         if (state.intent === 'chat') return 'chat_node';
         if (state.intent === 'boundary') return 'boundary_node';
@@ -312,6 +352,7 @@ export function buildTurnGraph(deps: TurnDeps) {
       .addConditionalEdges('compose_card', (state) =>
         state.intent === 'mixed' && state.record_ref?.type === 'workout' ? 'assess_node' : END,
       )
+      .addEdge('record_weight', END)
       .addEdge('knowledge_node', END)
       .addEdge('assess_node', END)
       .addEdge('chat_node', END)

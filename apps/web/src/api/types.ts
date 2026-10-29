@@ -3,7 +3,15 @@
  * 🔴 不出现 text / content / transcript —— 界面没有渲染全文的通道（ADR-008）。
  */
 
-export type Intent = 'record' | 'assess' | 'mixed' | 'knowledge' | 'chat' | 'reject' | 'boundary';
+export type Intent =
+  | 'record'
+  | 'assess'
+  | 'mixed'
+  | 'knowledge'
+  | 'chat'
+  | 'reject'
+  | 'boundary'
+  | 'weight';
 export type RecordStatus = 'complete' | 'incomplete';
 export type MissingField = 'exercises' | 'reps' | 'weight_kg';
 export type RefusalReason = 'medical' | 'medication' | 'extreme_diet' | 'off_topic';
@@ -146,6 +154,12 @@ export interface CorrectionCard {
   working_sets: number;
 }
 
+export interface WeightCard {
+  kind: 'weight';
+  date: string;
+  weight_kg: number;
+}
+
 export type TurnCard =
   | WorkoutCard
   | MealCard
@@ -153,7 +167,8 @@ export type TurnCard =
   | KnowledgeCard
   | RefusalCard
   | BoundaryCard
-  | CorrectionCard;
+  | CorrectionCard
+  | WeightCard;
 
 export interface AssessmentLookup {
   status: 'ok' | 'none' | 'not_found' | 'insufficient';
@@ -290,6 +305,8 @@ export interface Account {
   birthday: string | null;
   gender: Gender | null;
   bio: string | null;
+  /** 压缩后的图片 data URL；null = 用昵称首字 */
+  avatar: string | null;
   age: number | null;
   created_at: string;
 }
@@ -299,6 +316,7 @@ export interface AccountInput {
   birthday: string | null;
   gender: Gender | null;
   bio: string | null;
+  avatar?: string | null;
 }
 
 export interface ClearTrainingResult {

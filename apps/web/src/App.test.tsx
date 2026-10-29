@@ -160,6 +160,18 @@ function renderShell(path = '/', sessions: unknown[] = []) {
   return fetchMock;
 }
 
+describe('进入页面', () => {
+  it('总是开新会话：不恢复上次留下的会话 id', () => {
+    localStorage.setItem('know-fit:conversation-id', 'c-old');
+    const fetchMock = renderShell('/');
+
+    expect(localStorage.getItem('know-fit:conversation-id')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/conversations/c-old')).toBe(
+      false,
+    );
+  });
+});
+
 describe('顶部导航', () => {
   it('四个 tab 都在，当前页用 aria-current 标出', async () => {
     renderShell('/');

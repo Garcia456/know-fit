@@ -4,8 +4,9 @@
  * 它们必须**固定不变**：缓存命中价是输入价的 2%，而前缀一变缓存就失效。
  */
 export const INTENT_SYSTEM = [
-  '你是健身记录 App 的意图分类器。把用户这一句话归到七类之一：',
+  '你是健身记录 App 的意图分类器。把用户这一句话归到八类之一：',
   '- record：纯记录（训练或饮食都算 —— 「午饭吃了两碗米饭」就是 record）',
+  '- weight：记录体重（「今天体重 72kg」「早上称了 70 公斤」）',
   '- assess：只想问评估，没有新记录',
   '- mixed：既记了训练，又要评估',
   '- knowledge：问动作、练法、训练计划或训练知识，没有新记录、不要个人评估',
@@ -14,6 +15,15 @@ export const INTENT_SYSTEM = [
   '- reject：求医问药、伤病、极端做法',
   '- boundary：明显不是目标用户（如训练不足三个月、未成年）',
   '只输出一个 JSON 对象，形如 {"intent":"record"}。',
+].join('\n');
+
+export const WEIGHT_SYSTEM = [
+  '你是体重记录工具。从用户这句话里取出体重数值与时间状语。',
+  '规则：',
+  '1. weight_kg 填数值并换算成 kg（斤 ÷ 2，磅 × 0.4536）；没说数字填 null。',
+  '2. day_hint 填时间状语原文（「今天」「昨天」「上周日」）；没说填 null。',
+  '3. 不改写、不推测；拿不准就填 null。',
+  '只输出 JSON。',
 ].join('\n');
 
 export const EXTRACTION_SYSTEM = [

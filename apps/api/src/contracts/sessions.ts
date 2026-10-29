@@ -82,6 +82,26 @@ export const PatchSessionRequestSchema = z.object({
   note: z.string().min(1).nullable().optional(),
 });
 
+/** 手动编辑：按现有顺序覆盖动作名 / 重量 / 次数；不增删动作与组 */
+export const UpdateSessionRequestSchema = z.object({
+  exercises: z
+    .array(
+      z.object({
+        raw_name: z.string().min(1),
+        sets: z
+          .array(
+            z.object({
+              weight_kg: z.number().min(0).max(2000).nullable(),
+              reps: z.number().int().min(0).max(1000).nullable(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .min(1),
+  note: z.string().max(500).nullable().optional(),
+});
+
 /** 记录级历史（对话抽屉）—— 没有会话实体，列的是可接回去的训练记录 */
 export const HistoryItemSchema = z.object({
   session_id: z.string().uuid(),
@@ -159,6 +179,7 @@ export type SessionListResponse = z.infer<typeof SessionListResponseSchema>;
 export type SessionExercise = z.infer<typeof SessionExerciseSchema>;
 export type SessionDetail = z.infer<typeof SessionDetailSchema>;
 export type PatchSessionRequest = z.infer<typeof PatchSessionRequestSchema>;
+export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequestSchema>;
 export type Profile = z.infer<typeof ProfileSchema>;
 export type ProfileInput = z.infer<typeof ProfileInputSchema>;
 export type Nudge = z.infer<typeof NudgeSchema>;

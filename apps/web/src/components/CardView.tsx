@@ -4,6 +4,7 @@ import type {
   MealType,
   MissingField,
   TurnCard,
+  WeightCard,
   WorkoutCard,
   WorkoutCardExercise,
 } from '../api/types';
@@ -72,7 +73,25 @@ export function CardView({ card, onAssess, assessingSessionId, onComplete, onQui
       );
     case 'correction':
       return <CorrectionCardView card={card} />;
+    case 'weight':
+      return <WeightCardView card={card} />;
   }
+}
+
+function WeightCardView({ card }: { card: WeightCard }) {
+  return (
+    <article className="card" aria-label="体重记录">
+      <div className="card-hd">
+        <CheckIcon />
+        <h3>体重已记录</h3>
+        <span className="tag">{formatMonthDay(card.date)}</span>
+      </div>
+      <div className="sum">
+        <span>当天体重</span>
+        <b>{formatKg(card.weight_kg)}</b>
+      </div>
+    </article>
+  );
 }
 
 function ExerciseRows({ exercises }: { exercises: WorkoutCardExercise[] }) {

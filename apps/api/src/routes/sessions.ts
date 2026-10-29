@@ -3,15 +3,18 @@ import {
   HistoryQuerySchema,
   PatchSessionRequestSchema,
   SessionListQuerySchema,
+  UpdateSessionRequestSchema,
   type HistoryResponse,
   type SessionDetail,
   type SessionListResponse,
 } from '../contracts/sessions.js';
 import {
   appendToSession,
+  deleteSession,
   getSessionDetail,
   listHistory,
   listSessions,
+  updateSession,
 } from '../services/history.js';
 
 /**
@@ -68,5 +71,36 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       return undefined;
     }
     return result;
+  });
+
+  // 手动编辑：整份覆盖动作名 / 重量 / 次数（不增删动作与组）
+  app.put('/sessions/:id', async (request, reply): Promise<SessionDetail | undefined> => {
+    const { id } = request.params as { id: string };
+    const parsed = UpdateSessionRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      await reply.code(400).send({ error: '请求体需要至少一个带组的动作（exercises）' });
+      return undefined;
+    }
+
+    const result = await updateSession({
+      user_id: request.userId,
+      session_id: id,
+      patch: parsed.data,
+    });
+    if (result === 'not_found') {
+      await reply.code(404).send({ error: '没有这条训练记录' });
+      return undefined;
+    }
+    return result;
+  });
+
+  app.delete('/sessions/:id', async (request, reply): Promise<void> => {
+    const { id } = request.params as { id: string };
+    const deleted = await deleteSession({ user_id: request.userId, session_id: id });
+    if (!deleted) {
+      await reply.code(404).send({ error: '没有这条训练记录' });
+      return;
+    }
+    await reply.code(204).send();
   });
 }

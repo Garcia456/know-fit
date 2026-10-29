@@ -35,12 +35,21 @@ export const LoginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
-/** 账号资料可改的只有这四个；邮箱注册后不可改。 */
+/** 头像只收压缩后的图片 data URL —— 不接受外链与任意字符串 */
+export const AvatarSchema = z
+  .string()
+  .max(200_000, '头像太大')
+  .regex(/^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/, '头像需要是图片 data URL')
+  .nullable();
+
+/** 账号资料可改的只有这几个；邮箱注册后不可改。 */
 export const AccountInputSchema = z.object({
   nickname: NicknameSchema,
   birthday: DateSchema.nullable(),
   gender: GenderSchema,
   bio: z.string().trim().max(80, '个性签名最多 80 字').nullable(),
+  /** 不传 = 不改头像（老客户端兼容） */
+  avatar: AvatarSchema.optional(),
 });
 
 /** 生日不存年龄：读时按自然年算。 */
@@ -51,6 +60,7 @@ export const UserSchema = z.object({
   birthday: DateSchema.nullable(),
   gender: GenderSchema,
   bio: z.string().nullable(),
+  avatar: z.string().nullable(),
   age: z.number().int().min(0).max(150).nullable(),
   created_at: z.string(),
 });

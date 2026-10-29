@@ -92,6 +92,13 @@
       "when": 1793247807801,
       "tag": "0012_conversation_pin",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793250000000,
+      "tag": "0013_user_avatar",
+      "breakpoints": true
     }
   ]
 }

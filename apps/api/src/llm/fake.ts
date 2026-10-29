@@ -32,6 +32,7 @@ function classifyIntent(input: string): Intent {
   const golden = GOLDEN_INTENTS[input];
   if (golden) return golden;
 
+  if (/体重|称了/.test(input)) return 'weight';
   if (has(input, CHAT_HINTS)) return 'chat';
   if (has(input, KNOWLEDGE_HINTS)) return 'knowledge';
   const assess = has(input, ASSESS_HINTS);
@@ -83,6 +84,22 @@ export function createFakeClient(): LlmClient {
 
       if (req.name === 'intent') {
         raw = { intent: classifyIntent(input) };
+      } else if (req.name === 'weight') {
+        const m = input.match(/(\d+(?:\.\d+)?)\s*(kg|公斤|千克|斤|磅|lb)?/i);
+        const rawValue = m ? Number(m[1]) : null;
+        const unit = m?.[2] ?? '';
+        const weight =
+          rawValue === null
+            ? null
+            : unit === '斤'
+              ? rawValue / 2
+              : /磅|lb/i.test(unit)
+                ? rawValue * 0.4536
+                : rawValue;
+        raw = {
+          weight_kg: weight === null ? null : Math.round(weight * 10) / 10,
+          day_hint: input.includes('昨天') ? '昨天' : input.includes('今天') ? '今天' : null,
+        };
       } else if (req.name === 'extraction') {
         raw = EXTRACTION_FIXTURES[input] ?? EMPTY_WORKOUT;
       } else if (req.name === 'claim_type') {

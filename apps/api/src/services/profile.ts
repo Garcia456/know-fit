@@ -111,6 +111,21 @@ export async function saveProfile(input: {
   return getProfile(input.user_id, now);
 }
 
+/** 「记录体重」工具落库 —— 同一天覆盖，跨天保留。 */
+export async function saveWeight(input: {
+  user_id: string;
+  date: string;
+  weight_kg: number;
+}): Promise<void> {
+  await getDb()
+    .insert(bodyMetric)
+    .values({ userId: input.user_id, date: input.date, weightKg: input.weight_kg })
+    .onConflictDoUpdate({
+      target: [bodyMetric.userId, bodyMetric.date],
+      set: { weightKg: input.weight_kg },
+    });
+}
+
 /** 某天的体重 —— 数据页以后要用；没有当天记录就返回 null，不拿最近值冒充。 */
 export async function weightOn(user_id: string, date: string): Promise<number | null> {
   const rows = await getDb()

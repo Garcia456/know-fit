@@ -120,6 +120,13 @@ export const CorrectionCardSchema = z.object({
   working_sets: z.number().int(),
 });
 
+/** 体重记录 —— 数值已落库，卡片只回算好的日期与数字 */
+export const WeightCardSchema = z.object({
+  kind: z.literal('weight'),
+  date: z.string(),
+  weight_kg: z.number(),
+});
+
 export const TurnCardSchema = z.discriminatedUnion('kind', [
   WorkoutCardSchema,
   MealCardSchema,
@@ -128,6 +135,7 @@ export const TurnCardSchema = z.discriminatedUnion('kind', [
   RefusalCardSchema,
   BoundaryCardSchema,
   CorrectionCardSchema,
+  WeightCardSchema,
 ]);
 
 /** 评估查到哪一步 —— 屏 11 靠它区分「没记录 / 数据不足」 */
@@ -167,6 +175,7 @@ export type KnowledgeCard = z.infer<typeof KnowledgeCardSchema>;
 export type RefusalCard = z.infer<typeof RefusalCardSchema>;
 export type BoundaryCard = z.infer<typeof BoundaryCardSchema>;
 export type CorrectionCard = z.infer<typeof CorrectionCardSchema>;
+export type WeightCard = z.infer<typeof WeightCardSchema>;
 export type AssessmentLookup = z.infer<typeof AssessmentLookupSchema>;
 export type TurnCard = z.infer<typeof TurnCardSchema>;
 export type TurnResponse = z.infer<typeof TurnResponseSchema>;

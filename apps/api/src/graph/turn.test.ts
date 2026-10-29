@@ -130,6 +130,59 @@ describe('数据钩子：记录完成后带一个算好的判定', () => {
   });
 });
 
+describe('体重工具：record_weight', () => {
+  function buildWithWeight(record = true) {
+    const s = stub();
+    const saved: { user_id: string; date: string; weight_kg: number }[] = [];
+    const graph = buildTurnGraph({
+      llm: createFakeClient(),
+      persistWorkout: s.persistWorkout,
+      ...(record
+        ? {
+            recordWeight: async (input: { user_id: string; date: string; weight_kg: number }) => {
+              saved.push(input);
+            },
+          }
+        : {}),
+      now: () => NOW,
+    });
+    return { graph, saved, calls: s.calls };
+  }
+
+  it('「今天体重 72kg」→ weight 卡片 + 写当天体重，不碰训练', async () => {
+    const { graph, saved, calls } = buildWithWeight();
+    const state = await graph.invoke({ message: '今天体重 72kg' });
+
+    expect(state.intent).toBe('weight');
+    expect(state.card).toEqual({ kind: 'weight', date: '2026-10-13', weight_kg: 72 });
+    expect(saved).toEqual([
+      { user_id: '00000000-0000-4000-8000-000000000001', date: '2026-10-13', weight_kg: 72 },
+    ]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('「昨天早上称了 70 公斤」→ 记到前一天', async () => {
+    const { graph, saved } = buildWithWeight();
+    const state = await graph.invoke({ message: '昨天早上称了 70 公斤' });
+    expect(state.card).toEqual({ kind: 'weight', date: '2026-10-12', weight_kg: 70 });
+    expect(saved[0]?.date).toBe('2026-10-12');
+  });
+
+  it('没有数字 → 追问一句，不写库', async () => {
+    const { graph, saved } = buildWithWeight();
+    const state = await graph.invoke({ message: '帮我记一下体重' });
+    expect(state.card?.kind).toBe('chat');
+    expect(saved).toHaveLength(0);
+  });
+
+  it('没注入 recordWeight → 说明暂时用不了，不抛错', async () => {
+    const { graph, saved } = buildWithWeight(false);
+    const state = await graph.invoke({ message: '今天体重 72kg' });
+    expect(state.card?.kind).toBe('chat');
+    expect(saved).toHaveLength(0);
+  });
+});
+
 describe('饮食：只走契约，不落库', () => {
   it('「午饭吃了两碗米饭」→ meal 卡片，且没有写库', async () => {
     const { graph, calls } = build();

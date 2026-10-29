@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Account } from '../api/types';
@@ -12,6 +12,7 @@ const me: Account = {
   birthday: '2000-01-15',
   gender: '男',
   bio: '练了三年',
+  avatar: null,
   age: 26,
   created_at: '2026-10-01T00:00:00.000Z',
 };
@@ -59,6 +60,27 @@ afterEach(() => {
 });
 
 describe('设置页', () => {
+  it('移除头像后保存，PATCH 里 avatar 为 null', async () => {
+    const withAvatar = { ...me, avatar: 'data:image/jpeg;base64,AAAA' };
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/me') return res(200, { user: withAvatar });
+      if (url === '/api/account' && init?.method === 'PATCH') {
+        return res(200, { user: { ...withAvatar, ...JSON.parse(String(init.body)) } });
+      }
+      return res(200, {});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderSettings();
+
+    fireEvent.click(await screen.findByRole('button', { name: '移除' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存资料' }));
+
+    await screen.findByText('已保存');
+    const patch = fetchMock.mock.calls.find(
+      ([url, init]) => url === '/api/account' && init?.method === 'PATCH',
+    );
+    await waitFor(() => expect(JSON.parse(String(patch?.[1]?.body)).avatar).toBeNull());
+  });
   it('回显账号资料，改昵称与签名后提交 PATCH', async () => {
     const fetchMock = stubApi();
     renderSettings();

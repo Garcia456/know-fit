@@ -78,6 +78,10 @@ export function CloseIcon() {
   return <LineIcon icon={X} />;
 }
 
+export function SquarePenIcon() {
+  return <LineIcon icon={SquarePen} />;
+}
+
 export function LinkIcon() {
   return <LineIcon icon={Link2} size={13} />;
 }

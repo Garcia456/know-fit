@@ -5,9 +5,11 @@ import type {
   SessionDetail,
   SessionExercise,
   SessionListItem,
+  UpdateSessionRequest,
 } from '../contracts/sessions.js';
 import type { MissingField } from '../contracts/extraction.js';
-import { exerciseEntry, setEntry, workoutSession } from '../db/schema.js';
+import { assessment, exerciseEntry, setEntry, workoutSession } from '../db/schema.js';
+import { normalizeExerciseName } from '../extraction/normalize.js';
 import { getDb } from './pool.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 import { computeVolume, type VolumeSet } from '../metrics/volume.js';
@@ -378,4 +380,128 @@ export async function appendToSession(input: {
   });
 
   return (await getSessionDetail({ user_id: input.user_id, session_id: input.session_id }))!;
+}
+
+/**
+ * 手动编辑：按现有顺序覆盖动作名 / 重量 / 次数。
+ * 不增删动作与组 —— 补全仍走 appendToSession，这里只改展示与数值。
+ */
+export async function updateSession(input: {
+  user_id: string;
+  session_id: string;
+  patch: UpdateSessionRequest;
+}): Promise<SessionDetail | 'not_found'> {
+  const db = getDb();
+  const found = await db
+    .select()
+    .from(workoutSession)
+    .where(and(eq(workoutSession.id, input.session_id), eq(workoutSession.userId, input.user_id)))
+    .limit(1);
+  const session = found[0];
+  if (!session) return 'not_found';
+
+  await db.transaction(async (tx) => {
+    const entries = await tx
+      .select()
+      .from(exerciseEntry)
+      .where(eq(exerciseEntry.sessionId, session.id))
+      .orderBy(asc(exerciseEntry.order));
+
+    for (const [i, patchExercise] of input.patch.exercises.entries()) {
+      const entry = entries[i];
+      if (!entry) break;
+
+      const norm = normalizeExerciseName(patchExercise.raw_name);
+      const isBodyweight = isBodyweightExercise(norm.exercise_id);
+      await tx
+        .update(exerciseEntry)
+        .set({
+          rawName: patchExercise.raw_name,
+          exerciseId: norm.exercise_id,
+          nameConfidence: norm.level === 1 ? 'high' : 'low',
+          regionFallback: norm.region_fallback,
+          isBodyweight,
+        })
+        .where(eq(exerciseEntry.id, entry.id));
+
+      // 自重与否变了，组的自重部分跟着改 —— 已有组不重算，只换基准
+      if (isBodyweight !== entry.isBodyweight) {
+        const bodyweightKg = isBodyweight
+          ? await bodyweightOn(input.user_id, session.date)
+          : null;
+        await tx
+          .update(setEntry)
+          .set({ bodyweightKg })
+          .where(eq(setEntry.exerciseEntryId, entry.id));
+      }
+
+      const sets = await tx
+        .select()
+        .from(setEntry)
+        .where(eq(setEntry.exerciseEntryId, entry.id))
+        .orderBy(asc(setEntry.order));
+      for (const [j, patchSet] of patchExercise.sets.entries()) {
+        const set = sets[j];
+        if (!set) break;
+        await tx
+          .update(setEntry)
+          .set({ weightKg: patchSet.weight_kg, reps: patchSet.reps })
+          .where(eq(setEntry.id, set.id));
+      }
+    }
+
+    const allEntries = await tx
+      .select({ id: exerciseEntry.id })
+      .from(exerciseEntry)
+      .where(eq(exerciseEntry.sessionId, session.id));
+    const allSets = allEntries.length
+      ? await tx
+          .select({
+            weightKg: setEntry.weightKg,
+            reps: setEntry.reps,
+            isBodyweight: exerciseEntry.isBodyweight,
+          })
+          .from(setEntry)
+          .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
+          .where(eq(exerciseEntry.sessionId, session.id))
+      : [];
+
+    const missing: MissingField[] = [];
+    if (allEntries.length === 0) missing.push('exercises');
+    if (allSets.some((s) => s.reps === null)) missing.push('reps');
+    if (allSets.some((s) => !s.isBodyweight && s.weightKg === null)) missing.push('weight_kg');
+
+    await tx
+      .update(workoutSession)
+      .set({
+        notes: input.patch.note === undefined ? session.notes : input.patch.note,
+        missingFields: missing,
+        status: missing.length ? 'incomplete' : 'complete',
+      })
+      .where(eq(workoutSession.id, session.id));
+  });
+
+  return (await getSessionDetail({ user_id: input.user_id, session_id: input.session_id }))!;
+}
+
+/** 删一条训练：动作 / 组 / 评估 / 提示级联清掉；对话消息保留但不再指向它。 */
+export async function deleteSession(input: {
+  user_id: string;
+  session_id: string;
+}): Promise<boolean> {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: workoutSession.id })
+      .from(workoutSession)
+      .where(
+        and(eq(workoutSession.id, input.session_id), eq(workoutSession.userId, input.user_id)),
+      )
+      .limit(1);
+    if (!rows[0]) return false;
+
+    await tx.delete(assessment).where(eq(assessment.relatedRecordId, input.session_id));
+    await tx.delete(workoutSession).where(eq(workoutSession.id, input.session_id));
+    return true;
+  });
 }

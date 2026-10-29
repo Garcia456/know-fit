@@ -1400,3 +1400,86 @@ body.sheet-open .page-body {
 .btn--danger:disabled {
   opacity: 0.45;
 }
+
+/* ---------- 训练卡片编辑 ---------- */
+
+.card-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.icon-btn--sm {
+  width: 30px;
+  height: 30px;
+}
+
+.edit-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+
+.edit-box:focus-within {
+  border-color: var(--ink-2);
+}
+
+.edit-box__input {
+  width: 46px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  outline: none;
+}
+
+.edit-box--name {
+  display: flex;
+  width: 100%;
+}
+
+.edit-box--name .edit-box__input {
+  width: 100%;
+  text-align: left;
+  font-weight: 600;
+}
+
+.edit-box__unit {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.edit-set {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.edit-set__x {
+  color: var(--muted);
+}
+
+/* ---------- 头像 ---------- */
+
+.avatar--sm {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+
+.avatar__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}

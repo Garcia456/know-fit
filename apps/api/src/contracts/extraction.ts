@@ -64,7 +64,7 @@ export const MealSchema = z.object({
 
 export const ExtractionSchema = z.discriminatedUnion('kind', [WorkoutSchema, MealSchema]);
 
-/** 七类意图 */
+/** 八类意图 */
 export const IntentSchema = z.enum([
   'record',
   'assess',
@@ -73,7 +73,14 @@ export const IntentSchema = z.enum([
   'chat',
   'reject',
   'boundary',
+  'weight',
 ]);
+
+/** 记体重工具的入参 —— 数值与时间状语都由模型抽，日期由代码解析 */
+export const WeightResultSchema = z.object({
+  weight_kg: z.number().nullable(),
+  day_hint: z.string().nullable(),
+});
 
 /** 缺什么 —— 由代码算，不由 LLM 输出 */
 export const MissingFieldSchema = z.enum(['exercises', 'reps', 'weight_kg']);
@@ -92,6 +99,7 @@ export type Workout = z.infer<typeof WorkoutSchema>;
 export type MealItem = z.infer<typeof MealItemSchema>;
 export type Meal = z.infer<typeof MealSchema>;
 export type Extraction = z.infer<typeof ExtractionSchema>;
+export type WeightResult = z.infer<typeof WeightResultSchema>;
 export type Intent = z.infer<typeof IntentSchema>;
 export type IntentResult = z.infer<typeof IntentResultSchema>;
 export type MissingField = z.infer<typeof MissingFieldSchema>;

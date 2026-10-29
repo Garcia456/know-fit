@@ -18,6 +18,8 @@ export const user = pgTable(
     birthday: date('birthday'),
     gender: text('gender'), // '男' | '女' | '其他'
     bio: text('bio'),
+    /** 头像：压缩后的 data URL，只存一份；null = 用昵称首字 */
+    avatar: text('avatar'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

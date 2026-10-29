@@ -134,6 +134,8 @@ export async function updateAccount(
       birthday: input.birthday,
       gender: input.gender,
       bio: input.bio,
+      // 不传即不改；传 null 才是清除头像
+      ...(input.avatar === undefined ? {} : { avatar: input.avatar }),
       updatedAt: now,
     })
     .where(eq(user.id, userId))
@@ -167,6 +169,7 @@ export function publicUser(row: typeof user.$inferSelect, now: Date = new Date()
     birthday: row.birthday,
     gender: row.gender === '男' || row.gender === '女' || row.gender === '其他' ? row.gender : null,
     bio: row.bio,
+    avatar: row.avatar,
     age: ageFromBirthday(row.birthday, now),
     created_at: row.createdAt.toISOString(),
   };

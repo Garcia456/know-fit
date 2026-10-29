@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { SINGLE_USER_ID } from '../graph/state.js';
 import { toLocalDate } from '../extraction/dates.js';
-import { getProfile, saveProfile, weightOn } from './profile.js';
+import { getProfile, saveProfile, saveWeight, weightOn } from './profile.js';
 import { getPool, closeDb } from './pool.js';
 
 /** 档案读写 —— 连真库；体重历史同一天覆盖，训练年限按月折算。 */
@@ -59,6 +59,19 @@ describe('saveProfile / getProfile', () => {
     );
     expect(rows.rows[0].n).toBe(1);
     expect((await getProfile(SINGLE_USER_ID)).weight_kg).toBe(76);
+  });
+
+  it('saveWeight 按日期写入；同一天再记是覆盖', async () => {
+    await saveWeight({ user_id: SINGLE_USER_ID, date: '2020-05-01', weight_kg: 71.2 });
+    expect(await weightOn(SINGLE_USER_ID, '2020-05-01')).toBe(71.2);
+
+    await saveWeight({ user_id: SINGLE_USER_ID, date: '2020-05-01', weight_kg: 70.8 });
+    const rows = await getPool().query(
+      'SELECT count(*)::int AS n FROM body_metric WHERE user_id = $1 AND date = $2',
+      [SINGLE_USER_ID, '2020-05-01'],
+    );
+    expect(rows.rows[0].n).toBe(1);
+    expect(await weightOn(SINGLE_USER_ID, '2020-05-01')).toBe(70.8);
   });
 
   it('训练年限按自然月增长：1 年 2 个月过 3 个月变 1 年 5 个月', async () => {

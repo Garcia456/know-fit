@@ -12,6 +12,7 @@ const me: Account = {
   birthday: '2000-01-15',
   gender: '男',
   bio: '练了三年',
+  avatar: null,
   age: 26,
   created_at: '2026-10-01T00:00:00.000Z',
 };

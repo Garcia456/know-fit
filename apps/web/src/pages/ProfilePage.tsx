@@ -132,7 +132,13 @@ export function ProfilePage() {
     <div className="body page-body">
       <div className="profile profile--account">
         <span className="avatar" aria-hidden="true">
-          {user ? avatarText(user) : '我'}
+          {user?.avatar ? (
+            <img className="avatar__img" src={user.avatar} alt="" />
+          ) : user ? (
+            avatarText(user)
+          ) : (
+            '我'
+          )}
         </span>
         <div>
           <h2>{user?.nickname ?? '我的档案'}</h2>

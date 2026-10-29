@@ -73,15 +73,27 @@ describe('注册 / 登录 / 会话', () => {
 
   it('改账号资料回读一致，年龄按生日计算', async () => {
     const { user } = await login({ email, password });
+    const avatar = 'data:image/jpeg;base64,AAAA';
     const updated = await updateAccount(user.id, {
       nickname: '新昵称',
       birthday: '2000-01-15',
       gender: '男',
       bio: '练了三年，还在学。',
+      avatar,
     });
     expect(updated.nickname).toBe('新昵称');
     expect(publicUser(updated, new Date('2026-01-14T00:00:00Z')).age).toBe(25);
     expect(publicUser(updated, new Date('2026-01-15T00:00:00Z')).age).toBe(26);
+    expect(publicUser(updated).avatar).toBe(avatar);
+
+    // 不传 avatar 表示「不改」，不是清空
+    const kept = await updateAccount(user.id, {
+      nickname: '新昵称',
+      birthday: null,
+      gender: null,
+      bio: null,
+    });
+    expect(publicUser(kept).avatar).toBe(avatar);
   });
 });
 

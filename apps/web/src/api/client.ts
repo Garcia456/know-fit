@@ -217,3 +217,24 @@ export function patchSession(
     body: JSON.stringify({ exercises, ...(note ? { note } : {}) }),
   });
 }
+
+export interface UpdateExerciseInput {
+  raw_name: string;
+  sets: { weight_kg: number | null; reps: number | null }[];
+}
+
+/** 手动编辑：按现有顺序覆盖动作名 / 重量 / 次数 */
+export function putSession(
+  id: string,
+  exercises: UpdateExerciseInput[],
+  note?: string | null,
+): Promise<SessionDetail> {
+  return request(`/api/sessions/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ exercises, ...(note === undefined ? {} : { note }) }),
+  });
+}
+
+export function deleteSession(id: string): Promise<void> {
+  return request(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}

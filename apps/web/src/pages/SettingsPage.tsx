@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   clearTrainingRecords,
@@ -10,6 +10,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DateField } from '../components/DateField';
 import { ArrowLeftIcon, InfoIcon, WarnIcon } from '../components/Icons';
 import { OptionField } from '../components/OptionField';
+import { fileToAvatar } from '../lib/avatar';
 
 const GENDER_OPTIONS = [
   { value: '', label: '不填' },
@@ -22,6 +23,10 @@ function todayKey(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function initialOf(name: string): string {
+  return Array.from(name.trim())[0] ?? '我';
 }
 
 /** 设置页：改账号资料 / 清空训练记录 / 退出 / 注销。 */
@@ -41,7 +46,12 @@ function SettingsForm({ user }: { user: Account }) {
     birthday: user.birthday,
     gender: user.gender,
     bio: user.bio,
+    avatar: user.avatar,
   });
+  const [avatarDirty, setAvatarDirty] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -62,6 +72,33 @@ function SettingsForm({ user }: { user: Account }) {
     setSaveError(null);
   }
 
+  async function handleAvatarFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // 同一张图再选一次也要触发 change
+    event.target.value = '';
+    if (!file) return;
+    setAvatarError(null);
+    setAvatarBusy(true);
+    try {
+      const avatar = await fileToAvatar(file);
+      setValues((prev) => ({ ...prev, avatar }));
+      setAvatarDirty(true);
+      setSaved(false);
+      setSaveError(null);
+    } catch (e) {
+      setAvatarError(e instanceof Error ? e.message : '图片处理失败，换一张试试');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  function removeAvatar() {
+    setValues((prev) => ({ ...prev, avatar: null }));
+    setAvatarDirty(true);
+    setSaved(false);
+    setSaveError(null);
+  }
+
   async function handleSave(event: FormEvent) {
     event.preventDefault();
     if (saving) return;
@@ -78,6 +115,7 @@ function SettingsForm({ user }: { user: Account }) {
         birthday: values.birthday,
         gender: values.gender,
         bio: values.bio?.trim() ? values.bio.trim() : null,
+        ...(avatarDirty ? { avatar: values.avatar ?? null } : {}),
       });
       setUser(res.user);
       setValues({
@@ -85,7 +123,9 @@ function SettingsForm({ user }: { user: Account }) {
         birthday: res.user.birthday,
         gender: res.user.gender,
         bio: res.user.bio,
+        avatar: res.user.avatar,
       });
+      setAvatarDirty(false);
       setSaved(true);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : '保存失败，请重试');
@@ -145,6 +185,44 @@ function SettingsForm({ user }: { user: Account }) {
             <p className="group-label">账号资料</p>
             <div className="list-card">
               <div className="set-row">
+                <span className="lbl">头像</span>
+                <span className="val">
+                  <span className="avatar avatar--sm" aria-hidden="true">
+                    {values.avatar ? (
+                      <img className="avatar__img" src={values.avatar} alt="" />
+                    ) : (
+                      initialOf(values.nickname)
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={avatarBusy}
+                  >
+                    {avatarBusy ? '处理中…' : '更换头像'}
+                  </button>
+                  {values.avatar ? (
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={removeAvatar}
+                      disabled={avatarBusy}
+                    >
+                      移除
+                    </button>
+                  ) : null}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    aria-label="选择头像图片"
+                    style={{ display: 'none' }}
+                    onChange={handleAvatarFile}
+                  />
+                </span>
+              </div>
+              <div className="set-row">
                 <span className="lbl">邮箱</span>
                 <span className="val">{user.email}</span>
               </div>
@@ -197,6 +275,11 @@ function SettingsForm({ user }: { user: Account }) {
                 />
               </label>
             </div>
+            {avatarError ? (
+              <p className="error-text" role="alert">
+                {avatarError}
+              </p>
+            ) : null}
             <p className="card-meta">签名 {(values.bio ?? '').length}/80</p>
           </section>
 
