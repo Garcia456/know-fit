@@ -19,17 +19,12 @@ export function VolumeHookView({ hook, onAssess, assessing }: Props) {
         </div>
       </div>
       {onAssess ? (
-        <>
+        <div className="hook-ask-row">
           <p className="hook-ask">要不要看看这次练得够不够？</p>
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={onAssess}
-            disabled={assessing}
-          >
+          <button type="button" className="text-action" onClick={onAssess} disabled={assessing}>
             {assessing ? '正在评估…' : '看这次评估'}
           </button>
-        </>
+        </div>
       ) : null}
     </section>
   );

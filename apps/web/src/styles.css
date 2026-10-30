@@ -647,6 +647,29 @@ select:active,
   font-weight: 600;
 }
 
+/* 动作名后的推测提示：一枚浅灰 info 图标 */
+.inferred-dot {
+  display: inline-flex;
+  margin-left: 4px;
+  color: var(--faint);
+  vertical-align: -2px;
+}
+
+.exercise__hd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exercise__hd .edit-box--name {
+  flex: 1;
+  width: auto;
+}
+
+.set-plus {
+  color: var(--muted);
+}
+
 .set-list {
   color: var(--muted);
   font-size: 12.5px;
@@ -772,6 +795,11 @@ select:active,
   stroke-width: 0.12;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+/* 股四头三块并成一块：去掉内部分割线 */
+.body-region--merged path {
+  stroke: none;
 }
 
 .heat-0 {
@@ -1336,6 +1364,19 @@ body.sheet-open .page-body {
   color: #b3261e;
 }
 
+.bio-hd {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.bio-count {
+  color: var(--faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .bio-input {
   width: 100%;
   padding: 8px 10px;
@@ -1361,6 +1402,54 @@ body.sheet-open .page-body {
   font-size: 12px;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* 卡片里的次要动作：文字下划线，不抢主内容的视线 */
+.text-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* 钩子里的那一问和动作同一行：问在左，链接在右 */
+.hook-ask-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.hook-ask-row .hook-ask {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.text-action:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+.text-action:disabled {
+  color: var(--faint);
+  text-decoration: none;
+  cursor: default;
+}
+
+.text-action:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .danger-box {
@@ -1459,9 +1548,20 @@ body.sheet-open .page-body {
 
 .edit-set {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   margin-top: 6px;
+}
+
+.edit-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.edit-box--drop .edit-box__input {
+  width: 32px;
 }
 
 .edit-set__x {
@@ -1482,4 +1582,140 @@ body.sheet-open .page-body {
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
+}
+
+.avatar-btn {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  cursor: zoom-in;
+}
+
+
+.dialog-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 58%);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.avatar-preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(64vw, 260px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 64px;
+  font-weight: 500;
+  box-shadow: 0 18px 60px rgb(0 0 0 / 35%);
+}
+
+.avatar-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.avatar-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.avatar-preview__change {
+  padding: 8px 16px;
+  border: 1px solid rgb(255 255 255 / 32%);
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 24%);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.avatar-preview__change:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.dialog {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 22%);
+}
+
+.dialog h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.dialog-hint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.crop-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  margin: 14px 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #111;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.crop-stage:active {
+  cursor: grabbing;
+}
+
+.crop-stage:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.crop-stage__img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.crop-stage__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 0 9999px rgb(0 0 0 / 55%);
+  pointer-events: none;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
 }

@@ -12,6 +12,8 @@ import type {
   ProfileInput,
   SessionDetail,
   SessionListResponse,
+  SetDrop,
+  SetTag,
   StatsRange,
   TurnResponse,
   WeeklyVolume,
@@ -220,7 +222,12 @@ export function patchSession(
 
 export interface UpdateExerciseInput {
   raw_name: string;
-  sets: { weight_kg: number | null; reps: number | null }[];
+  sets: {
+    weight_kg: number | null;
+    reps: number | null;
+    tags?: SetTag[];
+    drops?: SetDrop[] | null;
+  }[];
 }
 
 /** 手动编辑：按现有顺序覆盖动作名 / 重量 / 次数 */

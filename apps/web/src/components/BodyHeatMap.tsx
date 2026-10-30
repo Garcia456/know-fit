@@ -1,5 +1,10 @@
 import { useMemo } from 'react';
-import { computeHeatTiers, validateBodyMap, viewPaths } from '../lib/bodyMap';
+import {
+  GLUTE_MEDIUS_PATHS,
+  computeHeatTiers,
+  validateBodyMap,
+  viewPaths,
+} from '../lib/bodyMap';
 
 interface Props {
   /** 范围内**已按肌群求和**的训练量（kg） */
@@ -11,7 +16,7 @@ const VIEWS = [
   { view: 'BACK' as const, label: '背面', viewBox: '37 0 35 93' },
 ];
 
-/** 19 区热力图。契约不成立就整块报错，不静默少画。 */
+/** 20 区热力图。契约不成立就整块报错，不静默少画。 */
 export function BodyHeatMap({ byMuscle }: Props) {
   const problems = useMemo(() => validateBodyMap(), []);
   const tiers = useMemo(() => computeHeatTiers(byMuscle), [byMuscle]);
@@ -34,6 +39,8 @@ export function BodyHeatMap({ byMuscle }: Props) {
       <div className="body-map__views">
         {VIEWS.map(({ view, label, viewBox }) => {
           const { groups, silhouettes } = viewPaths(view);
+          // 臀大肌有量时把臀中肌藏掉，臀部只剩一块光滑的轮廓
+          const hideMedius = view === 'BACK' && tiers.glutes > 0;
           return (
             <svg
               key={view}
@@ -45,17 +52,26 @@ export function BodyHeatMap({ byMuscle }: Props) {
               {silhouettes.map((d, i) => (
                 <path key={`s-${i}`} d={d} className="body-silhouette" />
               ))}
-              {groups.map((group) => (
-                <g
-                  key={group.region}
-                  data-region={group.region}
-                  className={`body-region heat-${tiers[group.region]}`}
-                >
-                  {group.paths.map((d, i) => (
-                    <path key={i} d={d} />
-                  ))}
-                </g>
-              ))}
+              {groups.map((group) => {
+                const paths =
+                  hideMedius && group.region === 'abductors'
+                    ? group.paths.filter((d) => !GLUTE_MEDIUS_PATHS.includes(d))
+                    : group.paths;
+                if (paths.length === 0) return null;
+                return (
+                  <g
+                    key={group.region}
+                    data-region={group.region}
+                    className={`body-region heat-${tiers[group.region]}${
+                      group.region === 'quads' ? ' body-region--merged' : ''
+                    }`}
+                  >
+                    {paths.map((d, i) => (
+                      <path key={i} d={d} />
+                    ))}
+                  </g>
+                );
+              })}
             </svg>
           );
         })}

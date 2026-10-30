@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   clearTrainingRecords,
@@ -7,10 +7,11 @@ import {
 } from '../api/client';
 import type { Account, AccountInput, ClearTrainingResult, Gender } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { AvatarCropDialog } from '../components/AvatarCropDialog';
 import { DateField } from '../components/DateField';
 import { ArrowLeftIcon, InfoIcon, WarnIcon } from '../components/Icons';
 import { OptionField } from '../components/OptionField';
-import { fileToAvatar } from '../lib/avatar';
+import { loadAvatarImage, type AvatarImage } from '../lib/avatar';
 
 const GENDER_OPTIONS = [
   { value: '', label: '不填' },
@@ -51,6 +52,8 @@ function SettingsForm({ user }: { user: Account }) {
   const [avatarDirty, setAvatarDirty] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState(false);
+  const [cropSource, setCropSource] = useState<AvatarImage | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -72,6 +75,21 @@ function SettingsForm({ user }: { user: Account }) {
     setSaveError(null);
   }
 
+  // 预览层打开时锁住背景滚动，Esc 可关
+  useEffect(() => {
+    if (!avatarPreview) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setAvatarPreview(false);
+    }
+    window.addEventListener('keydown', onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [avatarPreview]);
+
   async function handleAvatarFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     // 同一张图再选一次也要触发 change
@@ -80,11 +98,9 @@ function SettingsForm({ user }: { user: Account }) {
     setAvatarError(null);
     setAvatarBusy(true);
     try {
-      const avatar = await fileToAvatar(file);
-      setValues((prev) => ({ ...prev, avatar }));
-      setAvatarDirty(true);
-      setSaved(false);
-      setSaveError(null);
+      const source = await loadAvatarImage(file);
+      setCropSource(source);
+      setAvatarPreview(false);
     } catch (e) {
       setAvatarError(e instanceof Error ? e.message : '图片处理失败，换一张试试');
     } finally {
@@ -92,11 +108,17 @@ function SettingsForm({ user }: { user: Account }) {
     }
   }
 
-  function removeAvatar() {
-    setValues((prev) => ({ ...prev, avatar: null }));
+  function closeCrop() {
+    if (cropSource) URL.revokeObjectURL(cropSource.url);
+    setCropSource(null);
+  }
+
+  function applyCrop(avatar: string) {
+    setValues((prev) => ({ ...prev, avatar }));
     setAvatarDirty(true);
     setSaved(false);
     setSaveError(null);
+    closeCrop();
   }
 
   async function handleSave(event: FormEvent) {
@@ -187,39 +209,18 @@ function SettingsForm({ user }: { user: Account }) {
               <div className="set-row">
                 <span className="lbl">头像</span>
                 <span className="val">
-                  <span className="avatar avatar--sm" aria-hidden="true">
+                  <button
+                    type="button"
+                    className="avatar avatar--sm avatar-btn"
+                    aria-label="查看头像"
+                    onClick={() => setAvatarPreview(true)}
+                  >
                     {values.avatar ? (
                       <img className="avatar__img" src={values.avatar} alt="" />
                     ) : (
                       initialOf(values.nickname)
                     )}
-                  </span>
-                  <button
-                    type="button"
-                    className="link-btn"
-                    onClick={() => fileRef.current?.click()}
-                    disabled={avatarBusy}
-                  >
-                    {avatarBusy ? '处理中…' : '更换头像'}
                   </button>
-                  {values.avatar ? (
-                    <button
-                      type="button"
-                      className="link-btn"
-                      onClick={removeAvatar}
-                      disabled={avatarBusy}
-                    >
-                      移除
-                    </button>
-                  ) : null}
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    aria-label="选择头像图片"
-                    style={{ display: 'none' }}
-                    onChange={handleAvatarFile}
-                  />
                 </span>
               </div>
               <div className="set-row">
@@ -263,11 +264,14 @@ function SettingsForm({ user }: { user: Account }) {
                 </span>
               </div>
               <label className="set-row set-row--stack">
-                <span className="lbl">个性签名</span>
+                <span className="bio-hd">
+                  <span className="lbl">个性签名</span>
+                  <span className="bio-count">{(values.bio ?? '').length}/60</span>
+                </span>
                 <textarea
                   className="bio-input"
                   aria-label="个性签名"
-                  maxLength={80}
+                  maxLength={60}
                   rows={2}
                   placeholder="一句话介绍你的训练状态"
                   value={values.bio ?? ''}
@@ -275,12 +279,21 @@ function SettingsForm({ user }: { user: Account }) {
                 />
               </label>
             </div>
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              aria-label="选择头像图片"
+              style={{ display: 'none' }}
+              onChange={handleAvatarFile}
+            />
+
             {avatarError ? (
               <p className="error-text" role="alert">
                 {avatarError}
               </p>
             ) : null}
-            <p className="card-meta">签名 {(values.bio ?? '').length}/80</p>
           </section>
 
           {saveError ? (
@@ -417,6 +430,39 @@ function SettingsForm({ user }: { user: Account }) {
           ) : null}
         </section>
       </div>
+
+      {avatarPreview ? (
+        <div
+          className="dialog-mask dialog-mask--avatar"
+          role="presentation"
+          onClick={() => setAvatarPreview(false)}
+        >
+          <div className="avatar-preview-wrap">
+            <div className="avatar-preview" role="img" aria-label="头像大图">
+              {values.avatar ? (
+                <img src={values.avatar} alt="当前头像" />
+              ) : (
+                <span>{initialOf(values.nickname)}</span>
+              )}
+            </div>
+            <button
+              type="button"
+              className="avatar-preview__change"
+              disabled={avatarBusy}
+              onClick={(e) => {
+                e.stopPropagation();
+                fileRef.current?.click();
+              }}
+            >
+              {avatarBusy ? '处理中…' : '更换头像'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {cropSource ? (
+        <AvatarCropDialog source={cropSource} onCancel={closeCrop} onConfirm={applyCrop} />
+      ) : null}
     </div>
   );
 }

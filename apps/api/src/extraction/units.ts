@@ -3,7 +3,7 @@ const LB_TO_KG = 0.45359237;
 
 export interface ConvertedWeight {
   weight_kg: number | null;
-  /** 单位没提却说有重量 ⇒ 只能按 kg 记，标一下 */
+  /** 只有「用户没说、系统补的」才标推测；没带单位按 kg 是记录惯例，不算猜 */
   is_inferred: boolean;
 }
 
@@ -15,5 +15,5 @@ export function toKilograms(
 ): ConvertedWeight {
   if (weight === null) return { weight_kg: null, is_inferred: isInferred };
   if (unit === 'lb') return { weight_kg: Math.round(weight * LB_TO_KG * 100) / 100, is_inferred: isInferred };
-  return { weight_kg: weight, is_inferred: isInferred || unit === null };
+  return { weight_kg: weight, is_inferred: isInferred };
 }

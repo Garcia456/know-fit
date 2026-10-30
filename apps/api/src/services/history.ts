@@ -25,8 +25,11 @@ function asMissingFields(values: string[]): MissingField[] {
   );
 }
 
-function asTags(values: string[]): ('failure' | 'drop')[] {
-  return values.filter((v): v is 'failure' | 'drop' => v === 'failure' || v === 'drop');
+function asTags(values: string[]): ('failure' | 'drop' | 'rest_pause')[] {
+  return values.filter(
+    (v): v is 'failure' | 'drop' | 'rest_pause' =>
+      v === 'failure' || v === 'drop' || v === 'rest_pause',
+  );
 }
 
 function asDrops(
@@ -445,7 +448,12 @@ export async function updateSession(input: {
         if (!set) break;
         await tx
           .update(setEntry)
-          .set({ weightKg: patchSet.weight_kg, reps: patchSet.reps })
+          .set({
+            weightKg: patchSet.weight_kg,
+            reps: patchSet.reps,
+            ...(patchSet.tags !== undefined ? { tags: patchSet.tags } : {}),
+            ...(patchSet.drops !== undefined ? { drops: patchSet.drops } : {}),
+          })
           .where(eq(setEntry.id, set.id));
       }
     }
@@ -459,6 +467,8 @@ export async function updateSession(input: {
           .select({
             weightKg: setEntry.weightKg,
             reps: setEntry.reps,
+            tags: setEntry.tags,
+            drops: setEntry.drops,
             isBodyweight: exerciseEntry.isBodyweight,
           })
           .from(setEntry)
@@ -468,8 +478,27 @@ export async function updateSession(input: {
 
     const missing: MissingField[] = [];
     if (allEntries.length === 0) missing.push('exercises');
-    if (allSets.some((s) => s.reps === null)) missing.push('reps');
-    if (allSets.some((s) => !s.isBodyweight && s.weightKg === null)) missing.push('weight_kg');
+    if (
+      allSets.some(
+        (s) =>
+          s.reps === null ||
+          (Array.isArray(s.drops) &&
+            (s.drops as { reps: number | null }[]).some((d) => d.reps === null)),
+      )
+    ) {
+      missing.push('reps');
+    }
+    if (
+      allSets.some((s) => {
+        if (s.isBodyweight || s.weightKg !== null) return false;
+        return !(
+          Array.isArray(s.drops) &&
+          (s.drops as { weight_kg: number | null }[]).some((d) => d.weight_kg !== null)
+        );
+      })
+    ) {
+      missing.push('weight_kg');
+    }
 
     await tx
       .update(workoutSession)

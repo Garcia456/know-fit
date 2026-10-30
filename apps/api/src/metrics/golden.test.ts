@@ -39,6 +39,41 @@ const CASES: Case[] = [
   },
   { name: '小数不丢精度：70.31×8', sets: [w(70.31, 8)], total: 562.48, skipped: 0 },
   { name: '系统推测的组也计入：1 组推断的 60×10', sets: [w(60, 10, { is_inferred: true })], total: 600, skipped: 0 },
+  {
+    name: '休息暂停：75×16 + 5 次，仍算一组 = 1575',
+    sets: [w(75, 16, { tags: ['rest_pause'], drops: [{ weight_kg: null, reps: 5 }] })],
+    total: 1575,
+    skipped: 0,
+  },
+  {
+    name: '递减组后续段：12×10 + 8×10 + 6×12 = 272',
+    sets: [
+      w(12, 10, {
+        tags: ['drop'],
+        drops: [
+          { weight_kg: 8, reps: 10 },
+          { weight_kg: 6, reps: 12 },
+        ],
+      }),
+    ],
+    total: 272,
+    skipped: 0,
+  },
+  {
+    name: '旧的递减格式（drops 含主段）不重复算 = 272',
+    sets: [
+      w(12, 10, {
+        tags: ['drop'],
+        drops: [
+          { weight_kg: 12, reps: 10 },
+          { weight_kg: 8, reps: 10 },
+          { weight_kg: 6, reps: 12 },
+        ],
+      }),
+    ],
+    total: 272,
+    skipped: 0,
+  },
   { name: '空记录：0', sets: [], total: 0, skipped: 0 },
 ];
 

@@ -27,6 +27,17 @@ describe('1 级：精确命中 name_zh 或 resolvable.alias', () => {
   it('resolvable 别名「倒蹬」→ leg_press（作者裁定：口语指腿举）', () => {
     expect(normalizeExerciseName('倒蹬')).toMatchObject({ exercise_id: 'leg_press', level: 1 });
   });
+
+  it('「龙门架卷腹」→ cable_crunch，不被「卷腹」吃掉', () => {
+    expect(normalizeExerciseName('龙门架卷腹')).toMatchObject({
+      exercise_id: 'cable_crunch',
+      level: 1,
+    });
+    expect(normalizeExerciseName('龙门架卷腹 65kg')).toMatchObject({
+      exercise_id: 'cable_crunch',
+      level: 1,
+    });
+  });
 });
 
 describe('1 级补充层：exercise.aliases 精确命中（动作库长了就自动跟上）', () => {

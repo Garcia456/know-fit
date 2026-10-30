@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { getProfile, putProfile } from '../api/client';
 import type { Account, Goal } from '../api/types';
@@ -58,16 +58,22 @@ export function ProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
+  const hydrated = useRef(false);
+  const savedKey = useRef<string | null>(null);
+  const saveSeq = useRef(0);
 
   useEffect(() => {
     let alive = true;
     setLoadError(null);
+    setLoaded(false);
     getProfile()
       .then((p) => {
         if (!alive) return;
         setValues(toFormValues(p));
         setWeightDate(p.weight_date);
+        setLoaded(true);
       })
       .catch((e: unknown) => {
         if (!alive) return;
@@ -83,34 +89,56 @@ export function ProfilePage() {
     setValues((prev) => (prev ? { ...prev, [key]: value } : prev));
     setSaved(false);
     setSaveError(null);
+    if (key === 'height' || key === 'weight') {
+      setErrors((prev) => ({ ...prev, [key]: undefined }));
+    }
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (!values || saving || loadError) return;
-
-    const parsed = parseProfileForm(values);
-    if (!parsed.ok) {
-      setErrors(parsed.errors);
-      setSaved(false);
+  // 改完就存：输入停 800ms / 选项点完立刻进入这里。无效值不写库，失焦时才报错。
+  useEffect(() => {
+    if (!values || !loaded || loadError) return;
+    const key = JSON.stringify(values);
+    if (!hydrated.current) {
+      hydrated.current = true;
+      savedKey.current = key;
       return;
     }
-    setErrors({});
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const savedProfile = await putProfile(parsed.input);
-      // 以服务端回读为准，不拿本地输入冒充已保存
-      setValues(toFormValues(savedProfile));
-      setWeightDate(savedProfile.weight_date);
-      setSaved(true);
-    } catch (e) {
-      // 失败保留用户输入，不显示「已保存」
-      setSaveError(e instanceof Error ? e.message : '保存失败，请重试');
-      setSaved(false);
-    } finally {
-      setSaving(false);
-    }
+    if (key === savedKey.current) return;
+
+    const seq = ++saveSeq.current;
+    const parsed = parseProfileForm(values);
+    if (!parsed.ok) return;
+
+    const timer = setTimeout(() => {
+      setSaving(true);
+      setSaveError(null);
+      putProfile(parsed.input)
+        .then((savedProfile) => {
+          if (seq !== saveSeq.current) return;
+          // 以服务端回读为准；期间没有再改才覆盖表单
+          const next = toFormValues(savedProfile);
+          savedKey.current = JSON.stringify(next);
+          setValues(next);
+          setWeightDate(savedProfile.weight_date);
+          setErrors({});
+          setSaved(true);
+        })
+        .catch((e: unknown) => {
+          if (seq !== saveSeq.current) return;
+          setSaveError(e instanceof Error ? e.message : '保存失败，请重试');
+          setSaved(false);
+        })
+        .finally(() => {
+          if (seq === saveSeq.current) setSaving(false);
+        });
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [values, loaded, loadError]);
+
+  function showErrors() {
+    const parsed = parseProfileForm(values ?? EMPTY_VALUES);
+    setErrors(parsed.ok ? {} : parsed.errors);
   }
 
   if (!values) {
@@ -167,7 +195,7 @@ export function ProfilePage() {
         />
       ) : null}
 
-      <form onSubmit={handleSubmit} noValidate>
+      <div>
         <section className="sec" aria-label="身体数据">
           <p className="group-label icon-label">
             <IdCardIcon />
@@ -184,6 +212,7 @@ export function ProfilePage() {
                   placeholder="—"
                   value={values.height}
                   onChange={(e) => update('height', e.target.value)}
+                  onBlur={showErrors}
                   aria-invalid={errors.height ? true : undefined}
                 />
                 <span className="unit">cm</span>
@@ -199,6 +228,7 @@ export function ProfilePage() {
                   placeholder="—"
                   value={values.weight}
                   onChange={(e) => update('weight', e.target.value)}
+                  onBlur={showErrors}
                   aria-invalid={errors.weight ? true : undefined}
                 />
                 <span className="unit">kg</span>
@@ -312,17 +342,20 @@ export function ProfilePage() {
           </p>
         ) : null}
 
-        <div className="save-row">
-          <button type="submit" className="btn btn--block" disabled={saving || loadError !== null}>
-            {saving ? '正在保存…' : '保存'}
-          </button>
-          {loadError ? (
-            <p className="saved-note">档案没读出来，重试后再改，免得覆盖库里已存的数据。</p>
-          ) : saved ? (
-            <p className="saved-note">已保存</p>
-          ) : null}
-        </div>
-      </form>
+        {loadError || saving || saved ? (
+          <div className="save-row">
+            {loadError ? (
+              <p className="saved-note">档案没读出来，重试后再改，免得覆盖库里已存的数据。</p>
+            ) : saving ? (
+              <p className="saved-note">正在保存…</p>
+            ) : (
+              <p className="saved-note" role="status">
+                已自动保存
+              </p>
+            )}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

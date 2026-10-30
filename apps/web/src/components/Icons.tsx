@@ -1,10 +1,10 @@
 /** 界面图标 —— 统一走 lucide-react，不在本地画 svg。 */
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
   ArrowDown,
   ArrowLeft,
   ArrowUp,
-  ChartColumn,
   Check,
   ChevronDown,
   ChevronRight,
@@ -41,12 +41,12 @@ export function WarnIcon() {
   return <LineIcon icon={TriangleAlert} />;
 }
 
-export function InfoIcon() {
-  return <LineIcon icon={Info} />;
+export function InfoIcon({ size = 18 }: { size?: number }) {
+  return <LineIcon icon={Info} size={size} />;
 }
 
 export function ChartIcon() {
-  return <LineIcon icon={ChartColumn} size={24} />;
+  return <LineIcon icon={Activity} size={17} />;
 }
 
 export function HistoryIcon() {

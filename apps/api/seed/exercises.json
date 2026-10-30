@@ -1,16 +1,16 @@
 {
   "$schema_version": "1.0",
-  "$source": "docs/06-mvp-and-tech/动作-肌群映射表.md v1.4 —— §1.2 分区表 / §3.1 表A / §3.2 表B / §3.3 表C",
+  "$source": "docs/06-mvp-and-tech/动作-肌群映射表.md v1.5 —— §1.2 分区表 / §3.1 表A / §3.2 表B / §3.3 表C",
   "$generated": "2026-10-09",
   "$counts": {
-    "muscle_regions": 19,
-    "exercises": 63,
+    "muscle_regions": 20,
+    "exercises": 64,
     "region_fallbacks": 5
   },
   "$notes": [
     "肌群权重不在本文件内 —— 按 ADR-014，主动肌 1.0 / 协同肌 0.5 是确定性代码里的配置项，不写进数据。",
     "coarse 字段是 free-exercise-db 的 17 区粗档，供 ADR-013 的『退档不重做』路径使用（退 17 区只需改读这一列）。",
-    "primary_muscles / secondary_muscles 已统一到本表 19 区 id（映射表里写成『traps（中下）』这类口语的，已归到 back_mid）。",
+    "primary_muscles / secondary_muscles 已统一到本表 20 区 id（映射表里写成『traps（中下）』这类口语的，已归到 back_mid）。",
     "exercise_id 为 null 的情形（用户只说了部位、说不出动作）走 region_fallbacks —— 数据层不归并，展示层才补偿。",
     "本文件不含任何教学内容、要领或视频，符合 PRD §4.2 Won't『完整动作库』的边界。",
     "2026-10-10 作者裁定：『仰卧臂屈伸』不再是 pullover 的别名，唯一指向 skull_crusher（其标准中文名），冲突已消，相应 ambiguous 条目已删。"
@@ -22,7 +22,8 @@
     { "id": "delt_lat",    "name_zh": "三角肌中束",         "name_en": "lateral deltoid",    "face": "front", "coarse": "shoulders" },
     { "id": "biceps",      "name_zh": "肱二头肌",           "name_en": "biceps",             "face": "front", "coarse": "biceps" },
     { "id": "forearm",     "name_zh": "前臂",               "name_en": "forearms",           "face": "front", "coarse": "forearms" },
-    { "id": "abs",         "name_zh": "腹直肌",             "name_en": "rectus abdominis",   "face": "front", "coarse": "abdominals" },
+    { "id": "abs_upper",   "name_zh": "腹直肌上部",         "name_en": "upper rectus abdominis", "face": "front", "coarse": "abdominals" },
+    { "id": "abs_lower",   "name_zh": "腹直肌下部",         "name_en": "lower rectus abdominis", "face": "front", "coarse": "abdominals" },
     { "id": "obliques",    "name_zh": "腹斜肌",             "name_en": "obliques",           "face": "front", "coarse": "abdominals" },
     { "id": "quads",       "name_zh": "股四头肌",           "name_en": "quadriceps",         "face": "front", "coarse": "quadriceps" },
     { "id": "adductors",   "name_zh": "内收肌群",           "name_en": "adductors",          "face": "front", "coarse": "adductors" },
@@ -106,11 +107,12 @@
     { "id": "hip_abduction",            "name_zh": "髋外展",       "aliases": ["夹腿机扩腿", "臀外展", "外展机"],       "equipment": ["器械"], "mechanic": null, "primary_muscles": ["abductors"],       "secondary_muscles": ["glutes"],                                  "coarse": ["abductors", "glutes"] },
     { "id": "hip_adduction",            "name_zh": "髋内收",       "aliases": ["夹腿机夹腿", "内收机"],                 "equipment": ["器械"], "mechanic": null, "primary_muscles": ["adductors"],       "secondary_muscles": [],                                          "coarse": ["adductors"] },
 
-    { "id": "plank",                    "name_zh": "平板支撑",     "aliases": ["棒式", "平板"],                         "equipment": ["自重"], "mechanic": "静态", "primary_muscles": ["abs"],            "secondary_muscles": ["obliques"],                                "coarse": ["abdominals"] },
-    { "id": "crunch",                   "name_zh": "卷腹",         "aliases": ["仰卧卷腹"],                             "equipment": ["自重"], "mechanic": "推", "primary_muscles": ["abs"],              "secondary_muscles": [],                                          "coarse": ["abdominals"] },
-    { "id": "hanging_leg_raise",        "name_zh": "悬垂举腿",     "aliases": ["举腿", "吊杠举腿"],                     "equipment": ["自重"], "mechanic": null, "primary_muscles": ["abs"],             "secondary_muscles": ["obliques"],                                "coarse": ["abdominals"] },
-    { "id": "russian_twist",            "name_zh": "俄罗斯转体",   "aliases": ["转体", "负重转体"],                     "equipment": ["自重", "负重"], "mechanic": null, "primary_muscles": ["obliques", "abs"], "secondary_muscles": [],                                      "coarse": ["abdominals"] },
-    { "id": "ab_wheel",                 "name_zh": "健腹轮",       "aliases": ["滚腹轮", "腹肌轮"],                     "equipment": ["器械"], "mechanic": null, "primary_muscles": ["abs"],             "secondary_muscles": ["obliques", "lats"],                        "coarse": ["abdominals"], "$note": "ExRx 把同类动作列为分类有争议（可能肩伸/背主导）" }
+    { "id": "plank",                    "name_zh": "平板支撑",     "aliases": ["棒式", "平板"],                         "equipment": ["自重"], "mechanic": "静态", "primary_muscles": ["abs_upper", "abs_lower"], "secondary_muscles": ["obliques"],                                "coarse": ["abdominals"] },
+    { "id": "crunch",                   "name_zh": "卷腹",         "aliases": ["仰卧卷腹"],                             "equipment": ["自重"], "mechanic": "推", "primary_muscles": ["abs_upper"],        "secondary_muscles": [],                                          "coarse": ["abdominals"] },
+    { "id": "cable_crunch",             "name_zh": "龙门架卷腹",   "aliases": ["绳索卷腹", "跪姿卷腹"],                 "equipment": ["龙门架"], "mechanic": "拉", "primary_muscles": ["abs_upper"],       "secondary_muscles": [],                                          "coarse": ["abdominals"] },
+    { "id": "hanging_leg_raise",        "name_zh": "悬垂举腿",     "aliases": ["举腿", "吊杠举腿"],                     "equipment": ["自重"], "mechanic": null, "primary_muscles": ["abs_lower"],        "secondary_muscles": [],                                          "coarse": ["abdominals"] },
+    { "id": "russian_twist",            "name_zh": "俄罗斯转体",   "aliases": ["转体", "负重转体"],                     "equipment": ["自重", "负重"], "mechanic": null, "primary_muscles": ["obliques"], "secondary_muscles": ["abs_upper"],                                "coarse": ["abdominals"] },
+    { "id": "ab_wheel",                 "name_zh": "健腹轮",       "aliases": ["滚腹轮", "腹肌轮"],                     "equipment": ["器械"], "mechanic": null, "primary_muscles": ["abs_upper", "abs_lower"], "secondary_muscles": ["obliques", "lats"],                  "coarse": ["abdominals"], "$note": "ExRx 把同类动作列为分类有争议（可能肩伸/背主导）" }
   ],
 
   "region_fallbacks": [

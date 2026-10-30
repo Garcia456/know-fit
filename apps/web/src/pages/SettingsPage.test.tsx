@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Account } from '../api/types';
@@ -60,26 +60,24 @@ afterEach(() => {
 });
 
 describe('设置页', () => {
-  it('移除头像后保存，PATCH 里 avatar 为 null', async () => {
+  it('点头像看大图，大图里换头像，点屏幕退出', async () => {
     const withAvatar = { ...me, avatar: 'data:image/jpeg;base64,AAAA' };
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      if (url === '/api/auth/me') return res(200, { user: withAvatar });
-      if (url === '/api/account' && init?.method === 'PATCH') {
-        return res(200, { user: { ...withAvatar, ...JSON.parse(String(init.body)) } });
-      }
-      return res(200, {});
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/auth/me') return res(200, { user: withAvatar });
+        return res(200, {});
+      }),
+    );
     renderSettings();
 
-    fireEvent.click(await screen.findByRole('button', { name: '移除' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存资料' }));
+    fireEvent.click(await screen.findByRole('button', { name: '查看头像' }));
+    expect(screen.getByLabelText('头像大图')).toBeDefined();
+    expect(screen.getByRole('button', { name: '更换头像' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: '移除头像' })).toBeNull();
 
-    await screen.findByText('已保存');
-    const patch = fetchMock.mock.calls.find(
-      ([url, init]) => url === '/api/account' && init?.method === 'PATCH',
-    );
-    await waitFor(() => expect(JSON.parse(String(patch?.[1]?.body)).avatar).toBeNull());
+    fireEvent.click(document.querySelector('.dialog-mask')!);
+    expect(screen.queryByLabelText('头像大图')).toBeNull();
   });
   it('回显账号资料，改昵称与签名后提交 PATCH', async () => {
     const fetchMock = stubApi();

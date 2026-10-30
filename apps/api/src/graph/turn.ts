@@ -1,5 +1,10 @@
 import { END, START, StateGraph } from '@langchain/langgraph';
-import { ExtractionSchema, IntentResultSchema, WeightResultSchema } from '../contracts/extraction.js';
+import {
+  ExtractionSchema,
+  IntentResultSchema,
+  WeightResultSchema,
+  type SetTag,
+} from '../contracts/extraction.js';
 import type { WorkoutCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
 import { resolveDate } from '../extraction/dates.js';
 import { normalizeExerciseName } from '../extraction/normalize.js';
@@ -15,6 +20,15 @@ import { TurnState, type TurnHistoryItem } from './state.js';
 
 /** 空抽取的确定性追问 —— 不交给模型，免得它换个说法又落成记录 */
 export const EMPTY_EXTRACTION_REPLY = '这句里没听出训练内容 —— 是想问动作，还是想记训练？';
+
+/** 一组有多段但模型没定性时，默认按休息暂停记；明确说递减的保留 drop */
+export function normalizeSetTags(tags: SetTag[] | undefined, hasDrops: boolean): SetTag[] {
+  const out = [...(tags ?? [])];
+  if (hasDrops && !out.includes('drop') && !out.includes('rest_pause')) {
+    out.push('rest_pause');
+  }
+  return out;
+}
 
 /** 带指代的问题拼上一轮用户消息 —— v1 不改写 query（ADR-049 §1） */
 export function buildKnowledgeQuery(message: string, history: TurnHistoryItem[]): string {
@@ -105,7 +119,7 @@ export function buildTurnGraph(deps: TurnDeps) {
               set_type: s.set_type,
               is_inferred: conv.is_inferred,
               bodyweight_kg: isBodyweight ? bodyweightKg : null,
-              tags: s.tags ?? [],
+              tags: normalizeSetTags(s.tags, Boolean(s.drops?.length)),
               drops: drops?.map((d, k) => ({ weight_kg: d.weight_kg, reps: s.drops![k]!.reps ?? null })) ?? null,
             };
           });

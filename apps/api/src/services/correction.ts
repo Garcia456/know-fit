@@ -71,7 +71,7 @@ interface EntrySets {
     setType: 'warmup' | 'working';
     isInferred: boolean;
     bodyweightKg: number | null;
-    tags: ('failure' | 'drop')[];
+    tags: ('failure' | 'drop' | 'rest_pause')[];
     drops: { weight_kg: number | null; reps: number | null }[] | null;
   }[];
 }
@@ -101,7 +101,10 @@ async function loadSessionEntries(sessionId: string): Promise<EntrySets[]> {
       setType: r.setType === 'warmup' ? 'warmup' : 'working',
       isInferred: r.isInferred,
       bodyweightKg: r.bodyweightKg,
-      tags: r.tags.filter((t): t is 'failure' | 'drop' => t === 'failure' || t === 'drop'),
+      tags: r.tags.filter(
+        (t): t is 'failure' | 'drop' | 'rest_pause' =>
+          t === 'failure' || t === 'drop' || t === 'rest_pause',
+      ),
       drops: r.drops,
     });
     byEntry.set(r.exerciseEntryId, bucket);

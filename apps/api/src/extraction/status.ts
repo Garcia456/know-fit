@@ -7,7 +7,7 @@ import type { MissingField, RecordStatus } from '../contracts/extraction.js';
 export interface StatusSet {
   weight_kg: number | null;
   reps: number | null;
-  tags?: ('failure' | 'drop')[];
+  tags?: ('failure' | 'drop' | 'rest_pause')[];
   drops?: { weight_kg: number | null; reps: number | null }[] | null;
 }
 
@@ -33,14 +33,16 @@ export function computeStatus(exercises: StatusExercise[]): RecordCompleteness {
   if (exercises.length === 0) missing.push('exercises');
 
   const sets = exercises.flatMap((e) => e.sets.map((s) => ({ ...s, is_bodyweight: e.is_bodyweight })));
-  if (sets.some((s) => s.reps === null)) missing.push('reps');
+  if (sets.some((s) => s.reps === null || s.drops?.some((d) => d.reps === null))) {
+    missing.push('reps');
+  }
 
   const weightMissing = sets.some((s) => {
     if (s.is_bodyweight) return false;
-    if (s.tags?.includes('drop') && s.drops && s.drops.length > 0) {
-      return s.drops.every((d) => d.weight_kg === null);
-    }
-    return s.weight_kg === null;
+    // 主段有重量时，后续段沿用主段；只有主段和后续段都空才算缺
+    if (s.weight_kg !== null) return false;
+    if (s.drops && s.drops.length > 0) return s.drops.every((d) => d.weight_kg === null);
+    return true;
   });
   if (weightMissing) missing.push('weight_kg');
 

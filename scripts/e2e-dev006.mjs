@@ -167,7 +167,7 @@ try {
     }
   }
 
-  // C. 数据页读接口：列表能查到、详情带 hook 与 19 键
+  // C. 数据页读接口：列表能查到、详情带 hook 与 20 键
   const list = await call(`/sessions?from=${date}&to=${date}`);
   if (list.status === 200 && list.body.sessions.some((s) => s.session_id === sessionId)) {
     ok('GET /api/sessions 能查到当天记录');
@@ -180,9 +180,9 @@ try {
   if (
     detail.status === 200 &&
     typeof detail.body.hook?.current === 'number' &&
-    Object.keys(muscleKeys).length === 19
+    Object.keys(muscleKeys).length === 20
   ) {
-    ok('GET /api/sessions/:id 带 hook 与 19 个肌群键');
+    ok('GET /api/sessions/:id 带 hook 与 20 个肌群键');
   } else {
     bad(
       `详情契约不对：status=${detail.status} hook=${JSON.stringify(detail.body?.hook)} 键数=${Object.keys(muscleKeys).length}`,

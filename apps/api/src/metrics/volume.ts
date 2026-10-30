@@ -11,8 +11,8 @@ export interface VolumeSet {
   is_inferred: boolean;
   /** 自重动作叠加的体重；非自重为 null */
   bodyweight_kg?: number | null;
-  tags?: ('failure' | 'drop')[];
-  /** 递减组的每一段 */
+  tags?: ('failure' | 'drop' | 'rest_pause')[];
+  /** 主段之后的每一小段；weight_kg 为 null = 沿用主段重量 */
   drops?: VolumeDrop[] | null;
 }
 
@@ -39,7 +39,7 @@ function effectiveWeight(weight: number | null, bodyweight: number | null): numb
 /**
  * 算一次训练（或一组动作）的容量。
  * 热身组不计入；缺重量或缺次数的正式组跳过并计数，不当 0。
- * 自重动作按「自重 + 额外负重」算；递减组按每一段分别算，但仍算一组。
+ * 自重动作按「自重 + 额外负重」算；一组多段（递减 / 休息暂停）每段分别算，但仍算一组。
  */
 export function computeVolume(sets: VolumeSet[]): VolumeSummary {
   let total = 0;
@@ -54,31 +54,37 @@ export function computeVolume(sets: VolumeSet[]): VolumeSummary {
       continue;
     }
 
-    if (s.tags?.includes('drop') && s.drops && s.drops.length > 0) {
-      let counted = false;
-      for (const d of s.drops) {
-        const w = effectiveWeight(d.weight_kg, s.bodyweight_kg ?? null);
-        if (w === null || d.reps === null) continue;
-        total += w * d.reps;
+    const drops = s.drops ?? [];
+    let counted = false;
+
+    // 旧数据把主段也写在 drops 里：第一段与主段相同就不再重复算
+    const dropsCarryMain =
+      drops.length > 0 &&
+      drops[0] !== undefined &&
+      drops[0].weight_kg === s.weight_kg &&
+      drops[0].reps === s.reps;
+
+    if (!dropsCarryMain) {
+      const w = effectiveWeight(s.weight_kg, s.bodyweight_kg ?? null);
+      if (w !== null && s.reps !== null) {
+        total += w * s.reps;
         counted = true;
       }
-      if (counted) {
-        working += 1;
-        if (s.is_inferred) inferred += 1;
-      } else {
-        skipped += 1;
-      }
-      continue;
     }
 
-    const w = effectiveWeight(s.weight_kg, s.bodyweight_kg ?? null);
-    if (w === null || s.reps === null) {
-      skipped += 1;
-      continue;
+    for (const d of drops) {
+      const w = effectiveWeight(d.weight_kg ?? s.weight_kg, s.bodyweight_kg ?? null);
+      if (w === null || d.reps === null) continue;
+      total += w * d.reps;
+      counted = true;
     }
-    total += w * s.reps;
-    working += 1;
-    if (s.is_inferred) inferred += 1;
+
+    if (counted) {
+      working += 1;
+      if (s.is_inferred) inferred += 1;
+    } else {
+      skipped += 1;
+    }
   }
 
   return {

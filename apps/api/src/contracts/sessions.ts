@@ -93,6 +93,8 @@ export const UpdateSessionRequestSchema = z.object({
             z.object({
               weight_kg: z.number().min(0).max(2000).nullable(),
               reps: z.number().int().min(0).max(1000).nullable(),
+              tags: z.array(SetTagSchema).optional(),
+              drops: z.array(SetDropSchema).nullable().optional(),
             }),
           )
           .min(1),

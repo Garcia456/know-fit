@@ -26,13 +26,16 @@ function seed(): Seed {
   return cachedSeed;
 }
 
-/** 19 块肌群及 coarse 归类 —— 检索 query 聚部位用 */
+/** 20 块肌群及 coarse 归类 —— 检索 query 聚部位用 */
 export function muscleRegions() {
   return seed().muscle_regions;
 }
 
-function asTags(values: string[]): ('failure' | 'drop')[] {
-  return values.filter((v): v is 'failure' | 'drop' => v === 'failure' || v === 'drop');
+function asTags(values: string[]): ('failure' | 'drop' | 'rest_pause')[] {
+  return values.filter(
+    (v): v is 'failure' | 'drop' | 'rest_pause' =>
+      v === 'failure' || v === 'drop' || v === 'rest_pause',
+  );
 }
 
 /** 动作 id → 中文名；读历史时补展示名，不改落库值。 */

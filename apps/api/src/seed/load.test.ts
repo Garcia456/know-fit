@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadSeed } from './load.js';
 
 /**
- * 映射表数据的断言 —— 19 个肌群分区 / 63 个动作 / 5 条兜底。
+ * 映射表数据的断言 —— 20 个肌群分区 / 64 个动作 / 5 条兜底。
  *
  * ⚠️ 数字写死在这里，是为了让「数据被悄悄改小」这件事必须显式过闸门。
  */
@@ -14,12 +14,12 @@ describe('seed 数据（apps/api/seed/exercises.json）', () => {
     expect(seed.muscle_regions.length).toBeGreaterThan(0);
   });
 
-  it('19 个肌群分区', () => {
-    expect(seed.muscle_regions).toHaveLength(19);
+  it('20 个肌群分区', () => {
+    expect(seed.muscle_regions).toHaveLength(20);
   });
 
-  it('63 个动作', () => {
-    expect(seed.exercises).toHaveLength(63);
+  it('64 个动作', () => {
+    expect(seed.exercises).toHaveLength(64);
   });
 
   it('5 条部位级兜底', () => {

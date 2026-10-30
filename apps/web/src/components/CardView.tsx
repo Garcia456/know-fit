@@ -159,7 +159,7 @@ function WorkoutCardView({
           {onComplete ? (
             <button
               type="button"
-              className="btn btn--sm"
+              className="text-action"
               onClick={() => onComplete(card.session_id)}
             >
               补充漏掉的组
@@ -179,11 +179,11 @@ function WorkoutCardView({
           />
         </div>
       ) : onAssess && !incomplete ? (
-        <div className="ask">
-          <p>要不要看看这次练得够不够？</p>
+        <div className="hook-ask-row">
+          <p className="hook-ask">要不要看看这次练得够不够？</p>
           <button
             type="button"
-            className="btn btn--sm"
+            className="text-action"
             onClick={() => onAssess(card.session_id)}
             disabled={assessing}
           >
@@ -267,7 +267,7 @@ function RefusalCardView({
       {onQuickAsk ? (
         <div className="ask">
           <p>训练记录本身不受影响</p>
-          <button type="button" className="btn btn--sm" onClick={() => onQuickAsk('今天练了')}>
+          <button type="button" className="text-action" onClick={() => onQuickAsk('今天练了')}>
             记一下今天的训练
           </button>
         </div>

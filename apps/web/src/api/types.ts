@@ -16,7 +16,7 @@ export type RecordStatus = 'complete' | 'incomplete';
 export type MissingField = 'exercises' | 'reps' | 'weight_kg';
 export type RefusalReason = 'medical' | 'medication' | 'extreme_diet' | 'off_topic';
 export type SetType = 'warmup' | 'working';
-export type SetTag = 'failure' | 'drop';
+export type SetTag = 'failure' | 'drop' | 'rest_pause';
 export interface SetDrop {
   weight_kg: number | null;
   reps: number | null;

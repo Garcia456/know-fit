@@ -8,10 +8,10 @@ import { z } from 'zod';
  * 🔴 可空字段一律 nullable()：LangChain 的 jsonSchema 通道对 optional() 支持不好。
  */
 
-/** 组标签：力竭 / 递减 */
-export const SetTagSchema = z.enum(['failure', 'drop']);
+/** 组标签：力竭 / 递减 / 休息暂停 */
+export const SetTagSchema = z.enum(['failure', 'drop', 'rest_pause']);
 
-/** 递减组的一小段 */
+/** 一组内后续的一小段；weight_kg 为 null = 沿用主段重量 */
 export const SetDropSchema = z.object({
   weight_kg: z.number().nullable(),
   reps: z.number().int().nullable(),
@@ -20,13 +20,13 @@ export const SetDropSchema = z.object({
 /** 一组 */
 export const SetSchema = z.object({
   weight_kg: z.number().nullable(), // 用户说的那个数字；换算成 kg 由代码做
-  weight_unit: z.enum(['kg', 'lb']).nullable(), // 原文单位；null = 没提，按 kg 记并标记推测
+  weight_unit: z.enum(['kg', 'lb']).nullable(), // 原文单位；null = 没提，按 kg 记
   reps: z.number().int().nullable(),
   set_type: z.enum(['warmup', 'working']),
-  is_inferred: z.boolean().default(false), // 系统推测出来的值；模型漏填按「用户原话」处理
+  is_inferred: z.boolean().default(false), // 系统补出来的值；用户说出的数字（含没带单位）为 false
   /** 缺省 = 无标签（模型没提） */
   tags: z.array(SetTagSchema).optional(),
-  /** 递减组的每段重量×次数；非递减组为空 */
+  /** 主段之后的后续段；weight_kg 为 null = 沿用主段重量 */
   drops: z.array(SetDropSchema).nullable().optional(),
 });
 

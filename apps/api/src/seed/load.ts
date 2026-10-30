@@ -22,7 +22,7 @@ const ExerciseSchema = z.object({
   aliases: z.array(z.string()),
   equipment: z.array(z.string()),
   // nullable：核心类动作（举腿 / 转体 / 健腹轮 / 髋外展内收）没有"推 / 拉"的力学分类。
-  // 实测数据里 63 条中有 5 条为 null —— 这不是数据缺失，是分类本身不适用。
+  // 实测数据里 64 条中有 5 条为 null —— 这不是数据缺失，是分类本身不适用。
   mechanic: z.string().nullable(),
   primary_muscles: z.array(z.string()),
   secondary_muscles: z.array(z.string()),

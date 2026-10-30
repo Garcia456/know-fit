@@ -42,7 +42,7 @@ export function LowDataCard({ missing, onComplete }: Props) {
       {onComplete ? (
         <div className="ask">
           <p>补完就能算趋势</p>
-          <button type="button" className="btn btn--sm" onClick={onComplete}>
+          <button type="button" className="text-action" onClick={onComplete}>
             补记这次训练
           </button>
         </div>

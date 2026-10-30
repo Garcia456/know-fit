@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 describe('个人信息页', () => {
-  it('保存成功后显示已保存，并以回读值为准', async () => {
+  it('改完自动保存，并以回读值为准', async () => {
     const fetchMock = stubFetch({
       ok: true,
       body: { ...emptyProfile, height_cm: 180, weight_kg: 75, goal: '增肌' },
@@ -42,36 +42,38 @@ describe('个人信息页', () => {
     fireEvent.change(screen.getByLabelText('体重（kg）'), { target: { value: '75' } });
     fireEvent.click(screen.getByLabelText('目标'));
     fireEvent.click(await screen.findByRole('option', { name: '增肌' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
-    expect(await screen.findByText('已保存')).toBeDefined();
-    expect(height.value).toBe('180');
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/profile',
-      expect.objectContaining({
-        method: 'PUT',
-        body: JSON.stringify({
-          height_cm: 180,
-          weight_kg: 75,
-          goal: '增肌',
-          training_years: null,
-          training_months: null,
-        }),
-      }),
+    await waitFor(
+      () =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/profile',
+          expect.objectContaining({
+            method: 'PUT',
+            body: JSON.stringify({
+              height_cm: 180,
+              weight_kg: 75,
+              goal: '增肌',
+              training_years: null,
+              training_months: null,
+            }),
+          }),
+        ),
+      { timeout: 3000 },
     );
+    expect(await screen.findByText('已自动保存')).toBeDefined();
+    expect(height.value).toBe('180');
   });
 
-  it('保存失败时不清空输入、不显示已保存', async () => {
+  it('自动保存失败时不清空输入、不显示已保存', async () => {
     stubFetch({ ok: false, body: { error: '写库失败' } });
     render(<ProfilePage />);
 
     const weight = (await screen.findByLabelText('体重（kg）')) as HTMLInputElement;
     fireEvent.change(weight, { target: { value: '75' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
-    await waitFor(() => expect(screen.getByText('写库失败')).toBeDefined());
+    expect(await screen.findByText('写库失败', {}, { timeout: 3000 })).toBeDefined();
     expect(weight.value).toBe('75');
-    expect(screen.queryByText('已保存')).toBeNull();
+    expect(screen.queryByText('已自动保存')).toBeNull();
   });
 
   it('越界值本地拦下，不发请求', async () => {
@@ -80,10 +82,14 @@ describe('个人信息页', () => {
 
     const height = await screen.findByLabelText('身高（cm）');
     fireEvent.change(height, { target: { value: '99' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.blur(height);
 
     expect(await screen.findByText(/身高需在 100–250 之间/)).toBeDefined();
-    expect(fetchMock).not.toHaveBeenCalledWith('/api/profile', expect.objectContaining({ method: 'PUT' }));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/profile',
+      expect.objectContaining({ method: 'PUT' }),
+    );
   });
 
   it('未实现的项画行、标未开放、不可点', async () => {
@@ -110,9 +116,8 @@ describe('个人信息页', () => {
     render(<ProfilePage />);
 
     fireEvent.change(await screen.findByLabelText('体重（kg）'), { target: { value: '75' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
-    expect(await screen.findByText('已保存')).toBeDefined();
+    expect(await screen.findByText('已自动保存', {}, { timeout: 3000 })).toBeDefined();
     expect(screen.getByText('· 10/26')).toBeDefined();
   });
 
@@ -131,7 +136,7 @@ describe('个人信息页', () => {
     await waitFor(() => expect(document.body.classList.contains('sheet-open')).toBe(false));
   });
 
-  it('训练年限用年 + 月滚轮，保存时提交年月', async () => {
+  it('训练年限用年 + 月滚轮，选完自动提交年月', async () => {
     const fetchMock = stubFetch({ ok: true, body: { ...emptyProfile, training_years: 2, training_months: 3 } });
     render(<ProfilePage />);
 
@@ -141,21 +146,22 @@ describe('个人信息页', () => {
     fireEvent.click(screen.getByRole('button', { name: '确定' }));
     expect(screen.getByText('2 年 3 个月')).toBeDefined();
 
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/profile',
-        expect.objectContaining({
-          method: 'PUT',
-          body: JSON.stringify({
-            height_cm: null,
-            weight_kg: null,
-            goal: null,
-            training_years: 2,
-            training_months: 3,
+    await waitFor(
+      () =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/profile',
+          expect.objectContaining({
+            method: 'PUT',
+            body: JSON.stringify({
+              height_cm: null,
+              weight_kg: null,
+              goal: null,
+              training_years: 2,
+              training_months: 3,
+            }),
           }),
-        }),
-      ),
+        ),
+      { timeout: 3000 },
     );
   });
 
@@ -179,17 +185,21 @@ describe('个人信息页', () => {
     spy.mockRestore();
   });
 
-  it('档案读失败时表单还在，保存关闭并给重试', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({}) }),
-    );
+  it('档案读失败时表单还在，给重试且不自动写库', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetchMock);
     render(<ProfilePage />);
 
     expect((await screen.findAllByText(/档案没读出来/)).length).toBeGreaterThan(0);
     expect(screen.getByLabelText('身高（cm）')).toBeDefined();
     expect(screen.getByLabelText('目标')).toBeDefined();
-    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: '保存' })).toBeNull();
     expect(screen.getByRole('button', { name: '重试' })).toBeDefined();
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/profile',
+      expect.objectContaining({ method: 'PUT' }),
+    );
   });
 });

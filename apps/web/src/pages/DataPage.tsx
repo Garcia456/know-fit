@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useState, type FocusEvent } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { Link, useSearchParams } from 'react-router';
-import { deleteSession, getHistory, getSession, putSession } from '../api/client';
-import type { HistoryItem, SessionDetail } from '../api/types';
+import {
+  deleteSession,
+  getHistory,
+  getSession,
+  putSession,
+  type UpdateExerciseInput,
+} from '../api/client';
+import type { HistoryItem, SessionDetail, SetTag, WorkoutCardSet } from '../api/types';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   ChartIcon,
   CheckIcon,
   CloseIcon,
+  InfoIcon,
   SquarePenIcon,
   TrashIcon,
 } from '../components/Icons';
@@ -351,11 +358,18 @@ interface Props {
   onDeleted: (id: string) => void;
 }
 
+interface DraftDrop {
+  weight: string;
+  reps: string;
+}
+
 interface DraftSet {
   weight: string;
   reps: string;
   setType: 'warmup' | 'working';
   isInferred: boolean;
+  tags: SetTag[];
+  drops: DraftDrop[];
 }
 
 interface DraftExercise {
@@ -371,8 +385,29 @@ function toDraft(detail: SessionDetail): DraftExercise[] {
       reps: set.reps === null ? '' : String(set.reps),
       setType: set.set_type,
       isInferred: set.is_inferred,
+      tags: set.tags ?? [],
+      // 旧数据把主段也放进 drops：编辑时去掉重复的那段
+      drops: (set.drops ?? [])
+        .filter(
+          (d, i) =>
+            !(i === 0 && d.weight_kg === set.weight_kg && d.reps === set.reps),
+        )
+        .map((d) => ({
+          weight: d.weight_kg === null ? '' : String(d.weight_kg),
+          reps: d.reps === null ? '' : String(d.reps),
+        })),
     })),
   }));
+}
+
+/** 一组拆成主段 + 后续段；后续段没写重量就沿用主段 */
+function setSegments(set: WorkoutCardSet): { weight: number | null; reps: number | null }[] {
+  const main = { weight: set.weight_kg, reps: set.reps };
+  const drops = set.drops ?? [];
+  const carriesMain =
+    drops.length > 0 && drops[0]?.weight_kg === main.weight && drops[0]?.reps === main.reps;
+  const extra = carriesMain ? drops : [{ weight_kg: main.weight, reps: main.reps }, ...drops];
+  return extra.map((d) => ({ weight: d.weight_kg ?? main.weight, reps: d.reps }));
 }
 
 /** 聚焦即全选：输入第一个数字时旧值被替换 */
@@ -382,6 +417,15 @@ function selectAll(e: FocusEvent<HTMLInputElement>) {
 
 function onlyDigits(value: string) {
   return value.replace(/\D/g, '');
+}
+
+/** 动作名后的浅灰信息点：这组动作里含系统推测的数字 */
+function InferredDot() {
+  return (
+    <span className="inferred-dot" role="img" aria-label="含推测数字" title="有系统推测的数字">
+      <InfoIcon size={12} />
+    </span>
+  );
 }
 
 function decimalText(value: string) {
@@ -419,7 +463,40 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
     setDraft((prev) =>
       prev.map((ex, i) =>
         i === exIndex
-          ? { ...ex, sets: ex.sets.map((set, j) => (j === setIndex ? { ...set, ...patch } : set)) }
+          ? {
+              ...ex,
+              sets: ex.sets.map((set, j) =>
+                j === setIndex ? { ...set, ...patch, isInferred: false } : set,
+              ),
+            }
+          : ex,
+      ),
+    );
+  }
+
+  function patchDrop(
+    exIndex: number,
+    setIndex: number,
+    dropIndex: number,
+    patch: Partial<DraftDrop>,
+  ) {
+    setDraft((prev) =>
+      prev.map((ex, i) =>
+        i === exIndex
+          ? {
+              ...ex,
+              sets: ex.sets.map((set, j) =>
+                j === setIndex
+                  ? {
+                      ...set,
+                      isInferred: false,
+                      drops: set.drops.map((drop, k) =>
+                        k === dropIndex ? { ...drop, ...patch } : drop,
+                      ),
+                    }
+                  : set,
+              ),
+            }
           : ex,
       ),
     );
@@ -428,15 +505,14 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
   async function handleSave() {
     if (!detail) return;
     setError(null);
-    const exercises: { raw_name: string; sets: { weight_kg: number | null; reps: number | null }[] }[] =
-      [];
+    const exercises: UpdateExerciseInput[] = [];
     for (const ex of draft) {
       const raw_name = ex.raw_name.trim();
       if (!raw_name) {
         setError('动作名不能为空');
         return;
       }
-      const sets: { weight_kg: number | null; reps: number | null }[] = [];
+      const sets: UpdateExerciseInput['sets'] = [];
       for (const set of ex.sets) {
         const weightText = set.weight.trim();
         const repsText = set.reps.trim();
@@ -450,7 +526,30 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
           setError('次数要填正整数');
           return;
         }
-        sets.push({ weight_kg, reps });
+
+        const drops: NonNullable<UpdateExerciseInput['sets'][number]['drops']> = [];
+        for (const drop of set.drops) {
+          const dropWeightText = drop.weight.trim();
+          const dropRepsText = drop.reps.trim();
+          const dropWeight = dropWeightText === '' ? null : Number(dropWeightText);
+          const dropReps = dropRepsText === '' ? null : Number(dropRepsText);
+          if (dropWeight !== null && (!Number.isFinite(dropWeight) || dropWeight < 0)) {
+            setError('后续段重量要填数字');
+            return;
+          }
+          if (dropReps !== null && (!Number.isInteger(dropReps) || dropReps <= 0)) {
+            setError('后续段次数要填正整数');
+            return;
+          }
+          drops.push({ weight_kg: dropWeight, reps: dropReps });
+        }
+
+        sets.push({
+          weight_kg,
+          reps,
+          ...(set.tags.length > 0 ? { tags: set.tags } : {}),
+          ...(drops.length > 0 ? { drops } : {}),
+        });
       }
       exercises.push({ raw_name, sets });
     }
@@ -581,20 +680,23 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
             <ul className="exercise-list">
               {draft.map((ex, exIndex) => (
                 <li key={exIndex} className="exercise">
-                  <label className="edit-box edit-box--name">
-                    <input
-                      className="edit-box__input"
-                      aria-label={`第 ${exIndex + 1} 个动作名称`}
-                      value={ex.raw_name}
-                      onChange={(e) =>
-                        setDraft((prev) =>
-                          prev.map((row, i) =>
-                            i === exIndex ? { ...row, raw_name: e.target.value } : row,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
+                  <div className="exercise__hd">
+                    <label className="edit-box edit-box--name">
+                      <input
+                        className="edit-box__input"
+                        aria-label={`第 ${exIndex + 1} 个动作名称`}
+                        value={ex.raw_name}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev.map((row, i) =>
+                              i === exIndex ? { ...row, raw_name: e.target.value } : row,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    {ex.sets.some((set) => set.isInferred) ? <InferredDot /> : null}
+                  </div>
                   <ul className="set-list">
                     {ex.sets.map((set, setIndex) => (
                       <li key={setIndex} className="edit-set">
@@ -627,8 +729,49 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
                           />
                           <span className="edit-box__unit">次</span>
                         </label>
+                        {set.drops.map((drop, dropIndex) => (
+                          <span key={dropIndex} className="edit-seg">
+                            <span className="edit-set__x">+</span>
+                            {drop.weight !== '' ? (
+                              <>
+                                <label className="edit-box edit-box--drop">
+                                  <input
+                                    className="edit-box__input"
+                                    aria-label={`第 ${exIndex + 1} 个动作第 ${setIndex + 1} 组后续第 ${dropIndex + 1} 段重量`}
+                                    inputMode="decimal"
+                                    placeholder="—"
+                                    value={drop.weight}
+                                    onChange={(e) =>
+                                      patchDrop(exIndex, setIndex, dropIndex, {
+                                        weight: decimalText(e.target.value),
+                                      })
+                                    }
+                                    onFocus={selectAll}
+                                  />
+                                  <span className="edit-box__unit">kg</span>
+                                </label>
+                                <span className="edit-set__x">×</span>
+                              </>
+                            ) : null}
+                            <label className="edit-box edit-box--drop">
+                              <input
+                                className="edit-box__input"
+                                aria-label={`第 ${exIndex + 1} 个动作第 ${setIndex + 1} 组后续第 ${dropIndex + 1} 段次数`}
+                                inputMode="numeric"
+                                placeholder="—"
+                                value={drop.reps}
+                                onChange={(e) =>
+                                  patchDrop(exIndex, setIndex, dropIndex, {
+                                    reps: onlyDigits(e.target.value),
+                                  })
+                                }
+                                onFocus={selectAll}
+                              />
+                              <span className="edit-box__unit">次</span>
+                            </label>
+                          </span>
+                        ))}
                         {set.setType === 'warmup' ? <span className="tag">热身</span> : null}
-                        {set.isInferred ? <span className="tag tag--dashed">推测</span> : null}
                       </li>
                     ))}
                   </ul>
@@ -639,16 +782,31 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
             <ul className="exercise-list">
               {detail.exercises.map((ex, exIndex) => (
                 <li key={`${ex.raw_name}-${exIndex}`} className="exercise">
-                  <div className="exercise__name">{ex.raw_name}</div>
+                  <div className="exercise__name">
+                    {ex.raw_name}
+                    {ex.sets.some((set) => set.is_inferred) ? <InferredDot /> : null}
+                  </div>
                   <ul className="set-list">
-                    {ex.sets.map((set, i) => (
-                      <li key={i}>
-                        {set.weight_kg === null ? '—' : formatKg(set.weight_kg)} ×{' '}
-                        {set.reps === null ? '—' : set.reps}
-                        {set.set_type === 'warmup' ? <span className="tag">热身</span> : null}
-                        {set.is_inferred ? <span className="tag tag--dashed">推测</span> : null}
-                      </li>
-                    ))}
+                    {ex.sets.map((set, i) => {
+                      const segments = setSegments(set);
+                      return (
+                        <li key={i}>
+                          {segments.map((seg, k) => (
+                            <span key={k}>
+                              {k > 0 ? <span className="set-plus"> + </span> : null}
+                              {k === 0 || seg.weight !== segments[k - 1]?.weight
+                                ? `${seg.weight === null ? '—' : formatKg(seg.weight)} × `
+                                : null}
+                              {seg.reps === null ? '—' : seg.reps}
+                            </span>
+                          ))}
+                          {set.set_type === 'warmup' ? <span className="tag">热身</span> : null}
+                          {set.tags?.includes('drop') ? (
+                            <span className="tag">递减组</span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </li>
               ))}

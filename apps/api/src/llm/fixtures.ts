@@ -207,7 +207,7 @@ export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
     ],
   },
 
-  // 递减组：一段里 3 个小段，weight/reps 记第一段
+  // 递减组：主段写 weight/reps，后续段只进 drops；用户明说「递减」才带 drop 标签
   '侧平举 12kg×10 递减到 8kg×10 再 6kg×12 三组': {
     kind: 'workout',
     day_hint: null,
@@ -219,9 +219,8 @@ export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
         name_confidence: 'high',
         mentioned_sets: working(3, 12, 'kg', 10).map((s) => ({
           ...s,
-          tags: ['drop'] as ('failure' | 'drop')[],
+          tags: ['drop'] as ('failure' | 'drop' | 'rest_pause')[],
           drops: [
-            { weight_kg: 12, reps: 10 },
             { weight_kg: 8, reps: 10 },
             { weight_kg: 6, reps: 12 },
           ],

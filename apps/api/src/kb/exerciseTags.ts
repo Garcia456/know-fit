@@ -4,7 +4,7 @@ import { buildIndex, normalizeKey } from '../extraction/normalize.js';
  * `exercise_tags` —— 从片文本里抽动作术语，**确定性代码，不让 LLM 抽**。
  *
  * 判据与别名归一相同：能锚在自有资产上的，就不让模型自由发挥。
- * 对 `seed/exercises.json` 的 63 条动作做术语匹配，命中记 `name_zh`。
+ * 对 `seed/exercises.json` 的 64 条动作做术语匹配，命中记 `name_zh`。
  *
  * ⚠️ 只认表内动作 —— 口语说法（「推」是不是卧推？）盖不全。
  *    匹配率让真跑的数字说话，不在这里假装。
