@@ -64,8 +64,8 @@ export const LIBRARY_TO_REGION: Record<string, RegionId> = {
   'shoulder-front-right': 'delt_ant',
   'shoulder-side-left': 'delt_lat',
   'shoulder-side-right': 'delt_lat',
-  'deltoid-rear-left': 'delt_post',
-  'deltoid-rear-right': 'delt_post',
+  'deltoid-rear-left': 'delt_lat',
+  'deltoid-rear-right': 'delt_lat',
 
   'biceps-left': 'biceps',
   'biceps-right': 'biceps',
@@ -161,10 +161,6 @@ export const UNMAPPED_LIBRARY_IDS = [
 
 export const BODY_PATHS: MuscleDef[] = [...FRONT_MUSCLES, ...BACK_MUSCLES];
 
-/** 臀大肌亮时，臀中肌让位 —— 只留臀大肌轮廓，线条不来回折 */
-export const GLUTE_MEDIUS_PATHS = BODY_PATHS.filter((m) => m.id.startsWith('gluteus-medius')).map(
-  (m) => m.path,
-);
 
 interface PathPiece {
   region: RegionId;
@@ -269,18 +265,85 @@ const CUSTOM_PATH_PIECES: Record<string, PathPiece[]> = {
   'traps-lower-right': [
     { region: 'back_mid', d: 'M 55.816 22.459 L 55.33 23.197 L 53.902 27.161 L 53.98 22.459 Z' },
   ],
+  // 臀中肌不画：库里那块三角留空，髋外展的色不上图
+  'gluteus-medius-left': [],
+  'gluteus-medius-right': [],
+  // 下背不画，腰往下由背阔肌最下面一块拉长补上
+  'lower-back-erectors-left': [],
+  'lower-back-erectors-right': [],
+  'lower-back-ql-left': [],
+  'lower-back-ql-right': [],
+  // 背阔肌最下一块往下留一段，臀线由臀大肌向上补
+  'gluteus-maximus-left': [
+    {
+      region: 'glutes',
+      d: 'M 50.6 40.9 L 44.3 43.3 L 44.41 50.52 L 47.18 51.03 L 51.62 49.09 L 52.2 49.48 L 52.2 41.6 Z',
+    },
+  ],
+  'gluteus-maximus-right': [
+    {
+      region: 'glutes',
+      d: 'M 54.95 40.9 L 52.8 41.7 L 52.8 49.48 L 53.57 49.09 L 57.68 50.76 L 60.5 50.6 L 60.85 43.4 Z',
+    },
+  ],
+  // 背阔肌最下一块往下留一段
+  'lats-lower-left': [
+    {
+      region: 'lats',
+      d: 'M 47.1 33.7 L 51.5 33.5 C 51.65 36 52 38.9 52.3 41.2 L 50.9 40.8 L 45.4 41.7 C 46.4 38.9 46.9 36.4 47.1 33.7 Z',
+    },
+  ],
+  'lats-lower-right': [
+    {
+      region: 'lats',
+      d: 'M 57.96 33.7 L 53.56 33.5 C 53.41 36 53.06 38.9 52.76 41.2 L 54.16 40.8 L 59.66 41.7 C 58.66 38.9 58.16 36.4 57.96 33.7 Z',
+    },
+  ],
+  // 中间两块往下延伸，边界往下挪；外缘往里凹，越到底越甩出去
+  'lats-mid-left': [
+    {
+      region: 'lats',
+      d: 'M 45.771 24.6 L 49.185 24.6 L 51.053 29.314 L 51.5 33.4 L 47.1 33.2 C 47.5 31.2 47.01 30.29 45.872 24.789 Z',
+    },
+  ],
+  'lats-mid-right': [
+    {
+      region: 'lats',
+      d: 'M 59.347 24.6 L 55.918 24.6 L 54.012 29.413 L 53.56 33.4 L 57.96 33.2 C 57.56 31.2 58.05 30.385 59.188 24.888 Z',
+    },
+  ],
+    // 中束在库里那块偏小，往外、往上放宽一点
+  'deltoid-rear-left': [
+    { region: 'delt_lat', d: 'M 41.9 16.33 L 40.33 17.89 L 39.736 20.156 L 44.32 14.77 Z' },
+  ],
+  'deltoid-rear-right': [
+    { region: 'delt_lat', d: 'M 63.1 16.33 L 64.67 17.89 L 65.264 20.156 L 60.68 14.77 Z' },
+  ],
+  // 背阔肌上块：整片折翼切给后束，留下的部分不再带尖端
+  'lats-upper-left': [
+    {
+      region: 'lats',
+      d: 'M 45.05 17.5 L 44.025 20.355 L 45.663 24.4 L 49.103 24.4 Z',
+    },
+    {
+      region: 'delt_post',
+      d: 'M 45.15 15.8 L 40.9 19.05 L 39.426 22.249 L 41.109 20.641 L 43.649 19.72 Z',
+    },
+  ],
+  'lats-upper-right': [
+    {
+      region: 'lats',
+      d: 'M 59.95 17.5 L 61.039 20.454 L 59.455 24.4 L 56.022 24.4 Z',
+    },
+    {
+      region: 'delt_post',
+      d: 'M 59.85 15.8 L 64.1 19.05 L 65.574 22.249 L 63.891 20.641 L 61.351 19.72 Z',
+    },
+  ],
 };
 
-/** 原图不画（作者定：下背四块留白）；数据仍按 lower_back 计入 */
-const HIDDEN_LIBRARY_IDS = new Set([
-  'lower-back-erectors-left',
-  'lower-back-erectors-right',
-  'lower-back-ql-left',
-  'lower-back-ql-right',
-]);
-
 /** 上图时不画的区：有数据，但不落在任何路径上 */
-const NOT_RENDERED_REGIONS = new Set<RegionId>(['lower_back']);
+const NOT_RENDERED_REGIONS = new Set<RegionId>(['abductors', 'lower_back']);
 
 /** 渲染前的契约校验：返回空数组才算过。 */
 export function validateBodyMap(): string[] {
@@ -300,11 +363,8 @@ export function validateBodyMap(): string[] {
   for (const id of Object.keys(LIBRARY_TO_REGION)) {
     if (!ids.has(id)) problems.push(`映射表里的库 id 不存在：${id}`);
   }
-  for (const id of [...Object.keys(CUSTOM_PATH_PIECES), ...HIDDEN_LIBRARY_IDS]) {
-    if (!ids.has(id)) problems.push(`改写表里的库 id 不存在：${id}`);
-  }
   for (const id of Object.keys(CUSTOM_PATH_PIECES)) {
-    if (HIDDEN_LIBRARY_IDS.has(id)) problems.push(`库路径既被改写又被隐藏：${id}`);
+    if (!ids.has(id)) problems.push(`改写表里的库 id 不存在：${id}`);
   }
 
   const unmapped = new Set<string>(UNMAPPED_LIBRARY_IDS);
@@ -316,7 +376,6 @@ export function validateBodyMap(): string[] {
 
   const rendered = new Set<RegionId>();
   for (const m of BODY_PATHS) {
-    if (HIDDEN_LIBRARY_IDS.has(m.id)) continue;
     const custom = CUSTOM_PATH_PIECES[m.id];
     if (custom) {
       for (const piece of custom) rendered.add(piece.region);
@@ -351,7 +410,6 @@ export function viewPaths(view: 'FRONT' | 'BACK'): {
   };
 
   for (const m of source) {
-    if (HIDDEN_LIBRARY_IDS.has(m.id)) continue;
     const custom = CUSTOM_PATH_PIECES[m.id];
     if (custom) {
       for (const piece of custom) push(piece.region, piece.d);
@@ -366,7 +424,10 @@ export function viewPaths(view: 'FRONT' | 'BACK'): {
   }
 
   return {
-    groups: [...groups.entries()].map(([region, paths]) => ({ region, paths })),
+    // 按项目肌群顺序画，臀中肌压在臀大肌之上（臀大肌上缘已盖住它）
+    groups: [...groups.entries()]
+      .sort(([a], [b]) => REGION_IDS.indexOf(a) - REGION_IDS.indexOf(b))
+      .map(([region, paths]) => ({ region, paths })),
     silhouettes,
   };
 }

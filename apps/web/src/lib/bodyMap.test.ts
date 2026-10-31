@@ -18,13 +18,13 @@ describe('body-muscles → 20 区映射', () => {
     expect(UNMAPPED_LIBRARY_IDS).toHaveLength(25);
   });
 
-  it('除留白的下背外，19 个区都至少有一条路径', () => {
+  it('除不上图的外展肌群、下背外，18 个区都至少有一条路径', () => {
     const front = viewPaths('FRONT').groups.map((g) => g.region);
     const back = viewPaths('BACK').groups.map((g) => g.region);
-    expect(new Set([...front, ...back]).size).toBe(19);
+    const notRendered = new Set(['abductors', 'lower_back']);
+    expect(new Set([...front, ...back]).size).toBe(18);
     for (const region of REGION_IDS) {
-      const rendered = [...front, ...back].includes(region);
-      expect(rendered).toBe(region !== 'lower_back');
+      expect([...front, ...back].includes(region)).toBe(!notRendered.has(region));
     }
   });
 
@@ -34,9 +34,14 @@ describe('body-muscles → 20 区映射', () => {
     expect(front.find((g) => g.region === 'abs_lower')?.paths).toHaveLength(4);
   });
 
-  it('下背四块不上图', () => {
-    const back = viewPaths('BACK').groups.map((g) => g.region);
-    expect(back).not.toContain('lower_back');
+  it('下背与臀中肌都不画，背阔肌最下一块拉长到臀部', () => {
+    const back = viewPaths('BACK').groups;
+    expect(back.map((g) => g.region)).not.toContain('abductors');
+    expect(back.map((g) => g.region)).not.toContain('lower_back');
+    expect(back.find((g) => g.region === 'glutes')?.paths).toHaveLength(2);
+    expect(back.find((g) => g.region === 'lats')?.paths).toHaveLength(6);
+    // 背阔肌外缘折边切下来归后束，后束在背面只剩这一条
+    expect(back.find((g) => g.region === 'delt_post')?.paths).toHaveLength(2);
   });
 
   it('未映射路径只出现在剪影里，不带上色分组', () => {
