@@ -1,4 +1,4 @@
-import { EMPTY_WORKOUT, EXTRACTION_FIXTURES, GOLDEN_INTENTS } from './fixtures.js';
+import { EDIT_FIXTURES, EMPTY_WORKOUT, EXTRACTION_FIXTURES, GOLDEN_INTENTS } from './fixtures.js';
 import { classifyClaimType } from '../kb/claimJudge.js';
 import { NO_SOURCE_SYSTEM } from '../assessment/prompts.js';
 import { KNOWLEDGE_NO_SOURCE_SYSTEM } from '../knowledge/prompts.js';
@@ -17,6 +17,7 @@ export const FAKE_UNSUPPORTED_MARK = '【不支撑】';
 
 // 顺序有讲究：先判闲聊 —— 「我不太想练了」同时含「练」，但不该被当记录
 // ⚠️ 关键词只能是**子串**：「不想」匹配不到「不太想」（中间隔了个「太」）
+const EDIT_HINTS = ['改成', '改为', '改到', '换成', '调成', '更正', '记错了', '说错了'];
 const CHAT_HINTS = ['不太想', '懒得', '没动力', '心情', '烦', '累', '放弃', 'emo', '休息', 'hi', 'hello', '你好', '嗨', '在吗', '你是谁', '你能干嘛', '你能做什么'];
 const KNOWLEDGE_HINTS = ['推荐动作', '有什么动作', '怎么练', '练法', '动作要领', '训练计划', '新手', '组间休息', '做标准', '替代动作'];
 const ASSESS_HINTS = ['够不够', '怎么样', '行不行', '够吗', '看下', '看看', '帮我看', '评估', '建议'];
@@ -33,6 +34,7 @@ function classifyIntent(input: string): Intent {
   if (golden) return golden;
 
   if (/体重|称了/.test(input)) return 'weight';
+  if (has(input, EDIT_HINTS)) return 'edit';
   if (has(input, CHAT_HINTS)) return 'chat';
   if (has(input, KNOWLEDGE_HINTS)) return 'knowledge';
   const assess = has(input, ASSESS_HINTS);
@@ -102,6 +104,11 @@ export function createFakeClient(): LlmClient {
         };
       } else if (req.name === 'extraction') {
         raw = EXTRACTION_FIXTURES[input] ?? EMPTY_WORKOUT;
+      } else if (req.name === 'edit') {
+        raw = EDIT_FIXTURES[input] ?? {
+          target: { day_hint: null, exercise_name: null },
+          changes: { day_hint: null, exercise_name: null, weight_kg: null, reps: null },
+        };
       } else if (req.name === 'claim_type') {
         raw = { claim_type: classifyClaimType(input) };
       } else if (req.name === 'build_query') {

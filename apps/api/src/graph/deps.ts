@@ -1,7 +1,7 @@
 import type { AssessmentCard } from '../contracts/assessment.js';
-import type { MissingField, RecordStatus } from '../contracts/extraction.js';
+import type { EditRequest, MissingField, RecordStatus } from '../contracts/extraction.js';
 import type { VolumeHook } from '../contracts/metrics.js';
-import type { KnowledgeCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
+import type { KnowledgeCard, TurnCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
 import type { TurnHistoryItem } from './state.js';
 import type { LlmClient } from '../llm/client.js';
 
@@ -77,5 +77,7 @@ export interface TurnDeps {
   bodyweightFor?: (input: { user_id: string; date: string }) => Promise<number | null>;
   /** 「记录体重」工具 —— 落库实现由服务层注入，同一天覆盖 */
   recordWeight?: (input: { user_id: string; date: string; weight_kg: number }) => Promise<void>;
+  /** 「修改已有记录」工具 —— 定位与写入由服务层做，图只负责把模型解析结果递进去 */
+  applyEdit?: (input: { user_id: string; request: EditRequest; now: Date }) => Promise<TurnCard>;
   now?: () => Date;
 }

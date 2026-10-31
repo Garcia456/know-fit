@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FocusEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { Link, useSearchParams } from 'react-router';
 import {
@@ -419,11 +419,43 @@ function onlyDigits(value: string) {
   return value.replace(/\D/g, '');
 }
 
-/** 动作名后的浅灰信息点：这组动作里含系统推测的数字 */
+/** 动作名后的浅灰信息点：这组动作里含系统推测的数字；点一下浮出说明，3s 后淡出 */
 function InferredDot() {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timer.current) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  function show() {
+    if (timer.current) window.clearTimeout(timer.current);
+    setOpen(true);
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      setOpen(false);
+    }, 3000);
+  }
+
   return (
-    <span className="inferred-dot" role="img" aria-label="含推测数字" title="有系统推测的数字">
-      <InfoIcon size={12} />
+    <span className="inferred-hint">
+      <button
+        type="button"
+        className="inferred-dot"
+        aria-label="含系统推测的数字"
+        aria-expanded={open}
+        onClick={show}
+      >
+        <InfoIcon size={12} />
+      </button>
+      {open ? (
+        <span className="inferred-tip" role="status">
+          有系统推测的数字，点编辑可以改
+        </span>
+      ) : null}
     </span>
   );
 }

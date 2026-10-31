@@ -56,7 +56,7 @@ export function parseWeightCorrection(message: string): WeightCorrection | null 
 
 const WEIGHT_EPS = 0.001;
 
-interface EntrySets {
+export interface EntrySets {
   entryId: string;
   order: number;
   rawName: string;
@@ -76,7 +76,7 @@ interface EntrySets {
   }[];
 }
 
-async function loadSessionEntries(sessionId: string): Promise<EntrySets[]> {
+export async function loadSessionEntries(sessionId: string): Promise<EntrySets[]> {
   const db = getDb();
   const entries = await db
     .select()

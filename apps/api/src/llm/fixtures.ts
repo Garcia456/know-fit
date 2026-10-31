@@ -1,4 +1,4 @@
-import type { Extraction, Exercise, Intent } from '../contracts/extraction.js';
+import type { EditRequest, Extraction, Exercise, Intent } from '../contracts/extraction.js';
 
 /**
  * 黄金集 —— 输入原文 → 期望结构。
@@ -230,6 +230,18 @@ export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
   },
 };
 
+/** 修改已有记录的固定解析 —— 替身用它走通修改链路（不证明模型抽得准） */
+export const EDIT_FIXTURES: Record<string, EditRequest> = {
+  '今天的器械卧推单边改成器械卧推，重量60kg': {
+    target: { day_hint: '今天', exercise_name: '器械卧推单边' },
+    changes: { day_hint: null, exercise_name: '器械卧推', weight_kg: 60, reps: null },
+  },
+  '把最上面的训练改成昨天的': {
+    target: { day_hint: null, exercise_name: null },
+    changes: { day_hint: '昨天', exercise_name: null, weight_kg: null, reps: null },
+  },
+};
+
 /** 黄金集里非抽取类的输入（闲聊 / 红线 / 非目标）—— 给真实 smoke 算意图准确率用 */
 export const GOLDEN_INTENTS: Record<string, Intent> = {
   '卧推 70kg×8 四组，飞鸟 15kg×12 三组，深蹲 100kg×5 五组': 'record',
@@ -249,6 +261,8 @@ export const GOLDEN_INTENTS: Record<string, Intent> = {
   '侧平举 12kg×10 递减到 8kg×10 再 6kg×12 三组': 'record',
   '卧推 70kg×8 四组，帮我看下够不够': 'mixed',
   '推日：卧推 70kg×5 五组，帮我看下够不够': 'mixed',
+  '今天的器械卧推单边改成器械卧推，重量60kg': 'edit',
+  '把最上面的训练改成昨天的': 'edit',
   '我不太想练了': 'chat',
   'hi': 'chat',
   '你是谁': 'chat',

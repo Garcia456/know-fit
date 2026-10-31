@@ -5,6 +5,7 @@
 
 export type Intent =
   | 'record'
+  | 'edit'
   | 'assess'
   | 'mixed'
   | 'knowledge'

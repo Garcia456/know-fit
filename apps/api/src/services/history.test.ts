@@ -176,6 +176,50 @@ describe('updateSession', () => {
     expect(detail.note).toBe('手动改到 72.5');
   });
 
+  it('手动改过的组清掉推测标记，没动的组保留', async () => {
+    const { session_id } = await persistWorkout({
+      user_id: SINGLE_USER_ID,
+      date: '2031-03-15',
+      split_label: 'e2e-history-推测',
+      status: 'complete',
+      missing_fields: [],
+      notes: null,
+      exercises: [
+        {
+          order: 0,
+          raw_name: 'e2e-history-推测卧推',
+          exercise_id: null,
+          name_confidence: 'low',
+          region_fallback: null,
+          sets: [
+            { order: 0, weight_kg: 60, reps: 8, set_type: 'working', is_inferred: true },
+            { order: 1, weight_kg: 60, reps: 8, set_type: 'working', is_inferred: true },
+          ],
+        },
+      ],
+    });
+
+    const detail = await updateSession({
+      user_id: SINGLE_USER_ID,
+      session_id,
+      patch: {
+        exercises: [
+          {
+            raw_name: 'e2e-history-推测卧推',
+            sets: [
+              { weight_kg: 62.5, reps: 8 },
+              { weight_kg: 60, reps: 8 },
+            ],
+          },
+        ],
+      },
+    });
+    if (detail === 'not_found') throw new Error('session 不见了');
+    expect(detail.exercises[0]?.sets.map((s) => s.is_inferred)).toEqual([false, true]);
+
+    await getDb().delete(workoutSession).where(eq(workoutSession.id, session_id));
+  });
+
   it('不存在返回 not_found', async () => {
     const detail = await updateSession({
       user_id: SINGLE_USER_ID,
@@ -199,7 +243,7 @@ describe('deleteSession', () => {
 });
 
 /** 抽屉列表没有 split 过滤 —— 用独立用户隔离 */
-const HIST_USER = '00000000-0000-4000-8000-0000000000e4';
+const HIST_USER = '00000000-0000-4000-8000-0000000000b4';
 
 describe('listHistory', () => {
   beforeAll(async () => {

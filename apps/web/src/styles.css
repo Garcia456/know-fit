@@ -647,12 +647,51 @@ select:active,
   font-weight: 600;
 }
 
-/* 动作名后的推测提示：一枚浅灰 info 图标 */
-.inferred-dot {
+/* 动作名后的推测提示：一枚浅灰 info 图标；点开浮出白底说明，3s 后淡出 */
+.inferred-hint {
+  position: relative;
   display: inline-flex;
   margin-left: 4px;
-  color: var(--faint);
   vertical-align: -2px;
+}
+
+.inferred-dot {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.inferred-tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -8px;
+  z-index: 20;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 14%);
+  pointer-events: none;
+  animation: inferred-tip-fade 3s ease forwards;
+}
+
+@keyframes inferred-tip-fade {
+  0%,
+  82% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 .exercise__hd {
@@ -1508,7 +1547,7 @@ body.sheet-open .page-body {
   align-items: center;
   gap: 2px;
   min-width: 0;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border: 1px solid var(--line-2);
   border-radius: var(--r-2);
   background: var(--surface);
@@ -1519,7 +1558,7 @@ body.sheet-open .page-body {
 }
 
 .edit-box__input {
-  width: 46px;
+  width: 40px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1561,7 +1600,7 @@ body.sheet-open .page-body {
 }
 
 .edit-box--drop .edit-box__input {
-  width: 32px;
+  width: 28px;
 }
 
 .edit-set__x {

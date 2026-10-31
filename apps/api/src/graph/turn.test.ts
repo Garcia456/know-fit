@@ -270,3 +270,51 @@ describe('评估接线', () => {
     expect(state.notices).toContain('评估暂时没生成出来，稍后再试');
   });
 });
+describe('修改链路：意图 edit 不落库', () => {
+  it('「今天的器械卧推单边改成器械卧推，重量60kg」→ 交给 applyEdit', async () => {
+    const seen: unknown[] = [];
+    const graph = buildTurnGraph({
+      llm: createFakeClient(),
+      persistWorkout: async () => {
+        throw new Error('修改意图不应落新记录');
+      },
+      applyEdit: async (input) => {
+        seen.push(input.request);
+        return { kind: 'chat', reply: '已修改' };
+      },
+      now: () => NOW,
+    });
+
+    const state = await graph.invoke({ message: '今天的器械卧推单边改成器械卧推，重量60kg' });
+
+    expect(state.intent).toBe('edit');
+    expect(state.card?.kind).toBe('chat');
+    expect(seen[0]).toEqual({
+      target: { day_hint: '今天', exercise_name: '器械卧推单边' },
+      changes: { day_hint: null, exercise_name: '器械卧推', weight_kg: 60, reps: null },
+    });
+  });
+
+  it('「把最上面的训练改成昨天的」→ 只改日期', async () => {
+    const seen: unknown[] = [];
+    const graph = buildTurnGraph({
+      llm: createFakeClient(),
+      persistWorkout: async () => {
+        throw new Error('修改意图不应落新记录');
+      },
+      applyEdit: async (input) => {
+        seen.push(input.request);
+        return { kind: 'chat', reply: '已修改' };
+      },
+      now: () => NOW,
+    });
+
+    const state = await graph.invoke({ message: '把最上面的训练改成昨天的' });
+
+    expect(state.intent).toBe('edit');
+    expect(seen[0]).toEqual({
+      target: { day_hint: null, exercise_name: null },
+      changes: { day_hint: '昨天', exercise_name: null, weight_kg: null, reps: null },
+    });
+  });
+});

@@ -64,9 +64,10 @@ export const MealSchema = z.object({
 
 export const ExtractionSchema = z.discriminatedUnion('kind', [WorkoutSchema, MealSchema]);
 
-/** 八类意图 */
+/** 九类意图 */
 export const IntentSchema = z.enum([
   'record',
+  'edit',
   'assess',
   'mixed',
   'knowledge',
@@ -80,6 +81,25 @@ export const IntentSchema = z.enum([
 export const WeightResultSchema = z.object({
   weight_kg: z.number().nullable(),
   day_hint: z.string().nullable(),
+});
+
+/**
+ * 对话内修改已有记录的入参 —— 模型只负责说「改哪条、改什么」，
+ * 定位与写入都由确定性代码做（同 record_weight）。
+ */
+export const EditRequestSchema = z.object({
+  /** 要改的那条记录怎么找 */
+  target: z.object({
+    day_hint: z.string().nullable(), // 时间状语原文；指「最上面 / 最近一次」填 null
+    exercise_name: z.string().nullable(), // 动作名原文；整条训练填 null
+  }),
+  /** 要改成什么；没有提到的字段填 null */
+  changes: z.object({
+    day_hint: z.string().nullable(), // 日期改成哪天的时间状语原文
+    exercise_name: z.string().nullable(), // 动作名改成什么
+    weight_kg: z.number().nullable(),
+    reps: z.number().int().nullable(),
+  }),
 });
 
 /** 缺什么 —— 由代码算，不由 LLM 输出 */
@@ -100,6 +120,7 @@ export type MealItem = z.infer<typeof MealItemSchema>;
 export type Meal = z.infer<typeof MealSchema>;
 export type Extraction = z.infer<typeof ExtractionSchema>;
 export type WeightResult = z.infer<typeof WeightResultSchema>;
+export type EditRequest = z.infer<typeof EditRequestSchema>;
 export type Intent = z.infer<typeof IntentSchema>;
 export type IntentResult = z.infer<typeof IntentResultSchema>;
 export type MissingField = z.infer<typeof MissingFieldSchema>;

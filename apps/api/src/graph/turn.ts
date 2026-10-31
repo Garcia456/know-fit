@@ -1,5 +1,6 @@
 import { END, START, StateGraph } from '@langchain/langgraph';
 import {
+  EditRequestSchema,
   ExtractionSchema,
   IntentResultSchema,
   WeightResultSchema,
@@ -12,7 +13,7 @@ import { computeVolume } from '../metrics/volume.js';
 import { isBodyweightExercise } from '../metrics/bodyweight.js';
 import { computeStatus } from '../extraction/status.js';
 import { toKilograms } from '../extraction/units.js';
-import { CHAT_SYSTEM, EXTRACTION_SYSTEM, INTENT_SYSTEM, WEIGHT_SYSTEM } from '../llm/prompts.js';
+import { CHAT_SYSTEM, EDIT_SYSTEM, EXTRACTION_SYSTEM, INTENT_SYSTEM, WEIGHT_SYSTEM } from '../llm/prompts.js';
 import type { PersistExerciseInput, TurnDeps } from './deps.js';
 import { checkGuard } from './guard.js';
 import { boundaryReply, composeNotice, refusalReply } from './replies.js';
@@ -219,6 +220,35 @@ export function buildTurnGraph(deps: TurnDeps) {
         };
       })
 
+      // ── 工具节点：修改已有记录 ──
+      .addNode('apply_edit', async (state) => {
+        if (!deps.applyEdit) {
+          return { card: { kind: 'chat' as const, reply: '修改记录暂时用不了，稍后再试。' } };
+        }
+        const request = await deps.llm.structured({
+          system: EDIT_SYSTEM,
+          input: state.message,
+          schema: EditRequestSchema,
+          name: 'edit',
+        });
+        const { changes } = request;
+        if (
+          changes.day_hint === null &&
+          changes.exercise_name === null &&
+          changes.weight_kg === null &&
+          changes.reps === null
+        ) {
+          return {
+            card: {
+              kind: 'chat' as const,
+              reply: '没听出要改什么 —— 可以说「把今天的卧推重量改成 80kg」。',
+            },
+          };
+        }
+        const card = await deps.applyEdit({ user_id: state.user_id, request, now: now() });
+        return { card };
+      })
+
       .addNode('compose_card', async (state) => {
         const extracted = state.extracted;
 
@@ -352,6 +382,7 @@ export function buildTurnGraph(deps: TurnDeps) {
       })
       .addConditionalEdges('classify_intent', (state) => {
         if (state.intent === 'record' || state.intent === 'mixed') return 'extract_record';
+        if (state.intent === 'edit') return 'apply_edit';
         if (state.intent === 'assess') return 'assess_node';
         if (state.intent === 'weight') return 'record_weight';
         if (state.intent === 'knowledge') return 'knowledge_node';
@@ -367,6 +398,7 @@ export function buildTurnGraph(deps: TurnDeps) {
         state.intent === 'mixed' && state.record_ref?.type === 'workout' ? 'assess_node' : END,
       )
       .addEdge('record_weight', END)
+      .addEdge('apply_edit', END)
       .addEdge('knowledge_node', END)
       .addEdge('assess_node', END)
       .addEdge('chat_node', END)

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HistoryItem, SessionDetail } from '../api/types';
@@ -252,6 +252,27 @@ describe('历史页', () => {
 
     expect(screen.queryByLabelText('第 1 个动作第 1 组重量')).toBeNull();
     expect(screen.getByText(/70 kg × —/)).toBeDefined();
+  });
+
+  it('推测图标：点开浮出白底说明，3s 后消失', async () => {
+    const inferred = detail('s-inferred', todayKey, '腿日');
+    inferred.exercises = [
+      { ...inferred.exercises[0]!, sets: [{ ...inferred.exercises[0]!.sets[0]!, is_inferred: true }] },
+    ];
+    details['s-inferred'] = inferred;
+    stubApi([items[0]!, { ...items[0]!, session_id: 's-inferred' }]);
+    renderPage(`/data?date=${todayKey}`);
+
+    const dot = await screen.findByRole('button', { name: '含系统推测的数字' });
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(dot);
+      expect(screen.getByRole('status').textContent).toContain('有系统推测的数字');
+      act(() => vi.advanceTimersByTime(3000));
+      expect(screen.queryByRole('status')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('删除训练先二次确认，确认后从列表移除', async () => {

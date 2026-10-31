@@ -446,6 +446,14 @@ export async function updateSession(input: {
       for (const [j, patchSet] of patchExercise.sets.entries()) {
         const set = sets[j];
         if (!set) break;
+        // 手动改过的组不再算推测 —— 没动的组保留原标记
+        const changed =
+          patchSet.weight_kg !== set.weightKg ||
+          patchSet.reps !== set.reps ||
+          (patchSet.tags !== undefined &&
+            JSON.stringify(patchSet.tags) !== JSON.stringify(set.tags)) ||
+          (patchSet.drops !== undefined &&
+            JSON.stringify(patchSet.drops) !== JSON.stringify(set.drops));
         await tx
           .update(setEntry)
           .set({
@@ -453,6 +461,7 @@ export async function updateSession(input: {
             reps: patchSet.reps,
             ...(patchSet.tags !== undefined ? { tags: patchSet.tags } : {}),
             ...(patchSet.drops !== undefined ? { drops: patchSet.drops } : {}),
+            ...(changed ? { isInferred: false } : {}),
           })
           .where(eq(setEntry.id, set.id));
       }
