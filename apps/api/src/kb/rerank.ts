@@ -77,9 +77,10 @@ export function createQwenRerankClient(options: {
   url?: string;
   apiKey?: string;
 } = {}): RerankClient {
-  const model = options.model ?? process.env.RERANK_MODEL ?? DEFAULT_RERANK_MODEL;
-  const url = options.url ?? process.env.RERANK_BASE_URL ?? DEFAULT_RERANK_URL;
-  const apiKey = options.apiKey ?? process.env.RERANK_API_KEY ?? required('OPENAI_API_KEY');
+  // 空串按「没配」处理：.env 里留空的 RERANK_API_KEY 要能回落到 OPENAI_API_KEY
+  const model = options.model || process.env.RERANK_MODEL || DEFAULT_RERANK_MODEL;
+  const url = options.url || process.env.RERANK_BASE_URL || DEFAULT_RERANK_URL;
+  const apiKey = options.apiKey || process.env.RERANK_API_KEY?.trim() || required('OPENAI_API_KEY');
 
   return {
     model,

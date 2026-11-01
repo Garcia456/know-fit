@@ -18,6 +18,8 @@
     "rag:smoke": "node --env-file-if-exists=../../.env --import tsx src/rag/smoke.ts",
     "rag:eval:queries": "node --env-file-if-exists=../../.env --import tsx evals/rag/generate-queries.ts",
     "rag:eval": "node --env-file-if-exists=../../.env --import tsx evals/rag/eval.ts",
+    "rag:retrieval:tests": "node evals/rag-retrieval/generate-tests.mjs",
+    "rag:retrieval:eval": "node evals/rag-retrieval/run.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

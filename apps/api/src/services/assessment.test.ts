@@ -15,7 +15,16 @@ import { closeDb, getPool } from './pool.js';
  * 自清理：只删本文件造的 fixture。
  */
 
-const KEYS = ['rag-unit-s1', 'rag-unit-demo', 'rag-unit-out', 'rag-unit-notindexed', 'rag-unit-blocked'];
+const KEYS = [
+  'rag-unit-s1',
+  'rag-unit-demo',
+  'rag-unit-out',
+  'rag-unit-notindexed',
+  'rag-unit-blocked',
+  'rag-unit-quota-a',
+  'rag-unit-quota-b',
+  'rag-unit-quota-c',
+];
 const QUERY = '增肌 推日 训练容量下降 怎么调整';
 const USER = SINGLE_USER_ID;
 
@@ -140,6 +149,53 @@ describe('检索过滤', () => {
     });
     expect(ranks[0]?.index).toBe(1);
     expect(ranks).toHaveLength(2);
+  });
+});
+
+describe('同源配额', () => {
+  /** A 源 6 片、B / C 各 1 片 —— baseline 会被 A 占满，配额应把它们拉进来 */
+  const byLabel = (doc: string): number =>
+      doc.includes('Q-A') ? 0 : doc.includes('Q-B') ? 1 : doc.includes('Q-C') ? 2 : 3;
+
+  async function seedQuotaSources(): Promise<void> {
+    const a = await source({ key: KEYS[5]! });
+    for (let i = 0; i < 6; i++) {
+      await chunk({ sourceId: a, index: i, text: `Q-A${i} ${QUERY}，容量调整第 ${i} 段。` });
+    }
+    const b = await source({ key: KEYS[6]! });
+    await chunk({ sourceId: b, index: 0, text: `Q-B0 ${QUERY}，推日专项建议。` });
+    const c = await source({ key: KEYS[7]! });
+    await chunk({ sourceId: c, index: 0, text: `Q-C0 ${QUERY}，动作选择建议。` });
+  }
+
+  const groupedRerank: RerankClient = {
+    model: 'grouped',
+    async rerank({ documents, topN }) {
+      const order = documents
+        .map((doc, index) => ({ doc, index }))
+        .sort((x, y) => byLabel(x.doc) - byLabel(y.doc) || x.index - y.index);
+      return order.slice(0, topN).map((hit, i) => ({ index: hit.index, score: 1 - i * 0.01 }));
+    },
+  };
+
+  it('配额 0 时单源占满 top-5；配额 1 时拉出 3 个来源', async () => {
+    await seedQuotaSources();
+    const repo = createAssessmentRepo({ embedder, reranker: groupedRerank });
+
+    const baseline = await repo.retrieve({ user_id: USER, query: QUERY, max_per_source: 0 });
+    expect(baseline.status).toBe('ok');
+    if (baseline.status !== 'ok') return;
+    expect(baseline.candidates).toHaveLength(5);
+    expect(new Set(baseline.candidates.map((c) => c.source_id)).size).toBe(1);
+    expect(baseline.meta.distinct_sources).toBe(1);
+
+    const quota = await repo.retrieve({ user_id: USER, query: QUERY, max_per_source: 1 });
+    expect(quota.status).toBe('ok');
+    if (quota.status !== 'ok') return;
+    expect(quota.candidates).toHaveLength(5);
+    expect(new Set(quota.candidates.map((c) => c.source_id)).size).toBe(4);
+    expect(quota.meta).toMatchObject({ max_per_source: 1, distinct_sources: 4, backfilled: 1 });
+    expect(quota.meta.rerank_fetch_n).toBeGreaterThanOrEqual(5);
   });
 });
 

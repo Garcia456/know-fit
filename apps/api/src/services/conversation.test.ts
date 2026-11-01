@@ -89,6 +89,8 @@ describe('消息往返与上下文', () => {
       assessment_lookup: null,
       notices: [],
     };
+    // 同一批插入会拿到同一个 now()，按 createdAt 排序时先后不定 —— 显式错开 1ms
+    const createdAt = Date.now();
     await getDb()
       .insert(conversationTurn)
       .values([
@@ -99,6 +101,7 @@ describe('消息往返与上下文', () => {
           content: '你好',
           intent: 'chat',
           linkedRecordId: null,
+          createdAt: new Date(createdAt),
         },
         {
           userId: SINGLE_USER_ID,
@@ -108,6 +111,7 @@ describe('消息往返与上下文', () => {
           intent: 'chat',
           replyJson: response,
           linkedRecordId: null,
+          createdAt: new Date(createdAt + 1),
         },
       ]);
 

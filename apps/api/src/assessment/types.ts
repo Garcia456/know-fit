@@ -54,6 +54,11 @@ export interface PipelineMeta {
   rerank_model: string;
   rerank_degraded: boolean;
   no_source_reason: NoSourceReason | null;
+  max_per_source?: number;
+  rerank_fetch_n?: number;
+  distinct_sources?: number;
+  backfilled?: number;
+  rerank_error?: string;
 }
 
 export interface RagConfig {
@@ -61,6 +66,10 @@ export interface RagConfig {
   topN: number;
   minSimilarity: number;
   maxCitations: number;
+  /** 每个来源最多保留几片；0 = 关闭配额（baseline） */
+  maxPerSource: number;
+  /** 向 rerank 要回多少条 —— 少于 topN 就没有多样性可选 */
+  rerankFetchN: number;
 }
 
 function num(name: string, fallback: number): number {
@@ -71,12 +80,21 @@ function num(name: string, fallback: number): number {
   return n;
 }
 
+function nonNegativeInt(name: string, fallback: number): number {
+  const n = num(name, fallback);
+  if (!Number.isInteger(n) || n < 0) throw new Error(`${name} 得是 ≥0 的整数：「${n}」`);
+  return n;
+}
+
 /** 检索参数全部可配 —— 0.5 是推断初值，靠 pilot 反调 */
 export function ragConfig(): RagConfig {
+  const topN = num('RAG_TOP_N', 5);
   return {
     topK: num('RAG_TOP_K', 50),
-    topN: num('RAG_TOP_N', 5),
+    topN,
     minSimilarity: num('RAG_MIN_SIMILARITY', 0.5),
     maxCitations: num('RAG_MAX_CITATIONS', 2),
+    maxPerSource: nonNegativeInt('RAG_MAX_PER_SOURCE', 1),
+    rerankFetchN: nonNegativeInt('RAG_RERANK_FETCH_N', Math.max(topN * 4, topN)),
   };
 }

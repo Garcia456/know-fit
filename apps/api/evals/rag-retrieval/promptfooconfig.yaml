@@ -1,0 +1,67 @@
+description: dev-010 检索层评测 —— baseline（无配额）vs quota（每源 1 片）。不进 CI / check-dev.sh
+prompts:
+  - '{{query}}'
+providers:
+  - id: file://./provider.ts
+    label: baseline(无配额)
+    config:
+      maxPerSource: 0
+  - id: file://./provider.ts
+    label: quota(每源1片)
+    config:
+      maxPerSource: 1
+tests: file://./tests.jsonl
+defaultTest:
+  assert:
+    # ① hit@5：top-5 命中任意一条已标注的期望源
+    - type: javascript
+      value: |
+        const r = JSON.parse(output);
+        const got = r.candidates.map((c) => c.source_id);
+        const arr = (v) => (Array.isArray(v) ? v : JSON.parse(v || '[]'));
+        const expected = arr(context.vars.expected_source_ids);
+        const hit = got.some((id) => expected.includes(id));
+        return {
+          pass: hit,
+          score: hit ? 1 : 0,
+          reason: `命中 ${got.filter((id) => expected.includes(id)).length}/${expected.length}；候选=${got.length}`,
+        };
+    # ② 多样性：top-5 至少 3 个不同来源（degraded / 候选不足时另记）
+    - type: javascript
+      value: |
+        const r = JSON.parse(output);
+        const distinct = new Set(r.candidates.map((c) => c.source_id)).size;
+        const pass = distinct >= 3;
+        return {
+          pass,
+          score: pass ? 1 : 0,
+          reason: `不同来源=${distinct}，候选=${r.candidates.length}，backfilled=${r.meta.backfilled ?? 0}`,
+        };
+    # ③ 配额生效：未回填时单源不得超过上限
+    - type: javascript
+      value: |
+        const r = JSON.parse(output);
+        const cap = r.meta.max_per_source ?? 0;
+        if (cap <= 0) return { pass: true, score: 1, reason: 'baseline：未开配额' };
+        if ((r.meta.backfilled ?? 0) > 0) {
+          return { pass: true, score: 1, reason: `来源不足，回填 ${r.meta.backfilled} 条` };
+        }
+        const counts = {};
+        for (const c of r.candidates) counts[c.source_id] = (counts[c.source_id] || 0) + 1;
+        const max = Math.max(...Object.values(counts));
+        return { pass: max <= cap, score: max <= cap ? 1 : 0, reason: `单源最多 ${max} 片，上限 ${cap}` };
+    # ④ 推日专属命中：去掉三分化①（万能源）后仍命中至少一条
+    - type: javascript
+      value: |
+        if (context.vars.split !== '推日') return { pass: true, score: 1, reason: '非推日，不参与本项' };
+        const r = JSON.parse(output);
+        const got = r.candidates.map((c) => c.source_id);
+        const arr = (v) => (Array.isArray(v) ? v : JSON.parse(v || '[]'));
+        const generic = arr(context.vars.generic_source_ids);
+        const expected = arr(context.vars.expected_source_ids).filter((id) => !generic.includes(id));
+        const hit = expected.filter((id) => got.includes(id));
+        return {
+          pass: hit.length > 0,
+          score: hit.length > 0 ? 1 : 0,
+          reason: `推日专属源命中 ${hit.length}/${expected.length}`,
+        };

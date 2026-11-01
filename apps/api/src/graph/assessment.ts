@@ -61,6 +61,11 @@ const PipelineMetaSchema = z.object({
   embedding_model: z.string(),
   rerank_model: z.string(),
   rerank_degraded: z.boolean(),
+  max_per_source: z.number().int().optional(),
+  rerank_fetch_n: z.number().int().optional(),
+  distinct_sources: z.number().int().optional(),
+  backfilled: z.number().int().optional(),
+  rerank_error: z.string().optional(),
   no_source_reason: z
     .enum([
       'no_candidate',

@@ -23,6 +23,7 @@ import { createLlmClient } from '../llm/index.js';
 import { bindSignal } from '../llm/client.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 import { topBodyParts } from '../assessment/bodyParts.js';
+import { selectWithSourceQuota } from '../assessment/select.js';
 import { buildGateWindows } from '../assessment/windows.js';
 import { muscleRegions, prevSameSplitVolume, sessionVolume } from './metrics.js';
 import { getDb } from './pool.js';
@@ -126,7 +127,7 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
       };
     },
 
-    async retrieve({ query }): Promise<RetrieveResult> {
+    async retrieve({ query, max_per_source }): Promise<RetrieveResult> {
       let vector: number[] | undefined;
       try {
         [vector] = await embedder.embed([query]);
@@ -207,22 +208,45 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
       if (candidates.length === 0) return { status: 'ok', candidates: [], meta };
 
       try {
+        const fetchN = Math.max(cfg.rerankFetchN, cfg.topN);
         const hits = await reranker.rerank({
           query,
           documents: candidates.map((c) => `${c.context_prefix}\n${c.chunk_text}`),
-          topN: cfg.topN,
+          topN: fetchN,
         });
         const ranked = hits.flatMap((h) => {
           const found = candidates[h.index];
           return found ? [{ ...found, rerank_score: h.score }] : [];
         });
         if (ranked.length === 0) {
-          return { status: 'ok', candidates: candidates.slice(0, cfg.topN), meta: { ...meta, rerank_degraded: true } };
+          return {
+            status: 'ok',
+            candidates: candidates.slice(0, cfg.topN),
+            meta: { ...meta, rerank_degraded: true, rerank_error: 'rerank returned no hits' },
+          };
         }
-        return { status: 'ok', candidates: ranked.slice(0, cfg.topN), meta };
-      } catch {
+        const cap = max_per_source ?? cfg.maxPerSource;
+        const selected = selectWithSourceQuota(ranked, { topN: cfg.topN, maxPerSource: cap });
+        return {
+          status: 'ok',
+          candidates: selected.picked,
+          meta: {
+            ...meta,
+            max_per_source: cap,
+            rerank_fetch_n: fetchN,
+            distinct_sources: selected.distinctSources,
+            backfilled: selected.backfilled,
+          },
+        };
+      } catch (e) {
         // 重排挂了不降级为无源：向量顺序继续走闸②，只是召回质量降级
-        return { status: 'ok', candidates: candidates.slice(0, cfg.topN), meta: { ...meta, rerank_degraded: true } };
+        const reason = (e as Error).message.slice(0, 200);
+        console.warn(`[rag] 重排降级：${reason}`);
+        return {
+          status: 'ok',
+          candidates: candidates.slice(0, cfg.topN),
+          meta: { ...meta, rerank_degraded: true, rerank_error: reason },
+        };
       }
     },
 
@@ -358,6 +382,7 @@ export async function findRecentHookAssessment(input: {
 export async function retrieveKnowledge(input: {
   user_id: string;
   query: string;
+  max_per_source?: number;
 }): Promise<RetrieveResult> {
   return createAssessmentRepo({
     embedder: createEmbeddingClient(),
