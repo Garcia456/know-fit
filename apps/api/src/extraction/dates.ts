@@ -1,8 +1,9 @@
 /**
  * 时间状语 → date —— 纯确定性，LLM 只出原文。
  *
- * v1 只认「今天 / 昨天 / 前天」这一小组关键词（🔴 推断，够 MVP 用）。
- * 认不出来一律按今天算 —— 记错一天比拦住录入轻。
+ * 认：「今天 / 昨天 / 前天」、`YYYY-MM-DD`、`YYYY年M月D号`、`M月D号`、`D号`。
+ * day-only 的「30号」按 reference 的年月算（改日期时以原训练月为锚），没有 reference 才用当月。
+ * 认不出来返回 null —— 录入侧按今天兜底，修改侧由调用方决定是否追问。
  */
 const OFFSETS: { keywords: string[]; days: number }[] = [
   { keywords: ['前天'], days: -2 },
@@ -25,11 +26,47 @@ export function monthsSince(startDate: string, now: Date): number {
   return Math.max(0, (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m));
 }
 
-export function resolveDate(dayHint: string | null, now: Date = new Date()): string {
-  const hint = dayHint?.trim() ?? '';
-  const hit = OFFSETS.find((o) => o.keywords.some((k) => hint.includes(k)));
-  const days = hit?.days ?? 0;
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  d.setDate(d.getDate() + days);
+/** 回填校验：2 月 30 号这种不存在的日期返回 null，不让 Date 自动进位 */
+function makeDate(year: number, month: number, day: number): string | null {
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
   return toLocalDate(d);
+}
+
+export function tryResolveDate(
+  dayHint: string | null,
+  now: Date = new Date(),
+  reference: string | null = null,
+): string | null {
+  const hint = dayHint?.replace(/\s+/g, '') ?? '';
+  if (!hint) return null;
+
+  const iso = hint.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return makeDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+
+  const full = hint.match(/(?:(\d{4})年)?(\d{1,2})月(\d{1,2})[号日]?/);
+  if (full) {
+    return makeDate(full[1] ? Number(full[1]) : now.getFullYear(), Number(full[2]), Number(full[3]));
+  }
+
+  const dayOnly = hint.match(/^(\d{1,2})[号日]$/);
+  if (dayOnly) {
+    const [y, m] = reference
+      ? reference.split('-').map(Number)
+      : [now.getFullYear(), now.getMonth() + 1];
+    return makeDate(y!, m!, Number(dayOnly[1]));
+  }
+
+  const hit = OFFSETS.find((o) => o.keywords.some((k) => hint.includes(k)));
+  if (hit) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    d.setDate(d.getDate() + hit.days);
+    return toLocalDate(d);
+  }
+  return null;
+}
+
+/** 录入侧：认不出按今天算 —— 记错一天比拦住录入轻。修改侧请用 tryResolveDate。 */
+export function resolveDate(dayHint: string | null, now: Date = new Date()): string {
+  return tryResolveDate(dayHint, now) ?? toLocalDate(now);
 }

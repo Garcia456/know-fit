@@ -64,10 +64,11 @@ export const MealSchema = z.object({
 
 export const ExtractionSchema = z.discriminatedUnion('kind', [WorkoutSchema, MealSchema]);
 
-/** 九类意图 */
+/** 十类意图 */
 export const IntentSchema = z.enum([
   'record',
   'edit',
+  'query',
   'assess',
   'mixed',
   'knowledge',
@@ -102,6 +103,11 @@ export const EditRequestSchema = z.object({
   }),
 });
 
+/** 查记录的入参 —— 模型只出时间状语，日期与内容都由代码读库 */
+export const QueryRequestSchema = z.object({
+  day_hint: z.string().nullable(), // 问「最近一次」或没提日期填 null
+});
+
 /** 缺什么 —— 由代码算，不由 LLM 输出 */
 export const MissingFieldSchema = z.enum(['exercises', 'reps', 'weight_kg']);
 
@@ -121,6 +127,7 @@ export type Meal = z.infer<typeof MealSchema>;
 export type Extraction = z.infer<typeof ExtractionSchema>;
 export type WeightResult = z.infer<typeof WeightResultSchema>;
 export type EditRequest = z.infer<typeof EditRequestSchema>;
+export type QueryRequest = z.infer<typeof QueryRequestSchema>;
 export type Intent = z.infer<typeof IntentSchema>;
 export type IntentResult = z.infer<typeof IntentResultSchema>;
 export type MissingField = z.infer<typeof MissingFieldSchema>;

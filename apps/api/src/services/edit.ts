@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { EditRequest } from '../contracts/extraction.js';
 import type { TurnCard } from '../contracts/turn.js';
 import { exerciseEntry, setEntry, workoutSession } from '../db/schema.js';
-import { resolveDate } from '../extraction/dates.js';
+import { tryResolveDate } from '../extraction/dates.js';
 import { normalizeExerciseName } from '../extraction/normalize.js';
 import { isBodyweightExercise } from '../metrics/bodyweight.js';
 import { loadSessionEntries, type EntrySets } from './correction.js';
@@ -34,13 +34,19 @@ function clean(value: string): string {
   return value.replace(/\s+/g, '');
 }
 
-/** 先按归一 id，再按原文包含；不做双向包含，免得「卧推」把「上斜卧推」也算上 */
-function nameMatches(rawName: string, exerciseId: string | null, wanted: string): boolean {
-  const norm = normalizeExerciseName(wanted);
-  if (norm.exercise_id && exerciseId && norm.exercise_id === exerciseId) return true;
+/**
+ * 命中强度：原文全等 > 归一 id 相等 > 原文包含。
+ * 只在最高档里取唯一命中 —— 「器械卧推」优先改叫「器械卧推」的那条，
+ * 而不是把「器械卧推单边」也算成同等候选。
+ */
+function matchRank(rawName: string, exerciseId: string | null, wanted: string): number {
   const raw = clean(rawName);
   const want = clean(wanted);
-  return want.length >= 2 && (raw === want || raw.includes(want));
+  if (want.length >= 2 && raw === want) return 3;
+  const norm = normalizeExerciseName(wanted);
+  if (norm.exercise_id && exerciseId && norm.exercise_id === exerciseId) return 2;
+  if (want.length >= 2 && raw.includes(want)) return 1;
+  return 0;
 }
 
 async function findTarget(input: {
@@ -66,6 +72,7 @@ async function findTarget(input: {
 
   const entries = await db
     .select({
+      id: exerciseEntry.id,
       sessionId: exerciseEntry.sessionId,
       rawName: exerciseEntry.rawName,
       exerciseId: exerciseEntry.exerciseId,
@@ -75,16 +82,19 @@ async function findTarget(input: {
     .orderBy(asc(exerciseEntry.order));
 
   for (const session of sessions) {
-    const hits = entries.filter(
-      (e) => e.sessionId === session.id && nameMatches(e.rawName, e.exerciseId, input.exerciseName!),
-    );
+    const ranked = entries
+      .filter((e) => e.sessionId === session.id)
+      .map((e) => ({ id: e.id, rank: matchRank(e.rawName, e.exerciseId, input.exerciseName!) }))
+      .filter((e) => e.rank > 0);
+    if (ranked.length === 0) continue;
+
+    const best = Math.max(...ranked.map((e) => e.rank));
+    const hits = ranked.filter((e) => e.rank === best);
     if (hits.length > 1) return { status: 'ambiguous', session };
-    if (hits.length === 1) {
-      const loaded = await loadSessionEntries(session.id);
-      const entry =
-        loaded.find((e) => nameMatches(e.rawName, e.exerciseId, input.exerciseName!)) ?? null;
-      return { status: 'ok', session, entry };
-    }
+
+    const loaded = await loadSessionEntries(session.id);
+    const entry = loaded.find((e) => e.entryId === hits[0]!.id) ?? null;
+    return { status: 'ok', session, entry };
   }
 
   return { status: 'no_match', session: first };
@@ -97,9 +107,17 @@ export async function applyEdit(input: {
   now: Date;
 }): Promise<TurnCard> {
   const { target, changes } = input.request;
-  const day = target.day_hint ? resolveDate(target.day_hint, input.now) : null;
+  const targetHint = target.day_hint?.trim() || null;
+  const changeHint = changes.day_hint?.trim() || null;
   const wantedName = target.exercise_name?.trim() || null;
   const changeName = changes.exercise_name?.trim() || null;
+
+  // 改日期时认不出就追问，不能按今天兜底 —— 会把训练静默挪到今天
+  const day = targetHint ? tryResolveDate(targetHint, input.now) : null;
+  if (targetHint && !day) {
+    return chat(`没听清「${targetHint}」是哪天，这次没动数据。可以说「10月31号」或「昨天」。`);
+  }
+
   const found = await findTarget({
     user_id: input.user_id,
     day,
@@ -107,7 +125,9 @@ export async function applyEdit(input: {
   });
 
   if (found.status === 'no_session') {
-    return chat('还没有可以修改的训练记录，先记一次吧。');
+    return chat(
+      day ? `没找到 ${day} 的训练，这次没动数据。` : '还没有可以修改的训练记录，先记一次吧。',
+    );
   }
   if (found.status === 'no_match') {
     return chat(
@@ -116,7 +136,7 @@ export async function applyEdit(input: {
   }
   if (found.status === 'ambiguous') {
     return chat(
-      `有多个动作都包含「${wantedName}」，分不清要改哪个，这次没动数据。`,
+      `有多个动作都包含「${wantedName}」，分不清要改哪个，这次没动数据。说全名（比如「器械卧推单边」）再试一次。`,
     );
   }
 
@@ -135,7 +155,14 @@ export async function applyEdit(input: {
     return chat('要改哪个动作？可以说「把今天的卧推重量改成 80kg」。');
   }
 
-  const newDate = changes.day_hint ? resolveDate(changes.day_hint, input.now) : null;
+  // 「30号」这种只给日子的，按原训练的月份锚定（改成 10月30号，而不是 11月30号）
+  const newDate = changeHint
+    ? tryResolveDate(changeHint, input.now, day ?? session.date)
+    : null;
+  if (changeHint && !newDate) {
+    return chat(`没听清要改成哪一天（「${changeHint}」），这次没动数据。`);
+  }
+
   const parts: string[] = [];
   const db = getDb();
 
@@ -200,7 +227,7 @@ export async function applyEdit(input: {
   });
 
   if (parts.length === 0) {
-    return chat('这次没有改动 —— 要改的数值和原来一样。');
+    return chat('这次没有改动 —— 要改的日期或数值和原来一样。');
   }
   return chat(`已修改 ${newDate ?? session.date} 的训练：${parts.join('；')}。`);
 }

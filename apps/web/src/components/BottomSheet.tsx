@@ -2,6 +2,7 @@ import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
+import { CloseIcon } from './Icons';
 
 interface Props {
   open: boolean;
@@ -58,8 +59,8 @@ export function BottomSheet({ open, title, onClose, children }: Props) {
           >
             <div className="sheet-hd">
               <h2>{title}</h2>
-              <button type="button" className="sheet-cancel" onClick={onClose}>
-                取消
+              <button type="button" className="sheet-cancel" aria-label="取消" onClick={onClose}>
+                <CloseIcon />
               </button>
             </div>
             {children}

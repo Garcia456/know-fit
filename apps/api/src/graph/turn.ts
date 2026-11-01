@@ -3,6 +3,7 @@ import {
   EditRequestSchema,
   ExtractionSchema,
   IntentResultSchema,
+  QueryRequestSchema,
   WeightResultSchema,
   type SetTag,
 } from '../contracts/extraction.js';
@@ -13,7 +14,14 @@ import { computeVolume } from '../metrics/volume.js';
 import { isBodyweightExercise } from '../metrics/bodyweight.js';
 import { computeStatus } from '../extraction/status.js';
 import { toKilograms } from '../extraction/units.js';
-import { CHAT_SYSTEM, EDIT_SYSTEM, EXTRACTION_SYSTEM, INTENT_SYSTEM, WEIGHT_SYSTEM } from '../llm/prompts.js';
+import {
+  CHAT_SYSTEM,
+  EDIT_SYSTEM,
+  EXTRACTION_SYSTEM,
+  INTENT_SYSTEM,
+  QUERY_SYSTEM,
+  WEIGHT_SYSTEM,
+} from '../llm/prompts.js';
 import type { PersistExerciseInput, TurnDeps } from './deps.js';
 import { checkGuard } from './guard.js';
 import { boundaryReply, composeNotice, refusalReply } from './replies.js';
@@ -249,6 +257,21 @@ export function buildTurnGraph(deps: TurnDeps) {
         return { card };
       })
 
+      // ── 工具节点：查已有记录（只读） ──
+      .addNode('answer_query', async (state) => {
+        if (!deps.answerQuery) {
+          return { card: { kind: 'chat' as const, reply: '查记录暂时用不了，稍后再试。' } };
+        }
+        const request = await deps.llm.structured({
+          system: QUERY_SYSTEM,
+          input: state.message,
+          schema: QueryRequestSchema,
+          name: 'query',
+        });
+        const card = await deps.answerQuery({ user_id: state.user_id, request, now: now() });
+        return { card };
+      })
+
       .addNode('compose_card', async (state) => {
         const extracted = state.extracted;
 
@@ -383,6 +406,7 @@ export function buildTurnGraph(deps: TurnDeps) {
       .addConditionalEdges('classify_intent', (state) => {
         if (state.intent === 'record' || state.intent === 'mixed') return 'extract_record';
         if (state.intent === 'edit') return 'apply_edit';
+        if (state.intent === 'query') return 'answer_query';
         if (state.intent === 'assess') return 'assess_node';
         if (state.intent === 'weight') return 'record_weight';
         if (state.intent === 'knowledge') return 'knowledge_node';
@@ -399,6 +423,7 @@ export function buildTurnGraph(deps: TurnDeps) {
       )
       .addEdge('record_weight', END)
       .addEdge('apply_edit', END)
+      .addEdge('answer_query', END)
       .addEdge('knowledge_node', END)
       .addEdge('assess_node', END)
       .addEdge('chat_node', END)

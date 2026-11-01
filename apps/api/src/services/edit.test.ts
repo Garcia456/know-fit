@@ -15,6 +15,9 @@ const USERS = [
   '00000000-0000-4000-8000-0000000000a2',
   '00000000-0000-4000-8000-0000000000a3',
   '00000000-0000-4000-8000-0000000000a4',
+  '00000000-0000-4000-8000-0000000000a5',
+  '00000000-0000-4000-8000-0000000000a6',
+  '00000000-0000-4000-8000-0000000000a7',
 ];
 
 const NOW = new Date('2032-02-10T09:00:00');
@@ -164,15 +167,15 @@ describe('applyEdit：找不到就不动手', () => {
     expect(rows.rows.every((r) => r.weight_kg === 100)).toBe(true);
   });
 
-  it('多个动作都匹配 → 不猜，数据不变', async () => {
+  it('同档并列命中（都只是包含）→ 不猜，数据不变', async () => {
     const user_id = USERS[3]!;
     await persistWorkout(
       workout({
         user_id,
         date: '2032-02-10',
         exercises: [
-          { name: '卧推', weight: 80, reps: 8, sets: 2 },
-          { name: '上斜卧推', weight: 60, reps: 8, sets: 2 },
+          { name: '器械卧推单边', weight: 80, reps: 8, sets: 2 },
+          { name: '器械卧推反手', weight: 60, reps: 8, sets: 2 },
         ],
       }),
     );
@@ -181,7 +184,7 @@ describe('applyEdit：找不到就不动手', () => {
       user_id,
       now: NOW,
       request: {
-        target: { day_hint: '今天', exercise_name: '卧推' },
+        target: { day_hint: '今天', exercise_name: '器械卧推' },
         changes: { day_hint: null, exercise_name: null, weight_kg: 90, reps: null },
       },
     });
@@ -198,5 +201,97 @@ describe('applyEdit：找不到就不动手', () => {
       [user_id],
     );
     expect(rows.rows[0]?.weight_kg).toBe(80);
+  });
+});
+
+describe('applyEdit：命中强度排序', () => {
+  it('原文全等优先于「包含」——「器械卧推」不改到「器械卧推单边」', async () => {
+    const user_id = USERS[4]!;
+    await persistWorkout(
+      workout({
+        user_id,
+        date: '2032-02-10',
+        exercises: [
+          { name: '器械卧推', weight: 80, reps: 8, sets: 2 },
+          { name: '器械卧推单边', weight: 50, reps: 10, sets: 2 },
+        ],
+      }),
+    );
+
+    const card = await applyEdit({
+      user_id,
+      now: NOW,
+      request: {
+        target: { day_hint: '今天', exercise_name: '器械卧推' },
+        changes: { day_hint: null, exercise_name: null, weight_kg: 90, reps: null },
+      },
+    });
+
+    const rows = await getPool().query<{ raw_name: string; weight_kg: number }>(
+      `SELECT DISTINCT ee.raw_name, se.weight_kg FROM exercise_entry ee
+         JOIN set_entry se ON se.exercise_entry_id = ee.id
+         JOIN workout_session ws ON ws.id = ee.session_id
+        WHERE ws.user_id = $1 ORDER BY ee.raw_name`,
+      [user_id],
+    );
+    expect(rows.rows).toEqual([
+      { raw_name: '器械卧推', weight_kg: 90 },
+      { raw_name: '器械卧推单边', weight_kg: 50 },
+    ]);
+    expect(card.kind).toBe('chat');
+  });
+});
+
+describe('applyEdit：带日期指认', () => {
+  it('「把 2 月 10 号的训练改成 9 号」→ 日期前移一天', async () => {
+    const user_id = USERS[5]!;
+    await persistWorkout(
+      workout({ user_id, date: '2032-02-10', exercises: [{ name: '深蹲', weight: 100, reps: 5, sets: 3 }] }),
+    );
+
+    const card = await applyEdit({
+      user_id,
+      now: NOW,
+      request: {
+        target: { day_hint: '2月10号', exercise_name: null },
+        changes: { day_hint: '9号', exercise_name: null, weight_kg: null, reps: null },
+      },
+    });
+
+    expect(card.kind).toBe('chat');
+    if (card.kind !== 'chat') throw new Error('unreachable');
+    expect(card.reply).toContain('2032-02-09');
+
+    const rows = await getPool().query<{ date: string }>(
+      'SELECT date::text AS date FROM workout_session WHERE user_id = $1',
+      [user_id],
+    );
+    expect(rows.rows).toEqual([{ date: '2032-02-09' }]);
+  });
+
+  it('日期认不出 → 追问，数据不动', async () => {
+    const user_id = USERS[6]!;
+    await persistWorkout(
+      workout({ user_id, date: '2032-02-10', exercises: [{ name: '深蹲', weight: 100, reps: 5, sets: 3 }] }),
+    );
+
+    const card = await applyEdit({
+      user_id,
+      now: NOW,
+      request: {
+        target: { day_hint: '上周那次', exercise_name: null },
+        changes: { day_hint: null, exercise_name: null, weight_kg: null, reps: null },
+      },
+    });
+
+    expect(card.kind).toBe('chat');
+    if (card.kind !== 'chat') throw new Error('unreachable');
+    expect(card.reply).toContain('没听清');
+
+    const rows = await getPool().query<{ date: string }>(
+      'SELECT date::text AS date FROM workout_session WHERE user_id = $1',
+      [user_id],
+    );
+    expect(rows.rows).toEqual([{ date: '2032-02-10' }]);
   });
 });

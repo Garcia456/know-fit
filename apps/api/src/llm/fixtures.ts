@@ -240,6 +240,10 @@ export const EDIT_FIXTURES: Record<string, EditRequest> = {
     target: { day_hint: null, exercise_name: null },
     changes: { day_hint: '昨天', exercise_name: null, weight_kg: null, reps: null },
   },
+  '把10月31号的训练改成30号': {
+    target: { day_hint: '10月31号', exercise_name: null },
+    changes: { day_hint: '30号', exercise_name: null, weight_kg: null, reps: null },
+  },
 };
 
 /** 黄金集里非抽取类的输入（闲聊 / 红线 / 非目标）—— 给真实 smoke 算意图准确率用 */
@@ -263,6 +267,10 @@ export const GOLDEN_INTENTS: Record<string, Intent> = {
   '推日：卧推 70kg×5 五组，帮我看下够不够': 'mixed',
   '今天的器械卧推单边改成器械卧推，重量60kg': 'edit',
   '把最上面的训练改成昨天的': 'edit',
+  '把10月31号的训练改成30号': 'edit',
+  '我今天练了什么': 'query',
+  '昨天练了啥': 'query',
+  '查一下 10 月 31 号的训练': 'query',
   '我不太想练了': 'chat',
   'hi': 'chat',
   '你是谁': 'chat',

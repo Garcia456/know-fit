@@ -1051,10 +1051,14 @@ body.sheet-open .page-body {
 }
 
 .sheet-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  margin: -4px;
   border: 0;
   background: none;
   color: var(--muted);
-  font: inherit;
   cursor: pointer;
 }
 
@@ -1596,7 +1600,7 @@ body.sheet-open .page-body {
 .edit-seg {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
 }
 
 .edit-box--drop .edit-box__input {

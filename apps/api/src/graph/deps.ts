@@ -1,5 +1,5 @@
 import type { AssessmentCard } from '../contracts/assessment.js';
-import type { EditRequest, MissingField, RecordStatus } from '../contracts/extraction.js';
+import type { EditRequest, MissingField, QueryRequest, RecordStatus } from '../contracts/extraction.js';
 import type { VolumeHook } from '../contracts/metrics.js';
 import type { KnowledgeCard, TurnCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
 import type { TurnHistoryItem } from './state.js';
@@ -79,5 +79,7 @@ export interface TurnDeps {
   recordWeight?: (input: { user_id: string; date: string; weight_kg: number }) => Promise<void>;
   /** 「修改已有记录」工具 —— 定位与写入由服务层做，图只负责把模型解析结果递进去 */
   applyEdit?: (input: { user_id: string; request: EditRequest; now: Date }) => Promise<TurnCard>;
+  /** 「查训练记录」工具 —— 只读，同样由服务层注入 */
+  answerQuery?: (input: { user_id: string; request: QueryRequest; now: Date }) => Promise<TurnCard>;
   now?: () => Date;
 }

@@ -16,7 +16,13 @@ export function isMissingValue(exercise: {
   );
 }
 
-/** 「70kg · 8 次 · 4 组」—— 重量 / 次数 / 组数，缺值就说缺，不补 0；自重动作不把空重量叫缺 */
+/** 有效重量 = 额外负重 + 自重；没有体重记录时自重组仍是 null */
+function effectiveWeight(s: WorkoutCardSet): number | null {
+  if (s.weight_kg === null && s.bodyweight_kg == null) return null;
+  return (s.weight_kg ?? 0) + (s.bodyweight_kg ?? 0);
+}
+
+/** 「70kg · 8 次 · 4 组」—— 重量 / 次数 / 组数，缺值就说缺，不补 0；自重动作按体重算实际重量 */
 export function describeSets(exercise: {
   is_bodyweight?: boolean;
   sets: WorkoutCardSet[];
@@ -25,7 +31,7 @@ export function describeSets(exercise: {
   if (working.length === 0) return '组数待补';
 
   const bodyweight = exercise.is_bodyweight === true;
-  const weights = new Set(working.map((s) => s.weight_kg));
+  const weights = new Set(working.map(effectiveWeight));
   const reps = new Set(working.map((s) => s.reps));
   const missingWeightLabel = bodyweight ? '自重' : '重量待补';
 
@@ -33,7 +39,7 @@ export function describeSets(exercise: {
     ? missingWeightLabel
     : weights.size > 1
       ? bodyweight
-        ? '多负重'
+        ? '自重+负重'
         : '多重量'
       : `${[...weights][0]}kg`;
   const rep = reps.has(null) ? '次数待补' : reps.size > 1 ? '次数不一' : `${[...reps][0]} 次`;
