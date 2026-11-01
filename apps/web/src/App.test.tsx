@@ -6,7 +6,7 @@ import { AppShell } from './App';
 
 /**
  * React 组件测试。
- * 🔴 只断言「状态 → DOM」，不冒充真浏览器里的视觉验收（定义 §0.4 D）。
+ * 🔴 只断言「状态 → DOM」，不冒充真浏览器里的视觉验收。
  */
 afterEach(() => {
   cleanup();

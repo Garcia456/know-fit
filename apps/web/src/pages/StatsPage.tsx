@@ -31,7 +31,7 @@ function spanDays(from: string, to: string): number {
   );
 }
 
-/** 统计页：选定范围内的容量 / 体重 / 肌群（ADR-045）。 */
+/** 统计页：选定范围内的容量 / 体重 / 肌群。 */
 export function StatsPage() {
   const today = useMemo(() => new Date(), []);
   const todayKey = toDateKey(today);

@@ -156,7 +156,7 @@ try {
     bad('knowledge_chunk 上缺 HNSW（cosine）索引 —— 0004 迁移没跑：pnpm db:migrate');
   }
 
-  // 8. dev-006 的三处 —— 档案身高 / 体重历史 / F7 提示留痕
+  // 8. 档案身高 / 体重历史 / F7 提示留痕
   const dev006 = await client.query(
     `SELECT table_name, column_name
        FROM information_schema.columns
@@ -177,7 +177,7 @@ try {
   ];
   const missingDev006 = needDev006.filter((c) => !dev006Have.has(c));
   if (missingDev006.length > 0) {
-    bad(`dev-006 的表 / 列缺：${missingDev006.join('、')} —— 0007 迁移没跑：pnpm db:migrate`);
+    bad(`档案 / 体重 / 提示的表或列缺：${missingDev006.join('、')} —— 0007 迁移没跑：pnpm db:migrate`);
   } else {
     ok('user_profile.height_cm / training_started_on、body_metric、recovery_nudge 都在');
   }

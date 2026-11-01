@@ -4,7 +4,7 @@ import { z } from 'zod';
  * 采集结果的**对外契约** —— 只有元数据与计数。
  *
  * 🔴 本文件任何 schema 都不携带转写原文。护栏 R-B 会拦下 text / content / transcript
- *    这组字段名；运行期那条（遍历响应体断言）仍挂 dev-005。
+ *    这组字段名；运行期还要遍历响应体断言。
  */
 
 export const IngestedSourceSchema = z.object({
@@ -38,7 +38,7 @@ export const RetireReportSchema = z.object({
   sources_after: z.number().int(),
   segments_before: z.number().int(),
   segments_after: z.number().int(),
-  /** 下架同时清除该源的片 —— feat-005 §5.4：「置 false 并清除 chunk」 */
+  /** 下架同时清除该源的片 —— 置 false 并清除 chunk */
   chunks_before: z.number().int(),
   chunks_after: z.number().int(),
 });

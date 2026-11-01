@@ -16,7 +16,7 @@ import {
 import type { AssessmentRepo, PersistAssessmentInput, RetrieveResult } from '../assessment/repo.js';
 import { ragConfig } from '../assessment/types.js';
 import { createEmbeddingClient, type EmbeddingClient } from '../kb/embedding.js';
-import { visiblePlatforms } from '../kb/platforms.js';
+import { visiblePlatformsFor } from './knowledge-access.js';
 import { createRerankClient, type RerankClient } from '../kb/rerank.js';
 import { assessment, citation, knowledgeChunk, knowledgeSource, userProfile, workoutSession } from '../db/schema.js';
 import { createLlmClient } from '../llm/index.js';
@@ -34,7 +34,7 @@ import { getDb } from './pool.js';
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** 钩子重复点击的幂等窗口（技术默认，定义文档 §1.2） */
+/** 钩子重复点击的幂等窗口（技术默认） */
 export const HOOK_IDEMPOTENCY_MS = 10 * 60 * 1000;
 
 export interface AssessmentRepoOptions {
@@ -127,7 +127,18 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
       };
     },
 
-    async retrieve({ query, max_per_source }): Promise<RetrieveResult> {
+    async retrieve({ user_id, query, max_per_source }): Promise<RetrieveResult> {
+      let platforms: string[];
+      try {
+        platforms = await visiblePlatformsFor(user_id);
+      } catch (e) {
+        return { status: 'error', message: (e as Error).message, meta };
+      }
+      // 没有授权平台 = 知识库对该用户关闭：不 embedding、不查库
+      if (platforms.length === 0) {
+        return { status: 'ok', candidates: [], meta: { ...meta, distinct_sources: 0 } };
+      }
+
       let vector: number[] | undefined;
       try {
         [vector] = await embedder.embed([query]);
@@ -179,7 +190,7 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
               eq(knowledgeSource.complianceStatus, 'ok'),
               // 防串味：查询向量与库里向量必须同模型版本
               eq(knowledgeChunk.embeddingModel, embedder.model),
-              inArray(knowledgeSource.platform, visiblePlatforms()),
+              inArray(knowledgeSource.platform, platforms),
               sql`1 - (${distance}) >= ${cfg.minSimilarity}`,
             ),
           )
@@ -403,7 +414,7 @@ export interface AssessActionResult {
   missing: string[];
 }
 
-/** 全链路上限（定义文档 §1.12）：到点掐断在途调用，按生成失败返回 */
+/** 全链路上限：到点掐断在途调用，按生成失败返回 */
 export const ASSESSMENT_DEADLINE_MS = Number(process.env.ASSESS_DEADLINE_MS) || 30_000;
 
 /**

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dev-006 端到端：读接口 / 档案写入 / F7 提示去重
+ * 端到端：读接口 / 档案写入 / F7 提示去重
  *
  * 走 HTTP（vite 代理 → api），再用裸 SQL 断言落库：
  *   A. PUT /api/profile → GET 回读一致；体重写入 body_metric 当天一行
@@ -60,7 +60,7 @@ try {
   process.exit(1);
 }
 
-console.log('\n=== dev-006 端到端 ===\n');
+console.log('\n=== 读接口 / 档案写入 / F7 提示去重 端到端 ===\n');
 
 try {
   cookie = await loginDemo(BASE);
@@ -216,7 +216,7 @@ try {
 }
 
 if (failed) {
-  console.error('\ndev-006 端到端未通过。\n');
+  console.error('\n端到端未通过。\n');
   process.exit(1);
 }
-console.log('\ndev-006 端到端通过。\n');
+console.log('\n端到端通过。\n');

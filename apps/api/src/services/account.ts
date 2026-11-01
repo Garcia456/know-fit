@@ -8,7 +8,7 @@ import {
 import { getDb } from './pool.js';
 
 /**
- * 「清空训练记录」—— 只删训练相关，保留档案与体重历史（ADR-049）。
+ * 「清空训练记录」—— 只删训练相关，保留档案与体重历史。
  * 必须在一个事务里删干净：assessment.related_record_id 是 SET NULL，
  * 只删 workout_session 会留下指向已删记录的旧评估。
  */

@@ -15,7 +15,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // 让前后端在同一个源下开发 —— 避免 CORS 从第一天就变成噪音（dev-001 §1.2）。
+    // 让前后端在同一个源下开发 —— 避免 CORS 从第一天就变成噪音。
     // /api/health → http://localhost:3000/health
     proxy: {
       '/api': {

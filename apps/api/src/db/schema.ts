@@ -46,6 +46,20 @@ export const authSession = pgTable(
   ],
 );
 
+/** 知识授权表：一行 = 某用户可检索某受限平台。无行 = 不可见。 */
+export const knowledgeAccess = pgTable(
+  'knowledge_access',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    platform: text('platform').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('knowledge_access_user_platform_unique').on(t.userId, t.platform)],
+);
+
 /** 档案表。training_started_on 是「是否 < 3 个月」那个边界判定的依据。 */
 export const userProfile = pgTable('user_profile', {
   userId: uuid('user_id')
@@ -183,7 +197,7 @@ export const setEntry = pgTable('set_entry', {
  *
  * `transcript_segments` 存的是**转写全文**（分段 + 时间戳）：
  * 🔴 它只进库、供内部检索用；**任何对外契约都不携带它**
- *    （护栏 R-B 拦字段名，运行期那条仍挂 dev-005）。
+ *    （静态护栏拦字段名；运行期还要遍历响应体断言）。
  * `is_indexable = false` 是下架开关：置 false 时连同转写一起清掉。
  * `content_hash` 是下架时按内容定位的锚，转写清掉后仍保留。
  */
@@ -214,10 +228,10 @@ export const knowledgeSource = pgTable('knowledge_source', {
 /**
  * 知识片 —— 检索的最小单位，由 `knowledge_source` 的转写切出来。
  *
- * 🔴 `text` 是切片全文：**只进库、绝不出接口**（ADR-008）。
+ * 🔴 `text` 是切片全文：**只进库、绝不出接口**。
  *    `context_prefix` 与它分开存、分开参与 embedding，不参与对外呈现。
  * `content_hash` 是片级幂等键：同一条源重跑不新增片。
- * 下架源时片随行删除（feat-005 §5.4）。
+ * 下架源时片随行删除。
  */
 export const knowledgeChunk = pgTable(
   'knowledge_chunk',
@@ -283,7 +297,7 @@ export const assessment = pgTable(
  * 一条引用 —— 一条建议挂一个知识片。
  *
  * 🔴 `quote_start` / `quote_end` 是支撑句在 `knowledge_chunk.text` 里的字符偏移，
- *    **不存引用文本**（ADR-031）：读时从 chunk 还原并断言逐字。
+ *    **不存引用文本**：读时从 chunk 还原并断言逐字。
  * 片被删时 `chunk_id` 置空、偏移清空，行保留为历史并标 `usability_status = '失效'`。
  */
 export const citation = pgTable(

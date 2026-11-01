@@ -13,7 +13,7 @@ export const CitationSchema = z.object({
   citation_id: z.string(),
   creator: z.string(),
   title: z.string(),
-  url: z.string(), // 视频级链接；start_ts 只作展示（ADR-024）
+  url: z.string(), // 视频级链接；start_ts 只作展示
   start_ts: z.number(),
   short_quote: z.string(), // 逐字原话，已过闸②
 });

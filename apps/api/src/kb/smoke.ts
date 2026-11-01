@@ -10,7 +10,7 @@
  *   3. seed/knowledge_whitelist.json 里填了博主主页（或钉住的视频）。
  *
  * ⚠️ 本脚本会把**转写正文**打到终端 —— 那是它的用途：**肉眼看它是不是博主口播**。
- *    转出来若是背景音乐、或术语错到不能引用，这条视频就不能算进知识库（dev-004 §3.2）。
+ *    转出来若是背景音乐、或术语错到不能引用，这条视频就不能算进知识库。
  */
 import { createLocalAsrClient } from '../asr/local.js';
 import { loadTranscript } from '../services/knowledge.js';
@@ -86,7 +86,7 @@ try {
     onProgress: (e) => {
       if (e.stage === 'listed') {
         console.log(`—— 博主「${e.creator}」：候选 ${e.candidates} 条（${e.pages} 页） → 采 ${e.picked} 条`);
-        // 定义 §3.1 第 5 条：真跑时要能肉眼看出排除词挡了谁、有没有误杀
+        // 真跑时要能肉眼看出排除词挡了谁、有没有误杀
         for (const t of e.excluded) console.log(`   ⛔ 排除词挡下：「${t}」`);
         // 同条规则的另一半：原声判定挡了谁 —— 这是**预期内的剔除**，但也得能看出有没有误杀真原声
         for (const t of e.music_excluded) console.log(`   🎵 配乐片挡下（非原声音轨）：「${t}」`);

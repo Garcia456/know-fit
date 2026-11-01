@@ -54,7 +54,7 @@ export const SessionDetailSchema = z.object({
   note: z.string().nullable(),
   exercises: z.array(SessionExerciseSchema),
   volume: SessionVolumeSchema,
-  /** 数据页的环比卡片 —— 基线 = 同 split 上一次（dev-003） */
+  /** 数据页的环比卡片 —— 基线 = 同 split 上一次 */
   hook: VolumeHookSchema,
 });
 

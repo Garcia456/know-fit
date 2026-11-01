@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dev-007 端到端：读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正
+ * 端到端：读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正
  *
  * 走 HTTP（vite 代理 → api），再用裸 SQL 断言落库与收尾：
  *   A. GET /api/metrics/weekly → 4 周、本周含测试记录、对外无全文键
@@ -113,7 +113,7 @@ async function insertExercise(sessionId, rawName, sets) {
   }
 }
 
-console.log('\n=== dev-007 端到端 ===\n');
+console.log('\n=== 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正 端到端 ===\n');
 
 try {
   // 留底，收尾时原样还原
@@ -394,7 +394,7 @@ try {
 }
 
 if (failed) {
-  console.error('\ndev-007 端到端未通过。\n');
+  console.error('\n端到端未通过。\n');
   process.exit(1);
 }
-console.log('\ndev-007 端到端通过。\n');
+console.log('\n端到端通过。\n');

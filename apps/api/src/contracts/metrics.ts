@@ -52,7 +52,7 @@ export const WeightHistorySchema = z.object({
   delta_kg: z.number().nullable(),
 });
 
-/** 统计页：任意日期范围的聚合（ADR-045） */
+/** 统计页：任意日期范围的聚合 */
 export const StatsDaySchema = z.object({
   date: z.string(),
   total_volume_kg: z.number(),

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dev-009 端到端 —— 身份 / 知识问答 / 空抽取 / 会话记录。
+ * 端到端 —— 身份 / 知识问答 / 空抽取 / 会话记录。
  *
  * 走 5173 代理发真请求，再用裸 SQL 验落库：
  *   1. 「hi」→ chat 卡含「枝链」，不新增 workout_session
@@ -34,7 +34,7 @@ const bad = (m) => {
   failed = true;
 };
 
-console.log('\n=== dev-009 对话 / 知识问答 / 会话记录 ===\n');
+console.log('\n=== 对话 / 知识问答 / 会话记录 端到端 ===\n');
 
 const createdConversations = [];
 const createdSessions = [];
@@ -307,7 +307,7 @@ try {
 }
 
 if (failed) {
-  console.error('\n\x1b[31mdev-009 端到端未通过。\x1b[0m\n');
+  console.error('\n\x1b[31m端到端未通过。\x1b[0m\n');
   process.exit(1);
 }
-console.log('\n\x1b[32mdev-009 端到端通过。\x1b[0m\n');
+console.log('\n\x1b[32m端到端通过。\x1b[0m\n');

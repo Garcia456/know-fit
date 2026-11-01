@@ -1,4 +1,4 @@
-description: dev-010 检索层评测 —— baseline（无配额）vs quota（每源 1 片）。不进 CI / check-dev.sh
+description: 检索层评测 —— baseline（无配额）vs quota（每源 1 片）。不进 CI / check-dev.sh
 prompts:
   - '{{query}}'
 providers:

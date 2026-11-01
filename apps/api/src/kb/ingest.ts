@@ -88,7 +88,7 @@ try {
     );
   }
 
-  // 🔴 跳过即「采集不完整」→ 退出码非零（ADR-033 决定②），否则这条会被静默吞掉
+  // 🔴 跳过即「采集不完整」→ 退出码非零，否则这条会被静默吞掉
   if (skipped.length > 0) {
     console.error(`\n⛔ 跳过 ${skipped.length} 条（空转写 / 配乐片 —— 不许入库）：`);
     for (const s of skipped) console.error(`   ${s.platform_video_key}「${s.title}」：${s.reason}`);

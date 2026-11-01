@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dev-008 端到端：注册 / 登录态 / 多用户隔离 / 改资料 / 清空训练 / 注销
+ * 端到端：注册 / 登录态 / 多用户隔离 / 改资料 / 清空训练 / 注销
  *
  * 走 HTTP（vite 代理 → api），再用裸 SQL 验落库：
  *   A. 未登录访问数据接口 → 401
@@ -44,7 +44,7 @@ async function call(path, init = {}, cookie = '') {
   return { status: res.status, body, headers: res.headers };
 }
 
-console.log('\n=== dev-008 端到端 ===\n');
+console.log('\n=== 用户系统端到端 ===\n');
 
 const client = new pg.Client({ connectionString: url, connectionTimeoutMillis: 5000 });
 let userId;

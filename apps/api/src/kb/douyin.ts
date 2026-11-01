@@ -75,7 +75,7 @@ export interface MusicInfo {
 /**
  * 🔴 抓音频的唯一依据是 `music.play_url` —— 但它**只在博主用「原声」时才等于视频原声**。
  *    挂授权配乐时它指的是**那首歌**（实测：拿到 170s 的配乐，而视频只有 89s）。
- *    所以三个字段一起取回去，由采样管线按规则 5 判（ADR-033）。
+ *    所以三个字段一起取回去，由采样管线按规则 5 判。
  */
 export function findMusicInfo(json: unknown): MusicInfo {
   const stack: unknown[] = [json];

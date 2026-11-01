@@ -293,7 +293,7 @@ export async function weightHistory(input: {
   };
 }
 
-/** 任意日期范围的容量 / 肌群 / 体重 —— 统计页一次取全（ADR-045） */
+/** 任意日期范围的容量 / 肌群 / 体重 —— 统计页一次取全 */
 export async function statsRange(input: {
   user_id: string;
   from: string;

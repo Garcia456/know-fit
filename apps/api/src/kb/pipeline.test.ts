@@ -263,7 +263,7 @@ describe('ingestCreator：遍历一个白名单博主', () => {
     expect(Number(rows.rows[0].seg_count)).toBe(2);
   });
 
-  it('🔴 挡下的标题要如实报出来 —— 定义 §3.1 第 5 条靠它肉眼复查有没有误杀', async () => {
+  it('🔴 挡下的标题要如实报出来 —— 真跑时靠它肉眼复查有没有误杀', async () => {
     const listed: string[][] = [];
     await ingestCreator(
       FIXTURE_CREATOR_WHITELIST,

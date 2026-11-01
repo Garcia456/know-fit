@@ -237,7 +237,7 @@ try {
   const realBefore = await nonFixtureFingerprint();
 
   // ── 1. 造 fixture：会话 + 3 条源 / 4 个片 ─────────────────────────
-  // 会话先建：query 会带上本次训练的主要部位（ADR-039），embedding 替身按整句哈希，
+  // 会话先建：query 会带上本次训练的主要部位，embedding 替身按整句哈希，
   // 片段向量必须与最终 query 逐字一致才能命中。
   await insertSession({ day: daysAgo(5), split: SPLIT, weight: 100 });
   const sessionB = await insertSession({ day: daysAgo(3), split: SPLIT, weight: 80 });

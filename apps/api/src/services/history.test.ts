@@ -78,7 +78,7 @@ describe('getSessionDetail', () => {
     expect(detail?.missing_fields).toEqual(['reps']);
     expect(detail?.exercises[0]?.raw_name).toBe('e2e-history-引体向上');
     expect(detail?.exercises[0]?.sets[0]?.reps).toBeNull();
-    // 次数缺失的组不计容量（dev-003 口径），算被跳过的组
+    // 次数缺失的组不计容量，算被跳过的组
     expect(detail?.volume.total_volume_kg).toBe(0);
     expect(detail?.volume.skipped_sets).toBe(1);
   });

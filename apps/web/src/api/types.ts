@@ -1,6 +1,6 @@
 /**
  * 前端只镜像用到的对外契约字段。
- * 🔴 不出现 text / content / transcript —— 界面没有渲染全文的通道（ADR-008）。
+ * 🔴 不出现 text / content / transcript —— 界面没有渲染全文的通道。
  */
 
 export type Intent =

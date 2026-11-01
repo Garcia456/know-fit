@@ -28,7 +28,7 @@ export const EMPTY_WORKOUT: Extraction = {
 };
 
 export const EXTRACTION_FIXTURES: Record<string, Extraction> = {
-  // 完整：3 动作 12 组（§一 的一句话验收）
+  // 完整：3 动作 12 组（一句话验收）
   '卧推 70kg×8 四组，飞鸟 15kg×12 三组，深蹲 100kg×5 五组': {
     kind: 'workout',
     day_hint: null,

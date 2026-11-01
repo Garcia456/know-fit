@@ -1,4 +1,4 @@
--- dev-008：用户系统（ADR-049）
+-- 用户系统
 -- 1) user 表补账号资料字段；2) 新建 auth_session；3) 现有单用户行迁为 demo 账号。
 
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "email" text;--> statement-breakpoint

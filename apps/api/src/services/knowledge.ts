@@ -99,7 +99,7 @@ async function countIndexable(): Promise<number> {
  * 下架一条知识源。
  *
  * 两件事一起做，缺一不可：
- *   1. `is_indexable = false` —— 检索侧从此看不到它（这道闸在 dev-005）；
+ *   1. `is_indexable = false` —— 检索侧从此看不到它；
  *   2. **清掉转写产物** —— 内容本身不再留在库里。
  * 而**行本身保留**（含 `content_hash`）：下架要留痕，否则「我们下架过什么」无从指认。
  */

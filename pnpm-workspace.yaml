@@ -1,4 +1,4 @@
-# ADR-017：单仓 + pnpm workspaces。
+# 单仓 + pnpm workspaces。
 # docs/ 不工作空间化 —— 它是交付物（认识成果），不是一个可安装的包。
 packages:
   - 'apps/*'

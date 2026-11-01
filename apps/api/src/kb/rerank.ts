@@ -5,7 +5,7 @@
  * 因此单独抽一个 `RerankClient`，而不是硬塞进 `LlmClient`。
  * 替身按**词面重叠**排序：确定性、可单测、不联网。
  *
- * 🔴 `gte-rerank-v2` 已下线（ADR-012），不要换回去。
+ * 🔴 `gte-rerank-v2` 已下线，不要换回去。
  */
 
 export interface RerankHit {

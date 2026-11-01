@@ -25,7 +25,7 @@ defaultTest:
         } catch {
           return false;
         }
-    # 第二层（确定性）：只比「可引用 / 不可引用」——唯一可引用的是「陈述」（ADR-035）
+    # 第二层（确定性）：只比「可引用 / 不可引用」——唯一可引用的是「陈述」
     - type: javascript
       value: |
         const CITABLE = ['陈述'];

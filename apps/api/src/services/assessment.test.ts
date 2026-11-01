@@ -27,6 +27,8 @@ const KEYS = [
 ];
 const QUERY = '增肌 推日 训练容量下降 怎么调整';
 const USER = SINGLE_USER_ID;
+/** 没有知识授权的独立用户 */
+const NO_ACCESS_USER = '00000000-0000-4000-8000-000000000d11';
 
 const embedder = createFakeEmbeddingClient();
 
@@ -83,6 +85,8 @@ async function chunk(input: {
 }
 
 async function purge(): Promise<void> {
+  await getPool().query('DELETE FROM knowledge_access WHERE user_id = $1', [NO_ACCESS_USER]);
+  await getPool().query('DELETE FROM "user" WHERE id = $1', [NO_ACCESS_USER]);
   await getPool().query('DELETE FROM knowledge_source WHERE platform_video_key = ANY($1)', [KEYS]);
 }
 
@@ -91,6 +95,12 @@ let s2Chunk = '';
 
 beforeAll(async () => {
   await purge();
+  await getPool().query(
+    `INSERT INTO "user" (id, email, password_hash, nickname)
+     VALUES ($1, 'no-access@knowfit.test', 'scrypt$locked$locked', 'no-access')
+     ON CONFLICT (id) DO NOTHING`,
+    [NO_ACCESS_USER],
+  );
   const [first] = await embedder.embed([QUERY]);
   if (!first) throw new Error('替身 embedding 没返回向量');
   vector = first;
@@ -149,6 +159,53 @@ describe('检索过滤', () => {
     });
     expect(ranks[0]?.index).toBe(1);
     expect(ranks).toHaveLength(2);
+  });
+});
+
+describe('检索授权', () => {
+  it('未授权用户：0 候选，且不进 embedding / 重排', async () => {
+    let embedCalls = 0;
+    const countingEmbedder = {
+      ...embedder,
+      async embed(texts: string[]) {
+        embedCalls++;
+        return embedder.embed(texts);
+      },
+    };
+    const seen: string[][] = [];
+    const recording: RerankClient = {
+      model: 'recording',
+      async rerank({ documents, topN }) {
+        seen.push(documents);
+        return documents.map((_, index) => ({ index, score: 1 })).slice(0, topN);
+      },
+    };
+    const repo = createAssessmentRepo({ embedder: countingEmbedder, reranker: recording });
+    const out = await repo.retrieve({ user_id: NO_ACCESS_USER, query: QUERY });
+
+    expect(out.status).toBe('ok');
+    if (out.status !== 'ok') return;
+    expect(out.candidates).toEqual([]);
+    expect(out.meta.distinct_sources).toBe(0);
+    expect(embedCalls).toBe(0);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('插入授权后同一用户可见 S1', async () => {
+    await getPool().query(
+      `INSERT INTO knowledge_access (user_id, platform) VALUES ($1, 'douyin')
+       ON CONFLICT DO NOTHING`,
+      [NO_ACCESS_USER],
+    );
+    try {
+      const repo = createAssessmentRepo({ embedder, reranker: createFakeRerankClient() });
+      const out = await repo.retrieve({ user_id: NO_ACCESS_USER, query: QUERY });
+      expect(out.status).toBe('ok');
+      if (out.status !== 'ok') return;
+      expect(out.candidates.map((c) => c.chunk_id)).toContain(s1Chunk);
+    } finally {
+      await getPool().query('DELETE FROM knowledge_access WHERE user_id = $1', [NO_ACCESS_USER]);
+    }
   });
 });
 

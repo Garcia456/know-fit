@@ -27,7 +27,7 @@ export interface SessionRef {
 export interface AssessmentTarget extends SessionRef {
   /** 档案里的目标；为空时 query 用「训练」，不猜 */
   goal: string | null;
-  /** 本次训练的主要部位（ADR-039）—— 取不到就是空数组 */
+  /** 本次训练的主要部位 —— 取不到就是空数组 */
   body_parts: string[];
   verdict: VolumeHook;
 }

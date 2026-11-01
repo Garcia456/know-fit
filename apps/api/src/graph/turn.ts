@@ -39,7 +39,7 @@ export function normalizeSetTags(tags: SetTag[] | undefined, hasDrops: boolean):
   return out;
 }
 
-/** 带指代的问题拼上一轮用户消息 —— v1 不改写 query（ADR-049 §1） */
+/** 带指代的问题拼上一轮用户消息 —— v1 不改写 query */
 export function buildKnowledgeQuery(message: string, history: TurnHistoryItem[]): string {
   const previous = [...history].reverse().find((h) => h.role === 'user')?.content;
   if (!previous) return message;
@@ -97,7 +97,7 @@ export function buildTurnGraph(deps: TurnDeps) {
         const extracted = state.extracted;
         // 饮食只手握契约：不落库
         if (!extracted || extracted.kind === 'meal') return {};
-        // 🔴 没有动作就不是训练记录 —— 不写库，走追问（ADR-049 §7）
+        // 🔴 没有动作就不是训练记录 —— 不写库，走追问
         if (extracted.exercises.length === 0) return { empty_extraction: true };
 
         const date = resolveDate(extracted.day_hint, now());

@@ -109,7 +109,7 @@ else
   bad "pnpm verify 失败"
 fi
 
-# 前端构建（ADR-019 补注）—— 类型过了不代表打得出来；构建失败 = 闸门失败。
+# 前端构建 —— 类型过了不代表打得出来；构建失败 = 闸门失败。
 if pnpm --filter @know-fit/web build; then
   ok "web 构建通过（pnpm --filter @know-fit/web build）"
 else
@@ -144,15 +144,15 @@ fi
 #   只有真发一次请求才知道。
 #
 # 本步两块：
-#   A. 录入往返（dev-002/003）—— POST /api/turns → 库里真有这条记录
-#   B. 采集转写（dev-004）—— 真跑一遍 kb:ingest → 库里真有知识源、
+#   A. 录入往返 —— POST /api/turns → 库里真有这条记录
+#   B. 采集转写 —— 真跑一遍 kb:ingest → 库里真有知识源、
 #      正文没漏出去、下架通道通。走**替身 provider**（不联网、不加载模型）。
-#   C. 切片与索引（dev-004b）—— 真跑 kb:index → 片落对、重跑幂等、下架带走片。
-#   D. 检索与引用（dev-005）—— 造源 → 检索过滤 → 闸② → 引用偏移 → R-C 计数。
-#   E. 历史 / 档案 / 提示（dev-006）—— 档案往返 → 体重落 body_metric → 提示只出现一次。
-#   F. 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正（dev-007）—— 与前端四页消费同一批接口。
-#   G. 用户系统（dev-008）—— 注册 / 隔离 / 改资料 / 清空训练 / 注销，全部走会话 cookie。
-#   H. 身份 / 知识问答 / 空抽取 / 会话记录（dev-009）—— 会话创建、恢复、改名、删除。
+#   C. 切片与索引 —— 真跑 kb:index → 片落对、重跑幂等、下架带走片。
+#   D. 检索与引用 —— 造源 → 检索过滤 → 闸② → 引用偏移 → R-C 计数。
+#   E. 历史 / 档案 / 提示 —— 档案往返 → 体重落 body_metric → 提示只出现一次。
+#   F. 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正 —— 与前端四页消费同一批接口。
+#   G. 用户系统 —— 注册 / 隔离 / 改资料 / 清空训练 / 注销，全部走会话 cookie。
+#   H. 身份 / 知识问答 / 空抽取 / 会话记录 —— 会话创建、恢复、改名、删除。
 bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引 + 检索引用 + 档案提示 + 读聚合修正 + 用户系统 + 会话记录）"
 if [ "$FAILED" -eq 0 ]; then
   if node scripts/e2e-turn.mjs; then
@@ -162,7 +162,7 @@ if [ "$FAILED" -eq 0 ]; then
     hint "dev server 起了吗？vite 代理的 /api 重写对了吗？"
   fi
 
-  # 历史 / 档案 / F7（dev-006）—— 走 5173 代理，再用裸 SQL 验落库。
+  # 历史 / 档案 / F7 提示补齐 —— 走 5173 代理，再用裸 SQL 验落库。
   if node scripts/e2e-dev006.mjs; then
     ok "档案读写 / 历史读取 / 提示去重通过"
   else
@@ -170,7 +170,7 @@ if [ "$FAILED" -eq 0 ]; then
     hint "0007 迁移跑了吗？pnpm db:migrate"
   fi
 
-  # 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正（dev-007）—— 走 5173 代理，裸 SQL 验落库。
+  # 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正 —— 走 5173 代理，裸 SQL 验落库。
   if node scripts/e2e-dev007.mjs; then
     ok "读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正通过"
   else
@@ -178,7 +178,7 @@ if [ "$FAILED" -eq 0 ]; then
     hint "0007 迁移跑了吗？pnpm db:migrate"
   fi
 
-# 用户系统（dev-008）—— 注册 → 隔离 → 改资料 → 清空训练 → 注销；收尾自删测试账号。
+# 用户系统 —— 注册 → 隔离 → 改资料 → 清空训练 → 注销；收尾自删测试账号。
   if node scripts/e2e-dev008.mjs; then
     ok "用户系统端到端通过"
   else
@@ -186,7 +186,7 @@ if [ "$FAILED" -eq 0 ]; then
     hint "0009 迁移跑了吗？pnpm db:migrate"
   fi
 
-  # 身份 / 知识问答 / 空抽取 / 会话记录（dev-009）—— 走 5173 代理，裸 SQL 验落库。
+  # 身份 / 知识问答 / 空抽取 / 会话记录 —— 走 5173 代理，裸 SQL 验落库。
   if node scripts/e2e-dev009.mjs; then
     ok "身份 / 知识问答 / 空抽取 / 会话记录通过"
   else
@@ -194,7 +194,7 @@ if [ "$FAILED" -eq 0 ]; then
     hint "0010 迁移跑了吗？pnpm db:migrate"
   fi
 
-  # 采集转写（dev-004）—— 走替身 provider：不联网、不加载模型。
+  # 采集转写 —— 走替身 provider：不联网、不加载模型。
   # 它证的是「管道通」；「抖音解析对 / 转写准」只在作者本机（kb:smoke）。
   # 不依赖 dev server，只依赖库。
   if node scripts/kb-check.mjs; then
@@ -204,7 +204,7 @@ if [ "$FAILED" -eq 0 ]; then
     hint "库起了吗？迁移（pnpm db:migrate）跑了吗？"
   fi
 
-  # 切片与索引（dev-004b）—— 同样走替身：不联网、不需要 key。
+  # 切片与索引 —— 同样走替身：不联网、不需要 key。
   # 它证的是「片落对 + 幂等 + 下架联动」；「切得像不像一个观点 / 判得准不准」不在这一步。
   if node scripts/kb-index-check.mjs; then
     ok "切片与索引通过"
@@ -213,7 +213,7 @@ if [ "$FAILED" -eq 0 ]; then
     hint "0004 迁移跑了吗？pnpm db:migrate"
   fi
 
-  # 检索与引用（dev-005）—— 走替身 embedding / rerank / LLM：不联网。
+  # 检索与引用 —— 走替身 embedding / rerank / LLM：不联网。
   # 它证的是「五条过滤都在、闸② 拒绝会降级、引用偏移能还原、R-C 计数在涨」；
   # 「召回准不准 / 引用贴不贴切」不在这一步（那只能来自作者盲评的 pilot）。
   if pnpm rag:check; then

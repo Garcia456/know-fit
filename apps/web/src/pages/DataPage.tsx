@@ -34,7 +34,7 @@ const STATUS_LABELS = { complete: '已记完', incomplete: '待补全' } as cons
 
 type Order = 'desc' | 'asc';
 
-/** 历史页：日历 + 全部 / 某天训练记录（ADR-045）。 */
+/** 历史页：日历 + 全部 / 某天训练记录。 */
 export function DataPage() {
   const [params] = useSearchParams();
   const paramDate = params.get('date');

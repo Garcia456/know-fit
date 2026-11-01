@@ -896,7 +896,7 @@ select:active,
 .heat-list li:last-child {
   border-bottom: 0;
 }
-/* ---------- 动效与手势（ADR-046） ---------- */
+/* ---------- 动效与手势 ---------- */
 
 .page-swipe {
   flex: 1;

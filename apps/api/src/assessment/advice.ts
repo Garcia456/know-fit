@@ -7,7 +7,7 @@ import type { AssessmentCandidate } from './types.js';
  * 建议的组装与校验。
  *
  * 🔴 有源路径不允许 `general` claim —— `basis` 的枚举里根本没有这个值。
- *    「博主没讲、模型自己知道」的话只能走无源路径（ADR-037）。
+ *    「博主没讲、模型自己知道」的话只能走无源路径。
  */
 
 export const DraftClaimSchema = z.object({
