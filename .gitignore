@@ -52,11 +52,7 @@ apps/web/public/fonts/PingFangSC-*.woff2
 # 本机 worktree（每个都是完整仓库副本，不进主仓库）
 .claude/worktrees/
 
-# 本地工作件（作者 2026-10-08 决定）—— 只在本机存在，不进仓库
 # progress.md / session-handoff.md 是会话日志，init.sh 是本地环境检查；
-# 三者都不属于作品集的交付物，故不随仓库分发（本地文件保留）
 progress.md
-progress-archive.md
 session-handoff.md
-session-handoff-archive.md
 init.sh
