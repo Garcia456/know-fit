@@ -3,24 +3,25 @@
  * 这里只写设计系统没有的：外壳、日历、热力图、表单输入、抽屉与列表的按钮化。
  */
 
-/* 全局中文字体：只带 400 / 500 两个文件。
+/* 全局中文字体：思源黑体（OFL，子集化后随仓库分发）；Mac 有系统苹方就先用，不再下载。
+ * 只带 400 / 500 两个文件。
  * 600–700 故意不再复用 Medium —— 否则「加粗」和正文一个粗度；
  * 交给浏览器在 Medium 上合成加粗（font-synthesis 默认开），真 Semibold 文件到位后可替换。 */
 @font-face {
-  font-family: "PingFang SC";
+  font-family: "KnowFit Sans";
   src:
     local("PingFang SC"),
-    url("/fonts/PingFangSC-Regular.woff2") format("woff2");
+    url("/fonts/KnowFitSans-Regular.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: "PingFang SC";
+  font-family: "KnowFit Sans";
   src:
     local("PingFang SC Medium"),
-    url("/fonts/PingFangSC-Medium.woff2") format("woff2");
+    url("/fonts/KnowFitSans-Medium.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -28,7 +29,7 @@
 
 :root {
   --font:
-    "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans GB",
+    "KnowFit Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans GB",
     "Microsoft YaHei", sans-serif;
   /* 热力图 5 档：0 = 未练，1–4 由浅到深（暖色，一眼看出练没练） */
   --heat-0: #ece8e1; /* 未练 = 头部/身体底色，整块一个色 */

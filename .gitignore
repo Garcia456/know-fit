@@ -46,8 +46,8 @@ tmp-test/
 # 浏览器核对工作件（playwright-cli 的快照 / 截图，只在本机）
 .playwright-cli/
 
-# 中文字体是苹果专有字体，只在本地开发时放进 public/fonts/，不随仓库分发
-apps/web/public/fonts/
+# 苹方是苹果专有字体，只留在本机；线上用同目录的思源黑体（OFL，随仓库分发）
+apps/web/public/fonts/PingFangSC-*.woff2
 
 # 本机 worktree（每个都是完整仓库副本，不进主仓库）
 .claude/worktrees/

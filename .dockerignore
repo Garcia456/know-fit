@@ -12,3 +12,6 @@ progress-archive.md
 session-handoff.md
 session-handoff-archive.md
 .claude
+
+# 苹果专有字体只在本机开发用，不进镜像
+apps/web/public/fonts/PingFangSC-*.woff2
