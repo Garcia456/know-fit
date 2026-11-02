@@ -1,13 +1,11 @@
 # 站点地址由 APP_SITE_ADDR 决定：
 #   有域名 → knowfit.example.com   （Caddy 自动申请 / 续期 TLS）
 #   无域名 → http://:80            （只走 HTTP，仅供作者 / 可信测试）
+#
+# ⚠️ 2026-11-02 起不再有 Basic Auth：浏览器弹窗已移除。
+#    准入边界改为「登录 + 邀请码注册 + 限流」；先部署 dev-013 再放开入口。
 {$APP_SITE_ADDR:http://:80} {
 	encode zstd gzip
-
-	# 受控演示的第二道门；哈希用 `caddy hash-password` 生成
-	basic_auth {
-		{$CADDY_BASIC_AUTH_USER} {$CADDY_BASIC_AUTH_HASH}
-	}
 
 	# /api/xxx → API 的 /xxx（与 Vite dev 代理同一套重写）
 	handle_path /api/* {
@@ -20,5 +18,7 @@
 
 	header {
 		-Server
+		# HTTP 下浏览器忽略；补域名走 HTTPS 后生效
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	}
 }

@@ -149,8 +149,6 @@ services:
     ports:
       - "${PUBLIC_HTTP_PORT:-80}:80"
       - "${PUBLIC_HTTPS_PORT:-443}:443"
-    env_file:
-      - deploy/.env.caddy
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - knowfit-prod-caddy-data:/data
