@@ -25,6 +25,7 @@
     "kb:smoke": "pnpm --filter @know-fit/api kb:smoke",
     "rag:check": "pnpm --filter @know-fit/api rag:check",
     "rag:smoke": "pnpm --filter @know-fit/api rag:smoke",
+    "rag:doctor": "bash scripts/rag-doctor.sh",
     "rag:eval:queries": "pnpm --filter @know-fit/api rag:eval:queries",
     "rag:eval": "pnpm --filter @know-fit/api rag:eval",
     "rag:retrieval:tests": "pnpm --filter @know-fit/api rag:retrieval:tests",

@@ -80,13 +80,18 @@ describe('知识起草', () => {
     expect(systems).toHaveLength(2);
   });
 
-  it('超过 3 条 → claim_count', async () => {
+  it('超过引用上限（默认 2）只保留前 2 条', async () => {
     const { llm } = stubLlm([
-      { claims: [claim(0), claim(1), claim(0), claim(1)] },
+      { claims: [claim(0), claim(1), claim(2)] },
     ]);
-    const out = await draftKnowledge(llm, '练胸练什么', [candidate('a'), candidate('b')]);
+    const out = await draftKnowledge(llm, '练胸练什么', [
+      candidate('a'),
+      candidate('b'),
+      candidate('c'),
+    ]);
 
-    expect(out.problem).toBe('claim_count');
+    expect(out.problem).toBeNull();
+    expect(out.draft?.claims.map((c) => c.source_index)).toEqual([0, 1]);
   });
 
   it('空 claim → empty_claim', async () => {

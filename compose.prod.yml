@@ -74,6 +74,27 @@ services:
     restart: "no"
     logging: *default-logging
 
+  # 只读检索体检：看 provider / 知识行数 / 向量版本 / 账号授权
+  rag-doctor:
+    image: ${API_IMAGE}:${IMAGE_TAG}
+    build:
+      context: .
+      target: api
+    profiles: ["tools"]
+    working_dir: /app
+    command: ["node", "/app/scripts/rag-doctor.mjs"]
+    env_file:
+      - deploy/.env.production
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-knowfit}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-knowfit}
+    volumes:
+      - ./scripts/rag-doctor.mjs:/app/scripts/rag-doctor.mjs:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
   api:
     image: ${API_IMAGE}:${IMAGE_TAG}
     build:
