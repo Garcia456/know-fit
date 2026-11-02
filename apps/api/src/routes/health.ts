@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import type { HealthResponse } from '../contracts/health.js';
+import type { HealthResponse, ReadyResponse } from '../contracts/health.js';
+import { getPool } from '../services/pool.js';
 import { rcStats } from '../guardrails/rc.js';
 
 /**
@@ -18,4 +19,15 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     service: 'know-fit-api',
     rc: { scanned: rcStats.scanned, blocked: rcStats.blocked },
   }));
+
+  // 与 /health 分开：这里答的是「数据库通不通」，失败要能让编排判成 unhealthy
+  app.get('/ready', async (_request, reply): Promise<ReadyResponse> => {
+    try {
+      await getPool().query('select 1');
+      return { status: 'ok' };
+    } catch {
+      reply.code(503);
+      return { status: 'unavailable' };
+    }
+  });
 }

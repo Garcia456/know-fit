@@ -1,0 +1,126 @@
+# ─────────────────────────────────────────────────────────────
+# 生产编排（单机，受控演示）
+#
+# 用法（在仓库根目录、服务器上）：
+#   docker compose --env-file deploy/.env.production -f compose.prod.yml pull
+#   docker compose --env-file deploy/.env.production -f compose.prod.yml run --rm migrate
+#   docker compose --env-file deploy/.env.production -f compose.prod.yml up -d
+#
+# 只有 caddy 对外发布端口；db / api / web 只在内部网络。
+# 🔴 镜像 tag 必须不可变（sha-xxxx），不要用 latest 做回滚依据。
+# ─────────────────────────────────────────────────────────────
+name: knowfit-prod
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-knowfit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置}
+      POSTGRES_DB: ${POSTGRES_DB:-knowfit}
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes:
+      - knowfit-prod-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    shm_size: 256mb
+    logging: *default-logging
+
+  # 一次性迁移：由 deploy.sh 显式 run，不随 up -d 启动
+  migrate:
+    image: ${API_IMAGE}:${IMAGE_TAG}
+    build:
+      context: .
+      target: api
+    profiles: ["tools"]
+    command: ["node", "dist/db/migrate.js"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-knowfit}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-knowfit}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
+  api:
+    image: ${API_IMAGE}:${IMAGE_TAG}
+    build:
+      context: .
+      target: api
+    restart: unless-stopped
+    env_file:
+      - deploy/.env.production
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgres://${POSTGRES_USER:-knowfit}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-knowfit}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    expose:
+      - "3000"
+    logging: *default-logging
+
+  web:
+    image: ${WEB_IMAGE}:${IMAGE_TAG}
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    expose:
+      - "80"
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "${PUBLIC_HTTP_PORT:-80}:80"
+      - "${PUBLIC_HTTPS_PORT:-443}:443"
+    env_file:
+      - deploy/.env.caddy
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - knowfit-prod-caddy-data:/data
+      - knowfit-prod-caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    logging: *default-logging
+
+volumes:
+  knowfit-prod-pgdata:
+  knowfit-prod-caddy-data:
+  knowfit-prod-caddy-config:

@@ -12,7 +12,19 @@ export const SESSION_COOKIE = 'kf_session';
 const SESSION_MAX_AGE_SEC = 30 * 24 * 60 * 60;
 
 /** 公开路径 —— 只认重写后的路径（vite 把 /api 去掉）。 */
-const PUBLIC_PATHS = new Set(['/health', '/auth/register', '/auth/login', '/auth/logout']);
+const PUBLIC_PATHS = new Set([
+  '/health',
+  '/ready',
+  '/auth/register',
+  '/auth/login',
+  '/auth/logout',
+]);
+
+/** 生产默认 Secure；无域名的临时 HTTP 部署可用 COOKIE_SECURE=0 关掉 */
+function secureCookie(): string {
+  if (process.env.COOKIE_SECURE === '0') return '';
+  return process.env.NODE_ENV === 'production' ? '; Secure' : '';
+}
 
 export function readSessionToken(request: FastifyRequest): string | null {
   const header = request.headers.cookie;
@@ -25,7 +37,7 @@ export function readSessionToken(request: FastifyRequest): string | null {
 }
 
 export function setSessionCookie(reply: FastifyReply, token: string): void {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const secure = secureCookie();
   reply.header(
     'set-cookie',
     `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SEC}${secure}`,
@@ -33,7 +45,7 @@ export function setSessionCookie(reply: FastifyReply, token: string): void {
 }
 
 export function clearSessionCookie(reply: FastifyReply): void {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const secure = secureCookie();
   reply.header('set-cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
 }
 

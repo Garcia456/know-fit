@@ -6,6 +6,10 @@ node_modules/
 .env
 .env.*
 !.env.example
+!**/.env.*.example
+deploy/.env.production
+.deployed-tag
+backups/
 
 # 构建产物
 dist/
@@ -31,6 +35,9 @@ Thumbs.db
 # 临时文件
 *.tmp
 .cache/
+
+# 本机部署验证用的临时件
+tmp-test/
 
 # 浏览器核对工作件（playwright-cli 的快照 / 截图，只在本机）
 .playwright-cli/

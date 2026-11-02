@@ -8,3 +8,8 @@ export interface HealthResponse {
     blocked: number;
   };
 }
+
+/** 就绪检查：库可达才算 ok —— 部署脚本与容器 healthcheck 用它 */
+export interface ReadyResponse {
+  status: 'ok' | 'unavailable';
+}

@@ -1,0 +1,24 @@
+# 站点地址由 APP_SITE_ADDR 决定：
+#   有域名 → knowfit.example.com   （Caddy 自动申请 / 续期 TLS）
+#   无域名 → http://:80            （只走 HTTP，仅供作者 / 可信测试）
+{$APP_SITE_ADDR:http://:80} {
+	encode zstd gzip
+
+	# 受控演示的第二道门；哈希用 `caddy hash-password` 生成
+	basic_auth {
+		{$CADDY_BASIC_AUTH_USER} {$CADDY_BASIC_AUTH_HASH}
+	}
+
+	# /api/xxx → API 的 /xxx（与 Vite dev 代理同一套重写）
+	handle_path /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+
+	header {
+		-Server
+	}
+}
