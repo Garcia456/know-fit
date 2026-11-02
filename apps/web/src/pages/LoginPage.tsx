@@ -4,9 +4,11 @@ import { useAuth } from '../auth/AuthContext';
 import { AuthLayout } from './AuthLayout';
 
 const DEMO_EMAIL = 'demo@knowfit.local';
-const DEMO_PASSWORD = 'knowfit-demo';
 
-/** 登录页。演示账号一键填入，方便作者/面试官直接看到有数据的界面。 */
+/**
+ * 登录页。演示账号只填邮箱 —— 密码是 seed 脚本生成的独立随机值，
+ * 不能硬编码在前端（会随镜像发出去）。
+ */
 export function LoginPage() {
   const { status, signIn } = useAuth();
   const navigate = useNavigate();
@@ -86,13 +88,14 @@ export function LoginPage() {
           className="auth-demo__fill"
           onClick={() => {
             setEmail(DEMO_EMAIL);
-            setPassword(DEMO_PASSWORD);
             setError(null);
           }}
         >
-          {DEMO_EMAIL} · {DEMO_PASSWORD}
+          {DEMO_EMAIL}
         </button>
-        <p className="card-meta">演示账号里有已有的训练记录；新注册的账号从空白开始。</p>
+        <p className="card-meta">
+          密码由作者单独发放。demo 账号里有已有的训练记录；新注册的账号从空白开始。
+        </p>
       </div>
     </AuthLayout>
   );

@@ -18,6 +18,8 @@
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @know-fit/api db:migrate",
     "db:check": "node --env-file-if-exists=.env scripts/db-check.mjs",
+    "demo:seed": "node --env-file-if-exists=.env scripts/seed-demo-users.mjs",
+    "demo:seed:rotate": "node --env-file-if-exists=.env scripts/seed-demo-users.mjs --rotate",
     "kb:ingest": "pnpm --filter @know-fit/api kb:ingest",
     "kb:index": "pnpm --filter @know-fit/api kb:index",
     "kb:smoke": "pnpm --filter @know-fit/api kb:smoke",

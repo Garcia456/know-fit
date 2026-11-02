@@ -14,12 +14,22 @@ import { profileRoutes } from './routes/profile.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { turnRoutes } from './routes/turns.js';
 import { resolveProvider } from './llm/index.js';
+import { applySecurityHeaders } from './security/headers.js';
+import { buildRouteLimits } from './security/rate-limit.js';
 import { loadAllChunkTexts } from './services/chunks.js';
 import { closeDb, getPool } from './services/pool.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 /** R-C 窗口集刷新间隔 —— 新入库的片最多晚 60 秒被纳入 */
 const RC_REFRESH_MS = 60_000;
+
+/** 生产默认在 Caddy 后面；本地默认关闭，免得伪造 X-Forwarded-For 绕过 IP 限流。 */
+export function trustProxyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.TRUST_PROXY?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false;
+  return env.NODE_ENV === 'production';
+}
 
 async function refreshGuardWindows(app: FastifyInstance): Promise<void> {
   try {
@@ -30,11 +40,37 @@ async function refreshGuardWindows(app: FastifyInstance): Promise<void> {
 }
 
 export async function buildServer() {
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
+  const app = Fastify({
+    logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    trustProxy: trustProxyEnabled(),
+  });
 
   // 🔴 认证钩子必须在注册路由之前挂到**根作用域**（包在 register 里不会作用于兄弟路由）
   app.decorateRequest('userId', '');
   app.addHook('onRequest', authOnRequest);
+
+  // 限流挂在认证之后：/turns 与 /assessments 要按 userId 计数
+  const routeLimits = process.env.RATE_LIMIT_DISABLED === '1' ? [] : buildRouteLimits();
+  app.addHook('onRequest', async (request, reply) => {
+    if (reply.sent) return;
+    const path = request.url.split('?')[0] ?? '/';
+    const rule = routeLimits.find((r) => r.method === request.method && r.path === path);
+    if (!rule) return;
+
+    const key = rule.dimension === 'ip' ? request.ip : request.userId;
+    // 未登录的请求已由认证钩子回 401，不占用户配额
+    if (!key) return;
+
+    const verdict = rule.limiter.take(key);
+    if (verdict.allowed) return;
+    reply.header('retry-after', String(verdict.retryAfterSec));
+    await reply.code(429).send({ error: rule.message });
+  });
+
+  app.addHook('onSend', async (_request, reply, payload) => {
+    applySecurityHeaders(reply);
+    return payload;
+  });
 
   // 🔴 R-C：钩子必须在注册路由之前挂 —— onSend 只作用于之后注册的路由
   await refreshGuardWindows(app);

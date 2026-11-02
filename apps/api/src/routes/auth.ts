@@ -5,6 +5,7 @@ import {
   type UserResponse,
 } from '../contracts/auth.js';
 import { clearSessionCookie, readSessionToken, setSessionCookie } from '../plugins/auth.js';
+import { checkRegistration } from '../security/registration.js';
 import {
   AuthError,
   deleteSession,
@@ -22,6 +23,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       await reply.code(400).send({ error: '需要昵称（1–20 字）、合法邮箱、至少 8 位密码' });
       return undefined;
     }
+
+    const gate = checkRegistration(parsed.data.invite_code);
+    if (!gate.ok) {
+      await reply.code(403).send({ error: gate.error });
+      return undefined;
+    }
+
     try {
       const result = await register(parsed.data);
       setSessionCookie(reply, result.token);

@@ -101,6 +101,28 @@ if [ "$DB_READY" = "1" ]; then
   fi
 fi
 
+# ── demo 凭据：轮换过密码后，本地 e2e 仍用同一组账号 ─────────────────
+# 凭据文件只在本机存在（伺服 / 轮换时生成）；CI 没有它，回退迁移 0009 的默认密码。
+if [ -f .demo-accounts.json ]; then
+  # 新卷 / 重跑迁移会把 demo 密码写回默认值，先按凭据文件同步一次
+  if [ "$DB_READY" != "1" ]; then
+    hint "数据库未就绪，跳过 demo 账号同步"
+  elif node --env-file-if-exists=.env scripts/seed-demo-users.mjs >/dev/null; then
+    E2E_PASSWORD="$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('.demo-accounts.json','utf8'));process.stdout.write(j.accounts?.['demo@knowfit.local']?.password ?? '')")"
+    if [ -n "$E2E_PASSWORD" ]; then
+      E2E_EMAIL="demo@knowfit.local"
+      export E2E_EMAIL E2E_PASSWORD
+      ok "e2e 使用 .demo-accounts.json 的 demo 凭据"
+    else
+      bad "凭据文件里没有 demo@knowfit.local"
+    fi
+  else
+    bad "demo 账号同步失败"
+  fi
+else
+  hint "没有 .demo-accounts.json —— e2e 用迁移默认密码（本机可跑 pnpm demo:seed）"
+fi
+
 # ── 2/4 代码正确性闸门：typecheck + lint + test ───────────────────────
 bold "2/4  pnpm verify （typecheck && lint && test）"
 if pnpm verify; then
@@ -126,7 +148,8 @@ if command -v curl >/dev/null 2>&1; then
 
   # 🔴 三个 provider 显式写死 fake：闸门绝不联网、绝不需要 key。
   #    （dev server 不读 .env，默认也是 fake —— 这里显式设是为了防外部环境变量把它翻过去。）
-  LLM_PROVIDER=fake EMBEDDING_PROVIDER=fake RERANK_PROVIDER=fake pnpm dev >/tmp/knowfit-dev.log 2>&1 &
+  #    REGISTRATION_INVITE_CODE= 显式清空：作者 .env 里配了邀请码时，e2e 仍要能注册。
+  LLM_PROVIDER=fake EMBEDDING_PROVIDER=fake RERANK_PROVIDER=fake REGISTRATION_INVITE_CODE= pnpm dev >/tmp/knowfit-dev.log 2>&1 &
   DEV_PID=$!
 
   wait_for_http "$WEB_URL"            "web 聊天页 GET /" 40
@@ -192,6 +215,14 @@ if [ "$FAILED" -eq 0 ]; then
   else
     bad "身份 / 知识问答 / 空抽取 / 会话记录失败"
     hint "0010 迁移跑了吗？pnpm db:migrate"
+  fi
+
+  # 邀请码 / 限流 / 安全头 —— 自己起一个生产模式 API（3101），不依赖 3000。
+  if node scripts/e2e-dev013.mjs; then
+    ok "邀请码 / 限流 / 安全头通过"
+  else
+    bad "邀请码 / 限流 / 安全头失败"
+    hint "0014 迁移跑了吗？.demo-accounts.json 与库里密码一致吗？"
   fi
 
   # 采集转写 —— 走替身 provider：不联网、不加载模型。

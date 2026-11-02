@@ -11,6 +11,10 @@ deploy/.env.production
 .deployed-tag
 backups/
 
+# demo 账号的真实密码（seed 脚本生成，只在本机 / 服务器）
+.demo-accounts.json
+deploy/demo-accounts/
+
 # 构建产物
 dist/
 build/

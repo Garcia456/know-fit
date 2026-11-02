@@ -28,6 +28,8 @@ export const RegisterSchema = z.object({
   email: EmailSchema,
   password: PasswordSchema,
   nickname: NicknameSchema,
+  /** 配了 REGISTRATION_INVITE_CODE 时必填；只进闸门，不落库 */
+  invite_code: z.string().trim().max(128).optional(),
 });
 
 export const LoginSchema = z.object({

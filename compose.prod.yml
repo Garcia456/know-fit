@@ -53,6 +53,27 @@ services:
     restart: "no"
     logging: *default-logging
 
+  # 一次性建 / 更新 demo 账号：脚本从仓库挂进去，凭据放 deploy/demo-accounts（gitignore）
+  demo-seed:
+    image: ${API_IMAGE}:${IMAGE_TAG}
+    build:
+      context: .
+      target: api
+    profiles: ["tools"]
+    working_dir: /app
+    command: ["node", "/app/scripts/seed-demo-users.mjs"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-knowfit}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-knowfit}
+      DEMO_CREDENTIALS_FILE: /data/.demo-accounts.json
+    volumes:
+      - ./scripts/seed-demo-users.mjs:/app/scripts/seed-demo-users.mjs:ro
+      - ./deploy/demo-accounts:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
   api:
     image: ${API_IMAGE}:${IMAGE_TAG}
     build:

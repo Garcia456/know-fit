@@ -54,14 +54,16 @@ afterEach(() => {
 });
 
 describe('登录页', () => {
-  it('演示账号一键填入，提交后进入首页', async () => {
+  it('演示账号一键填入邮箱，提交后进入首页', async () => {
     const fetchMock = stubLogin(200);
     renderLogin();
 
     fireEvent.click(await screen.findByRole('button', { name: /demo@knowfit\.local/ }));
     expect((screen.getByLabelText('邮箱') as HTMLInputElement).value).toBe('demo@knowfit.local');
-    expect((screen.getByLabelText('密码') as HTMLInputElement).value).toBe('knowfit-demo');
+    // 密码不再硬编码在前端 —— 由 seed 脚本生成、作者单独发放
+    expect((screen.getByLabelText('密码') as HTMLInputElement).value).toBe('');
 
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'demo-pass-1' } });
     fireEvent.click(screen.getByRole('button', { name: '登录' }));
 
     expect(await screen.findByText('会话首页')).toBeDefined();
@@ -69,7 +71,7 @@ describe('登录页', () => {
       '/api/auth/login',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ email: 'demo@knowfit.local', password: 'knowfit-demo' }),
+        body: JSON.stringify({ email: 'demo@knowfit.local', password: 'demo-pass-1' }),
       }),
     );
   });

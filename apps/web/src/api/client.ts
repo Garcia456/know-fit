@@ -76,6 +76,7 @@ export function postRegister(input: {
   email: string;
   password: string;
   nickname: string;
+  invite_code?: string;
 }): Promise<{ user: Account }> {
   return request('/api/auth/register', {
     method: 'POST',

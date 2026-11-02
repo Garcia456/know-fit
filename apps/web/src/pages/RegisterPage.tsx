@@ -3,12 +3,13 @@ import { Link, Navigate, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { AuthLayout } from './AuthLayout';
 
-/** 注册页：邮箱 + 密码 + 昵称；注册成功即登录，没有验证码环节。 */
+/** 注册页：邮箱 + 密码 + 昵称 + 邀请码；注册成功即登录，没有验证码环节。 */
 export function RegisterPage() {
   const { status, signUp } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [nickname, setNickname] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,13 @@ export function RegisterPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await signUp({ email: mail, password, nickname: name });
+      const code = inviteCode.trim();
+      await signUp({
+        email: mail,
+        password,
+        nickname: name,
+        ...(code ? { invite_code: code } : {}),
+      });
       navigate('/', { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : '注册失败，请重试');
@@ -76,6 +83,17 @@ export function RegisterPage() {
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             required
+          />
+        </label>
+        <label className="auth-field">
+          <span>邀请码</span>
+          <input
+            type="text"
+            autoComplete="off"
+            placeholder="内测阶段请向作者索取"
+            maxLength={128}
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
           />
         </label>
         <label className="auth-field">
