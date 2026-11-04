@@ -27,15 +27,8 @@ const DRAFT_KEY = 'know-fit:chat-draft';
 /** 「思考中」至少显示这么久，免得一闪而过 */
 const MIN_THINKING_MS = 1000;
 
-/** fill = 填入输入框等用户补全；send = 本身就是完整问题，点了直接发 */
-const QUICK_ASKS: { label: string; mode: 'fill' | 'send' }[] = [
-  { label: '今天练了背', mode: 'fill' },
-  { label: '补记昨天的推日', mode: 'fill' },
-  { label: '练胸有什么推荐动作', mode: 'send' },
-  { label: '深蹲怎么练才标准', mode: 'send' },
-  { label: '上周容量怎么样', mode: 'send' },
-  { label: '我这样练够吗', mode: 'send' },
-];
+/** 只放不需要上下文、不读任何数据的知识问题 —— 点了直接发 */
+const QUICK_ASKS = ['练胸有什么推荐动作', '深蹲怎么练才标准', '增肌一周练几次', '训练后要不要拉伸'];
 
 interface Entry {
   id: string;
@@ -218,15 +211,6 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
     writeDraft(value);
   }
 
-  /** 半截话先落进输入框，用户补完再发 */
-  function fillDraft(text: string) {
-    updateDraft(text);
-    const el = inputRef.current;
-    if (!el) return;
-    el.focus({ preventScroll: true });
-    requestAnimationFrame(() => el.setSelectionRange(el.value.length, el.value.length));
-  }
-
   async function send(message: string) {
     const trimmed = message.trim();
     if (!trimmed || sending) return;
@@ -348,17 +332,15 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
               动作怎么练、要不要加重量，也能直接问我。
             </p>
             <div className="chips">
-              {QUICK_ASKS.map((ask) => (
+              {QUICK_ASKS.map((label) => (
                 <button
-                  key={ask.label}
+                  key={label}
                   type="button"
                   className="chip"
-                  onClick={() =>
-                    ask.mode === 'fill' ? fillDraft(ask.label) : void send(ask.label)
-                  }
+                  onClick={() => void send(label)}
                   disabled={sending}
                 >
-                  {ask.label}
+                  {label}
                 </button>
               ))}
             </div>

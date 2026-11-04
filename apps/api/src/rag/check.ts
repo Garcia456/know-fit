@@ -24,6 +24,8 @@ const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://knowfit:knowfit@loc
 const USER = SINGLE_USER_ID;
 const SPLIT = 'rag-check';
 const KEYS = ['rag-fixture-s1', 'rag-fixture-s2', 'rag-fixture-s3'];
+// 知识问答的 fixture：三条不同视频，验证「有源 + 引用数 ≤3」
+const KNOW_KEYS = ['rag-fixture-k1', 'rag-fixture-k2', 'rag-fixture-k3'];
 
 let failed = false;
 const ok = (m: string) => console.log(`  \x1b[32m✓\x1b[0m ${m}`);
@@ -79,7 +81,9 @@ async function cleanup(): Promise<void> {
     startedAt.toISOString(),
   ]);
   await client.query('DELETE FROM workout_session WHERE id = ANY($1::uuid[])', [createdSessions]);
-  await client.query('DELETE FROM knowledge_source WHERE platform_video_key = ANY($1)', [KEYS]);
+  await client.query('DELETE FROM knowledge_source WHERE platform_video_key = ANY($1)', [
+    [...KEYS, ...KNOW_KEYS],
+  ]);
 }
 
 async function insertSource(input: {
@@ -226,7 +230,7 @@ const nonFixtureFingerprint = async () => {
             coalesce(md5(string_agg(c.id::text || ':' || c.embedding_model || ':' || c.content_hash, ',' ORDER BY c.id)), '') AS fp
        FROM knowledge_chunk c JOIN knowledge_source s ON s.id = c.source_id
       WHERE NOT (s.platform_video_key = ANY($1))`,
-    [KEYS],
+    [[...KEYS, ...KNOW_KEYS]],
   );
   return r.rows[0] as { n: number; fp: string };
 };
@@ -447,6 +451,45 @@ try {
     '纯评估：card=null，assessment 非 null',
     `纯评估返回 card=${String(pure.json?.card)} / assessment=${String((pure.json?.assessment as Record<string, unknown> | undefined)?.kind)}`,
   );
+
+  // ── 8b. 知识问答：有源 + 引用数 ≤3 ───────────────────────────────
+  const knowledgeMsg = '练胸有什么推荐动作';
+  const [kvec] = await embedder.embed([knowledgeMsg]);
+  if (!kvec) throw new Error('替身 embedding 没返回知识 query 向量');
+  for (const [i, key] of KNOW_KEYS.entries()) {
+    const sourceId = await insertSource({
+      key,
+      platform: 'douyin',
+      creator: `知识博主${i + 1}`,
+      title: `练胸动作 ${i + 1}`,
+    });
+    await insertChunk({
+      sourceId,
+      index: 0,
+      text: `练胸先做复合动作，再补孤立动作。第 ${i + 1} 条视频里说：卧推先把肩胛收紧，下放到胸口再推起，动作稳定以后再加重。`,
+      claimType: '陈述',
+      citable: true,
+      model: FAKE_EMBEDDING_MODEL,
+      vector: kvec,
+    });
+  }
+  const knowledge = await postJson('/api/turns', { message: knowledgeMsg });
+  const kCard = knowledge.json?.card as Record<string, unknown> | undefined;
+  expect(kCard?.kind === 'knowledge', '知识问题返回 knowledge 卡', `卡片 kind = ${String(kCard?.kind)}`);
+  expect(kCard?.has_source === true, '知识卡 has_source = true', '知识卡没走到有源路径');
+  const kCitations = (kCard?.citations ?? []) as Record<string, unknown>[];
+  expect(
+    kCitations.length >= 1 && kCitations.length <= 3,
+    `知识引用数在 1–3 条（实为 ${kCitations.length}）`,
+    `知识引用数超出 1–3：${kCitations.length}`,
+  );
+  expect(
+    new Set(kCitations.map((c) => c.url)).size === kCitations.length,
+    '知识引用来自不同视频',
+    '知识引用出现了同一条视频的重复来源',
+  );
+  const kClaims = (kCard?.claims ?? []) as Record<string, unknown>[];
+  expect(kClaims.length <= 3, `知识建议 ≤3 条（实为 ${kClaims.length}）`, `知识建议超过 3 条：${kClaims.length}`);
 
   // ── 9. 全端点扫一遍 + R-C 计数 ───────────────────────────────────
   const sweep: { label: string; result: HttpResult }[] = [];

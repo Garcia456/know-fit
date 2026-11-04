@@ -159,6 +159,81 @@ describe('训练 / 饮食 / 闲聊 / 拒答卡片', () => {
     expect(note.className).toContain('is-disclaimer');
   });
 
+  it('plan：训练日表格、动作组次与来源', () => {
+    render(
+      <CardView
+        card={{
+          kind: 'plan',
+          title: '三分化周计划',
+          split: '三分化',
+          cycle: '练 3 天休 1 天',
+          days: [
+            {
+              day: 1,
+              kind: 'train',
+              focus: '胸+三头',
+              exercises: [{ name: '卧推', sets: 4, reps: '8-12', note: null }],
+            },
+            {
+              day: 2,
+              kind: 'train',
+              focus: '背+二头',
+              exercises: [{ name: '高位下拉', sets: 4, reps: '8-12', note: null }],
+            },
+          ],
+          notes: ['可用器械按「健身房」默认。'],
+          ai_generated: true,
+          citations: [
+            {
+              citation_id: 'C1',
+              creator: '测试博主',
+              title: '三分化训练安排',
+              url: 'https://example.com/v',
+              start_ts: 12,
+              short_quote: '每个部位每周练两次比较稳',
+            },
+          ],
+          basis: [{ claim: '每个部位每周练两次比较稳', citation_id: 'C1' }],
+          has_source: true,
+          no_source_notice: null,
+        }}
+      />,
+    );
+    expect(screen.getByText('三分化周计划')).toBeDefined();
+    expect(screen.getByText('AI 编排')).toBeDefined();
+    expect(screen.getByText('三分化 · 练 3 天休 1 天')).toBeDefined();
+    expect(screen.getByText('卧推')).toBeDefined();
+    expect(screen.getByText('第1天')).toBeDefined();
+    expect(screen.getByText('第2天')).toBeDefined();
+    expect(screen.getByText('高位下拉')).toBeDefined();
+    expect(screen.getAllByText('4 组 × 8-12')).toHaveLength(2);
+    expect(screen.queryByText('休息')).toBeNull();
+    expect(screen.getByText('测试博主')).toBeDefined();
+    expect(screen.getByText('可用器械按「健身房」默认。')).toBeDefined();
+  });
+
+  it('plan：没有来源就明确标注由 AI 编排', () => {
+    render(
+      <CardView
+        card={{
+          kind: 'plan',
+          title: '周计划',
+          split: '二分化',
+          cycle: '练 2 天休 1 天',
+          days: [{ day: 1, kind: 'train', focus: '全身', exercises: [] }],
+          notes: [],
+          ai_generated: true,
+          citations: [],
+          basis: [],
+          has_source: false,
+          no_source_notice: '这次没找到能直接引用的博主原片；动作与组次由 AI 编排。',
+        }}
+      />,
+    );
+    const note = screen.getByText('这次没找到能直接引用的博主原片；动作与组次由 AI 编排。');
+    expect(note.className).toContain('is-disclaimer');
+  });
+
   it('数据不足卡：只说缺什么，不给建议', () => {
     render(<LowDataCard missing={['sets', 'baseline']} />);
     expect(screen.getByText('暂时算不出判定')).toBeDefined();

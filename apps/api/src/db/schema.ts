@@ -67,6 +67,8 @@ export const userProfile = pgTable('user_profile', {
     .references(() => user.id, { onDelete: 'cascade' }),
   heightCm: real('height_cm'),
   goal: text('goal'), // '增肌' | '减脂' | '维持' | '增肌+减脂'
+  /** 训练频率：二分化 / 三分化 / 四分化 / 五分化 / 不规律 */
+  trainingFrequency: text('training_frequency'),
   /** 开始训练的月份（当月 1 日）；读时按月折算年 / 月 */
   trainingStartedOn: date('training_started_on'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

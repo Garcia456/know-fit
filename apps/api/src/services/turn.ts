@@ -15,8 +15,9 @@ import {
 import { applyWeightCorrection, parseWeightCorrection } from './correction.js';
 import { applyEdit } from './edit.js';
 import { answerQuery } from './query.js';
+import { answerPlan } from './plan.js';
 import { loadTrainingBand, logTurn, persistWorkout } from './record.js';
-import { bodyweightOn, saveWeight } from './profile.js';
+import { bodyweightOn, getProfile, saveWeight } from './profile.js';
 import { volumeHookFor } from './metrics.js';
 
 /**
@@ -38,6 +39,7 @@ function turnGraph(llm: LlmClient) {
     computeHook: volumeHookFor,
     assess: assessRecord,
     answerKnowledge: (input) => answerKnowledge({ user_id: input.user_id, query: input.query }),
+    answerPlan: (input) => answerPlan(input),
     bodyweightFor: (input) => bodyweightOn(input.user_id, input.date),
     recordWeight: (input) => saveWeight(input),
     applyEdit: (input) => applyEdit(input),
@@ -115,12 +117,15 @@ export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
     // 新会话没有历史可带
     const history = existingId ? await loadRecentHistory(existingId) : [];
     const training_years_band = await loadTrainingBand(user_id);
+    const profile = await getProfile(user_id);
 
     const final = await turnGraph(createLlmClient()).invoke({
       message: input.message,
       user_id,
       history,
       training_years_band,
+      profile_training_frequency: profile.training_frequency,
+      profile_goal: profile.goal,
     });
 
     // 出口校验：图交出来的状态必须满足对外契约

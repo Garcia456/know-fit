@@ -93,7 +93,7 @@ export function ragConfig(): RagConfig {
     topK: num('RAG_TOP_K', 50),
     topN,
     minSimilarity: num('RAG_MIN_SIMILARITY', 0.5),
-    maxCitations: num('RAG_MAX_CITATIONS', 2),
+    maxCitations: num('RAG_MAX_CITATIONS', 3),
     maxPerSource: nonNegativeInt('RAG_MAX_PER_SOURCE', 1),
     rerankFetchN: nonNegativeInt('RAG_RERANK_FETCH_N', Math.max(topN * 4, topN)),
   };

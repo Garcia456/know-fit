@@ -9,6 +9,7 @@ export type Intent =
   | 'query'
   | 'assess'
   | 'mixed'
+  | 'plan'
   | 'knowledge'
   | 'chat'
   | 'reject'
@@ -131,6 +132,34 @@ export interface KnowledgeCard {
   no_source_notice: string | null;
 }
 
+export interface PlanExercise {
+  name: string;
+  sets: number | null;
+  reps: string;
+  note: string | null;
+}
+
+export interface PlanDay {
+  day: number;
+  kind: 'train' | 'rest';
+  focus: string | null;
+  exercises: PlanExercise[];
+}
+
+export interface PlanCard {
+  kind: 'plan';
+  title: string;
+  split: string;
+  cycle: string;
+  days: PlanDay[];
+  notes: string[];
+  ai_generated: boolean;
+  citations: Citation[];
+  basis: KnowledgeClaim[];
+  has_source: boolean;
+  no_source_notice: string | null;
+}
+
 export interface RefusalCard {
   kind: 'refusal';
   reply: string;
@@ -166,6 +195,7 @@ export type TurnCard =
   | WorkoutCard
   | MealCard
   | ChatCard
+  | PlanCard
   | KnowledgeCard
   | RefusalCard
   | BoundaryCard
@@ -330,11 +360,14 @@ export interface ClearTrainingResult {
 
 export type Goal = '增肌' | '减脂' | '维持' | '增肌+减脂';
 
+export type TrainingFrequency = '二分化' | '三分化' | '四分化' | '五分化' | '不规律';
+
 export interface Profile {
   height_cm: number | null;
   weight_kg: number | null;
   weight_date: string | null;
   goal: Goal | null;
+  training_frequency: TrainingFrequency | null;
   training_years: number | null;
   training_months: number | null;
   updated_at: string;

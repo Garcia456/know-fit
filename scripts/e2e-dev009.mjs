@@ -6,7 +6,7 @@
  *   1. 「hi」→ chat 卡含「枝链」，不新增 workout_session
  *   2. 「练胸有什么推荐动作」→ knowledge 卡，不新增 workout_session
  *   3. 真训练 → workout 卡，workout_session +1
- *   4. 「今天练了背」→ 追问，不落库
+ *   4. 「今天练了背」→ 引导补一句动作，不落库
  *   5. 会话创建 / 列表 / 详情 / 恢复（助手轮带 reply_json）
  *   6. 重命名 1–40 字；非法标题 400
  *   7. 删除会话与消息；训练记录条数不变
@@ -166,10 +166,10 @@ try {
   const empty = await postTurn(EMPTY);
   if (empty) {
     if (empty.conversation_id) createdConversations.push(empty.conversation_id);
-    if (empty.card?.kind === 'chat' && empty.card.reply.includes('没听出训练内容')) {
-      ok(`空抽取 → 追问：${empty.card.reply}`);
+    if (empty.card?.kind === 'chat' && empty.card.reply.includes('补一句动作和组数')) {
+      ok(`空抽取 → 引导补全：${empty.card.reply}`);
     } else {
-      bad(`空抽取应返回追问 chat 卡，实为 ${JSON.stringify(empty.card)}`);
+      bad(`空抽取应返回引导补全 chat 卡，实为 ${JSON.stringify(empty.card)}`);
     }
   }
   if ((await countSessions()) === before + 1) ok('空抽取没有新增 workout_session');

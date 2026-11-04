@@ -125,6 +125,16 @@ export const HistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(20),
 });
 
+/** 训练频率：作者指定的 UI 名称；值实际是分化方式。 */
+export const TrainingFrequencyValueSchema = z.enum([
+  '二分化',
+  '三分化',
+  '四分化',
+  '五分化',
+  '不规律',
+]);
+export const TrainingFrequencySchema = TrainingFrequencyValueSchema.nullable();
+
 const TrainingExperience = {
   /** 训练年限：整年 0–50；与 training_months 同为 null 表示未填 */
   training_years: z.number().int().min(0).max(50).nullable(),
@@ -139,6 +149,7 @@ export const ProfileSchema = z
     /** 最新体重那一行的日期；没记过体重时为 null */
     weight_date: DateSchema.nullable(),
     goal: z.enum(['增肌', '减脂', '维持', '增肌+减脂']).nullable(),
+    training_frequency: TrainingFrequencySchema,
     ...TrainingExperience,
     updated_at: z.string(),
   })
@@ -152,6 +163,8 @@ export const ProfileInputSchema = z
     height_cm: z.number().min(100).max(250).nullable(),
     weight_kg: z.number().min(30).max(300).nullable(),
     goal: z.enum(['增肌', '减脂', '维持', '增肌+减脂']).nullable(),
+    /** 旧客户端不传也合法 —— 省略表示不改，显式 null 才清空 */
+    training_frequency: TrainingFrequencySchema.optional(),
     ...TrainingExperience,
   })
   .refine(
@@ -184,6 +197,7 @@ export type PatchSessionRequest = z.infer<typeof PatchSessionRequestSchema>;
 export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequestSchema>;
 export type Profile = z.infer<typeof ProfileSchema>;
 export type ProfileInput = z.infer<typeof ProfileInputSchema>;
+export type TrainingFrequency = z.infer<typeof TrainingFrequencyValueSchema>;
 export type Nudge = z.infer<typeof NudgeSchema>;
 export type NudgeNextResponse = z.infer<typeof NudgeNextResponseSchema>;
 export type NudgeAction = z.infer<typeof NudgeActionSchema>;

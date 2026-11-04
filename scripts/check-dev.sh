@@ -217,6 +217,22 @@ if [ "$FAILED" -eq 0 ]; then
     hint "0010 迁移跑了吗？pnpm db:migrate"
   fi
 
+  # 训练计划子图 —— 问卷式追问、写回档案、7 天排布与来源标注。
+  if node scripts/e2e-dev016.mjs; then
+    ok "训练计划子图与计划卡通过"
+  else
+    bad "训练计划子图与计划卡失败"
+    hint "0015 迁移跑了吗？pnpm db:migrate"
+  fi
+
+  # 区间容量 —— 本周 / 上周按自然周统计；没有记录时如实回答，不落到「没听清」。
+  if node scripts/e2e-dev018.mjs; then
+    ok "区间容量查询与无数据如实回答通过"
+  else
+    bad "区间容量查询与无数据如实回答失败"
+    hint "dev server 起了吗？"
+  fi
+
   # 邀请码 / 限流 / 安全头 —— 自己起一个生产模式 API（3101），不依赖 3000。
   if node scripts/e2e-dev013.mjs; then
     ok "邀请码 / 限流 / 安全头通过"

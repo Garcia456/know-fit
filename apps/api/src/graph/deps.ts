@@ -1,8 +1,9 @@
 import type { AssessmentCard } from '../contracts/assessment.js';
+import type { TrainingFrequency } from '../contracts/sessions.js';
 import type { EditRequest, MissingField, QueryRequest, RecordStatus } from '../contracts/extraction.js';
 import type { VolumeHook } from '../contracts/metrics.js';
 import type { KnowledgeCard, TurnCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
-import type { TurnHistoryItem } from './state.js';
+import type { TrainingBand, TurnHistoryItem } from './state.js';
 import type { LlmClient } from '../llm/client.js';
 
 /** 落库原料 —— 规范化后的动作 + 已换算的组 */
@@ -73,6 +74,18 @@ export interface TurnDeps {
     query: string;
     history: TurnHistoryItem[];
   }) => Promise<KnowledgeCard>;
+  /**
+   * 训练计划由调用方注入 —— 它要读档案、调模型、检索知识库，图只负责路由。
+   */
+  answerPlan?: (input: {
+    user_id: string;
+    message: string;
+    history: TurnHistoryItem[];
+    frequency: TrainingFrequency | null;
+    goal: string | null;
+    band: TrainingBand;
+  }) => Promise<TurnCard>;
+
   /** 自重动作算容量时要叠加的体重（训练日当天或之前最近一次） */
   bodyweightFor?: (input: { user_id: string; date: string }) => Promise<number | null>;
   /** 「记录体重」工具 —— 落库实现由服务层注入，同一天覆盖 */

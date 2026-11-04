@@ -8,6 +8,7 @@ const emptyProfile: Profile = {
   weight_kg: null,
   weight_date: null,
   goal: null,
+  training_frequency: null,
   training_years: null,
   training_months: null,
   updated_at: '2026-10-26T00:00:00.000Z',
@@ -53,6 +54,7 @@ describe('个人信息页', () => {
               height_cm: 180,
               weight_kg: 75,
               goal: '增肌',
+              training_frequency: null,
               training_years: null,
               training_months: null,
             }),
@@ -97,7 +99,6 @@ describe('个人信息页', () => {
     render(<ProfilePage />);
 
     for (const name of [
-      '每周频率（未开放）',
       '自动换算磅（未开放）',
       '导出我的数据（未开放）',
       '删除我的数据（未开放）',
@@ -156,6 +157,7 @@ describe('个人信息页', () => {
               height_cm: null,
               weight_kg: null,
               goal: null,
+              training_frequency: null,
               training_years: 2,
               training_months: 3,
             }),
@@ -165,14 +167,45 @@ describe('个人信息页', () => {
     );
   });
 
-  it('选「不足 3 个月」时给出通用建议说明', async () => {
+  it('训练频率可编辑，选完自动保存', async () => {
+    const fetchMock = stubFetch({
+      ok: true,
+      body: { ...emptyProfile, training_frequency: '五分化' },
+    });
+    render(<ProfilePage />);
+
+    fireEvent.click(await screen.findByLabelText('训练频率'));
+    fireEvent.click(await screen.findByRole('option', { name: '五分化' }));
+
+    await waitFor(
+      () =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/profile',
+          expect.objectContaining({
+            method: 'PUT',
+            body: JSON.stringify({
+              height_cm: null,
+              weight_kg: null,
+              goal: null,
+              training_frequency: '五分化',
+              training_years: null,
+              training_months: null,
+            }),
+          }),
+        ),
+      { timeout: 3000 },
+    );
+    expect(await screen.findByText('五分化')).toBeDefined();
+  });
+
+  it('选「不足 3 个月」不再出现边界说明', async () => {
     stubFetch({ ok: true, body: emptyProfile });
     render(<ProfilePage />);
 
     fireEvent.click(await screen.findByLabelText('训练年限'));
     fireEvent.click(await screen.findByRole('option', { name: '2 个月' }));
     fireEvent.click(screen.getByRole('button', { name: '确定' }));
-    expect(screen.getByText(/只给通用建议，不出基于训练数据的评估/)).toBeDefined();
+    expect(screen.queryByText(/只给通用建议，不出基于训练数据的评估/)).toBeNull();
   });
 
   it('打开训练年限不调用 scrollIntoView（不把整页带跑）', async () => {

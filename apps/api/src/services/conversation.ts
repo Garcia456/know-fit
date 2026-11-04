@@ -322,6 +322,9 @@ export function assistantSummary(response: TurnResponse): string {
     if (card.kind === 'correction') {
       return `已把重量改成 ${card.new_weight_kg}kg`;
     }
+    if (card.kind === 'plan') {
+      return `训练计划：${card.title}（${card.split}）`;
+    }
   }
   if (response.assessment) return response.assessment.advice;
   return '（本轮没有文字回复）';

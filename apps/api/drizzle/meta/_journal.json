@@ -106,6 +106,13 @@
       "when": 1793260000000,
       "tag": "0014_knowledge_access",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793700000000,
+      "tag": "0015_training_frequency",
+      "breakpoints": true
     }
   ]
 }

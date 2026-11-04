@@ -3,6 +3,7 @@ import type {
   MealCard,
   MealType,
   MissingField,
+  PlanCard,
   TurnCard,
   WeightCard,
   WorkoutCard,
@@ -13,6 +14,7 @@ import { formatKg, formatMonthDay } from '../lib/format';
 import { CheckIcon, InfoIcon, RefreshIcon, WarnIcon } from './Icons';
 import { VolumeHookView } from './VolumeHookView';
 import { KnowledgeCardView } from './KnowledgeCardView';
+import { SourceBlock } from './AssessmentCardView';
 
 const MISSING_LABEL: Record<MissingField, string> = {
   exercises: '动作',
@@ -50,6 +52,8 @@ export function CardView({ card, onAssess, assessingSessionId, onComplete, onQui
       return <MealCardView card={card} />;
     case 'chat':
       return <p className="agent-text">{card.reply}</p>;
+    case 'plan':
+      return <PlanCardView card={card} />;
     case 'knowledge':
       return <KnowledgeCardView card={card} />;
     case 'refusal':
@@ -63,7 +67,7 @@ export function CardView({ card, onAssess, assessingSessionId, onComplete, onQui
           </div>
           <div className="verdict">
             <p>{card.reply}</p>
-            <span>未成年、有基础疾病或训练不足 3 个月时，这里只给通用建议</span>
+            <span>未成年、有基础疾病或伤病时，这里只给通用建议</span>
           </div>
           <div className="note-inline">
             <InfoIcon />
@@ -238,6 +242,92 @@ function MealCardView({ card }: { card: MealCard }) {
 
       <p className="foot-note">
         本版不估算热量与营养素；份量按你给的说法原样记录。下次直接说克数，记账会更准。
+      </p>
+    </article>
+  );
+}
+
+function PlanCardView({ card }: { card: PlanCard }) {
+  const citations = new Map(card.citations.map((c) => [c.citation_id, c]));
+
+  return (
+    <article className="card" aria-label="训练计划">
+      <div className="card-hd">
+        <h3>{card.title}</h3>
+        <span className="tag tag--dashed">{card.ai_generated ? 'AI 编排' : card.split}</span>
+      </div>
+      <p className="card-meta">
+        {card.split} · {card.cycle}
+      </p>
+      <hr className="hr" />
+
+      <div className="plan-wrap">
+        <table className="plan-table">
+          <thead>
+            <tr>
+              <th>训练日</th>
+              <th>训练</th>
+              <th>动作（组 × 次）</th>
+            </tr>
+          </thead>
+          <tbody>
+            {card.days.map((day) => (
+              <tr key={day.day} className={day.kind === 'rest' ? 'is-rest' : undefined}>
+                <td>第{day.day}天</td>
+                <td>{day.kind === 'rest' ? '休息' : day.focus ?? '训练'}</td>
+                <td>
+                  {day.kind === 'rest' ? (
+                    '—'
+                  ) : (
+                    <ul className="plan-ex">
+                      {day.exercises.map((exercise, i) => (
+                        <li key={`${i}-${exercise.name}`}>
+                          <span>{exercise.name}</span>
+                          <span className="plan-sr">
+                            {exercise.sets === null ? '组数未定' : `${exercise.sets} 组`}
+                            {exercise.reps ? ` × ${exercise.reps}` : ''}
+                          </span>
+                          {exercise.note ? <small>{exercise.note}</small> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {card.basis.length > 0 ? (
+        <ol className="advice">
+          {card.basis.map((item, i) => {
+            const citation = item.citation_id ? citations.get(item.citation_id) : undefined;
+            return (
+              <li key={`${i}-${item.claim}`}>
+                <span className="num">{i + 1}</span>
+                <div className="adv-body">
+                  <p className="adv">{item.claim}</p>
+                  {citation ? <SourceBlock citation={citation} /> : null}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
+
+      {card.notes.length > 0 ? (
+        <ul className="plan-notes">
+          {card.notes.map((note, i) => (
+            <li key={i}>{note}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      <p className={`foot-note is-note${card.has_source ? '' : ' is-disclaimer'}`}>
+        {card.has_source
+          ? '动作与原则尽量引用博主原片，可点回查看。'
+          : card.no_source_notice ?? '本计划由 AI 编排，内容仅供参考，请仔细甄别。'}
       </p>
     </article>
   );

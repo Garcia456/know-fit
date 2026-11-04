@@ -80,7 +80,7 @@ describe('知识起草', () => {
     expect(systems).toHaveLength(2);
   });
 
-  it('超过引用上限（默认 2）只保留前 2 条', async () => {
+  it('默认最多 3 条：3 个不同来源全保留', async () => {
     const { llm } = stubLlm([
       { claims: [claim(0), claim(1), claim(2)] },
     ]);
@@ -91,7 +91,40 @@ describe('知识起草', () => {
     ]);
 
     expect(out.problem).toBeNull();
-    expect(out.draft?.claims.map((c) => c.source_index)).toEqual([0, 1]);
+    expect(out.draft?.claims.map((c) => c.source_index)).toEqual([0, 1, 2]);
+  });
+
+  it('超过 3 条只保留前 3 条', async () => {
+    const { llm } = stubLlm([
+      { claims: [claim(0), claim(1), claim(2), claim(3)] },
+    ]);
+    const out = await draftKnowledge(llm, '练胸练什么', [
+      candidate('a'),
+      candidate('b'),
+      candidate('c'),
+      candidate('d'),
+    ]);
+
+    expect(out.problem).toBeNull();
+    expect(out.draft?.claims.map((c) => c.source_index)).toEqual([0, 1, 2]);
+  });
+
+  it('RAG_MAX_CITATIONS=2 时回退到 2 条', async () => {
+    const prev = process.env.RAG_MAX_CITATIONS;
+    process.env.RAG_MAX_CITATIONS = '2';
+    try {
+      const { llm } = stubLlm([{ claims: [claim(0), claim(1), claim(2)] }]);
+      const out = await draftKnowledge(llm, '练胸练什么', [
+        candidate('a'),
+        candidate('b'),
+        candidate('c'),
+      ]);
+      expect(out.problem).toBeNull();
+      expect(out.draft?.claims.map((c) => c.source_index)).toEqual([0, 1]);
+    } finally {
+      if (prev === undefined) delete process.env.RAG_MAX_CITATIONS;
+      else process.env.RAG_MAX_CITATIONS = prev;
+    }
   });
 
   it('空 claim → empty_claim', async () => {

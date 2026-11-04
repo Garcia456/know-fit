@@ -1,4 +1,4 @@
-import type { Goal, ProfileInput } from '../api/types';
+import type { Goal, ProfileInput, TrainingFrequency } from '../api/types';
 
 /** 档案表单的字符串 → 契约值。留空是合法值，不合法要当场说清楚。 */
 
@@ -6,6 +6,7 @@ export interface ProfileFormValues {
   height: string;
   weight: string;
   goal: Goal | null;
+  frequency: TrainingFrequency | null;
   years: number | null;
   months: number | null;
 }
@@ -62,6 +63,7 @@ export function parseProfileForm(values: ProfileFormValues): ProfileParseResult 
       height_cm: 'value' in height ? height.value : null,
       weight_kg: 'value' in weight ? weight.value : null,
       goal: values.goal,
+      training_frequency: values.frequency,
       training_years: values.years,
       training_months: values.months,
     },
@@ -73,6 +75,7 @@ export function toFormValues(profile: {
   height_cm: number | null;
   weight_kg: number | null;
   goal: Goal | null;
+  training_frequency: TrainingFrequency | null;
   training_years: number | null;
   training_months: number | null;
 }): ProfileFormValues {
@@ -80,6 +83,7 @@ export function toFormValues(profile: {
     height: profile.height_cm === null ? '' : String(profile.height_cm),
     weight: profile.weight_kg === null ? '' : String(profile.weight_kg),
     goal: profile.goal,
+    frequency: profile.training_frequency,
     years: profile.training_years,
     months: profile.training_months,
   };

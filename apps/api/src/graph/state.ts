@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AssessmentCardSchema } from '../contracts/assessment.js';
+import { TrainingFrequencySchema } from '../contracts/sessions.js';
 import { ExtractionSchema, IntentSchema, MissingFieldSchema, RecordStatusSchema } from '../contracts/extraction.js';
 import {
   AssessmentLookupSchema,
@@ -30,6 +31,9 @@ export const TurnState = z.object({
   history: z.array(TurnHistoryItemSchema).default([]),
   /** 由调用方从 user_profile 带进来 —— 边界判定要用，图里不读库 */
   training_years_band: TrainingBandSchema.default('3m_2y'),
+  /** 计划请求读档案用；图里不读库 */
+  profile_training_frequency: TrainingFrequencySchema.default(null),
+  profile_goal: z.enum(['增肌', '减脂', '维持', '增肌+减脂']).nullable().default(null),
 
   guard_verdict: GuardVerdictSchema.default('pass'),
   intent: IntentSchema.default('chat'),

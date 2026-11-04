@@ -86,13 +86,16 @@ describe('记录链路：走通 → 落库 → 出卡片', () => {
     expect(state.notices).toHaveLength(1);
   });
 
-  it('只说部位：「今天练了背」—— 0 个动作不落库，走确定性追问', async () => {
+  it('只说部位：「今天练了背」—— 0 个动作不落库，引导补充动作与组数', async () => {
     const { graph, calls } = build();
     const state = await graph.invoke({ message: '今天练了背' });
     expect(calls).toHaveLength(0);
     expect(state.empty_extraction).toBe(true);
     expect(state.card?.kind).toBe('chat');
-    expect(state.card?.kind === 'chat' ? state.card.reply : '').toContain('没听出训练内容');
+    const reply = state.card?.kind === 'chat' ? state.card.reply : '';
+    expect(reply).toContain('补一句动作和组数');
+    expect(reply).toContain('高位下拉');
+    expect(reply).not.toContain('是想问动作');
   });
 
   it('混合意图：「…帮我看下够不够」先落库出卡片（评估接线另测）', async () => {
@@ -215,11 +218,107 @@ describe('三个出口：不落库', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('非目标用户（档案说 < 3 个月）→ boundary 卡片，哪怕话里没有任何红线词', async () => {
+  it('训练不足 3 个月不再触发边界：正常录入照常落库', async () => {
     const { graph, calls } = build();
     const state = await graph.invoke({ message: COMPLETE, training_years_band: 'lt_3m' });
-    expect(state.card?.kind).toBe('boundary');
+    expect(state.intent).toBe('record');
+    expect(state.card?.kind).toBe('workout');
+    expect(calls).toHaveLength(1);
+  });
+
+it('训练不足 3 个月问计划：不出 boundary，走计划子图', async () => {
+    const s = stub();
+    const plans: unknown[] = [];
+    const graph = buildTurnGraph({
+      llm: createFakeClient(),
+      persistWorkout: s.persistWorkout,
+      answerPlan: async (input) => {
+        plans.push(input);
+        return { kind: 'chat' as const, reply: '计划桩' };
+      },
+      now: () => NOW,
+    });
+    const state = await graph.invoke({
+      message: '我已经健身快两周了，帮我做一份力量训练计划',
+      training_years_band: 'lt_3m',
+    });
+    expect(state.intent).toBe('plan');
+    expect(state.card?.kind).not.toBe('boundary');
+    expect(plans).toHaveLength(1);
+    expect((plans[0] as { band: string }).band).toBe('lt_3m');
+    expect(s.calls).toHaveLength(0);
+  });
+
+describe('计划路由：plan_node', () => {
+  interface PlanCall {
+    message: string;
+    frequency: string | null;
+    band: string;
+  }
+
+  function buildPlan() {
+    const s = stub();
+    const plans: PlanCall[] = [];
+    const graph = buildTurnGraph({
+      llm: createFakeClient(),
+      persistWorkout: s.persistWorkout,
+      answerPlan: async (input) => {
+        plans.push({ message: input.message, frequency: input.frequency, band: input.band });
+        return { kind: 'chat' as const, reply: '计划桩' };
+      },
+      now: () => NOW,
+    });
+    return { graph, plans, calls: s.calls };
+  }
+
+  it('「帮我出一个力量训练计划」→ 计划，不是检索卡', async () => {
+    const { graph, plans, calls } = buildPlan();
+    const state = await graph.invoke({ message: '帮我出一个力量训练计划' });
+    expect(state.intent).toBe('plan');
+    expect(state.card?.kind).toBe('chat');
+    expect(plans).toHaveLength(1);
     expect(calls).toHaveLength(0);
+  });
+
+  it('上一轮问了频率，这一轮「三分化」直接接回计划', async () => {
+    const { graph, plans } = buildPlan();
+    const state = await graph.invoke({
+      message: '三分化',
+      history: [{ role: 'assistant', content: '你现在的训练频率是？二分化 / 三分化 / 四分化' }],
+    });
+    expect(state.intent).toBe('plan');
+    expect(plans[0]?.message).toBe('三分化');
+  });
+
+  it('档案里的频率随状态传进计划', async () => {
+    const { graph, plans } = buildPlan();
+    await graph.invoke({ message: '帮我出个训练计划', profile_training_frequency: '四分化' });
+    expect(plans[0]?.frequency).toBe('四分化');
+  });
+
+  it('计划没接线 → 给一句可重试的话，不抛错', async () => {
+    const { graph } = build();
+    const state = await graph.invoke({ message: '帮我出一个力量训练计划' });
+    expect(state.intent).toBe('plan');
+    expect(state.card?.kind).toBe('chat');
+  });
+});
+
+it('模型误判 boundary：规则闸未命中时兜底为 knowledge', async () => {
+    const base = createFakeClient();
+    const llm = {
+      ...base,
+      structured: (async (req, options) => {
+        if (req.name === 'intent') return { intent: 'boundary' };
+        return base.structured(req, options);
+      }) as typeof base.structured,
+    };
+    const s = stub();
+    const graph = buildTurnGraph({ llm, persistWorkout: s.persistWorkout, now: () => NOW });
+    const state = await graph.invoke({ message: COMPLETE });
+    expect(state.intent).toBe('knowledge');
+    expect(state.card?.kind).not.toBe('boundary');
+    expect(s.calls).toHaveLength(0);
   });
 
   it('纯求评估 → 不落库、不出记录卡片', async () => {

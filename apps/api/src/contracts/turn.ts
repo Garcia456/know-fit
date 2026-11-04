@@ -92,13 +92,43 @@ export const KnowledgeCardSchema = z.object({
   no_source_notice: z.string().nullable(),
 });
 
+/** 计划里的一个动作 —— 组次是 AI 给的，来源引用另挂 */
+export const PlanExerciseSchema = z.object({
+  name: z.string(),
+  sets: z.number().int().positive().nullable(),
+  reps: z.string(),
+  note: z.string().nullable(),
+});
+
+export const PlanDaySchema = z.object({
+  day: z.number().int().min(1).max(7),
+  kind: z.enum(['train', 'rest']),
+  focus: z.string().nullable(),
+  exercises: z.array(PlanExerciseSchema),
+});
+
+/** 训练计划 —— 按训练循环列训练日；有源挂引用，没有就显式无源 */
+export const PlanCardSchema = z.object({
+  kind: z.literal('plan'),
+  title: z.string(),
+  split: z.string(),
+  cycle: z.string(),
+  days: z.array(PlanDaySchema).min(1).max(7),
+  notes: z.array(z.string()),
+  ai_generated: z.boolean(),
+  citations: z.array(CitationSchema),
+  basis: z.array(KnowledgeClaimSchema),
+  has_source: z.boolean(),
+  no_source_notice: z.string().nullable(),
+});
+
 export const RefusalCardSchema = z.object({
   kind: z.literal('refusal'),
   reply: z.string(),
   reason: RefusalReasonSchema,
 });
 
-/** 非目标用户（未成年 / 有基础疾病 / 训练不足 3 个月）的出口 */
+/** 非目标用户（未成年 / 有基础疾病 / 伤病）的出口 */
 export const BoundaryCardSchema = z.object({
   kind: z.literal('boundary'),
   reply: z.string(),
@@ -132,6 +162,7 @@ export const TurnCardSchema = z.discriminatedUnion('kind', [
   MealCardSchema,
   ChatCardSchema,
   KnowledgeCardSchema,
+  PlanCardSchema,
   RefusalCardSchema,
   BoundaryCardSchema,
   CorrectionCardSchema,
@@ -172,6 +203,9 @@ export type MealCard = z.infer<typeof MealCardSchema>;
 export type ChatCard = z.infer<typeof ChatCardSchema>;
 export type KnowledgeClaim = z.infer<typeof KnowledgeClaimSchema>;
 export type KnowledgeCard = z.infer<typeof KnowledgeCardSchema>;
+export type PlanExercise = z.infer<typeof PlanExerciseSchema>;
+export type PlanDay = z.infer<typeof PlanDaySchema>;
+export type PlanCard = z.infer<typeof PlanCardSchema>;
 export type RefusalCard = z.infer<typeof RefusalCardSchema>;
 export type BoundaryCard = z.infer<typeof BoundaryCardSchema>;
 export type CorrectionCard = z.infer<typeof CorrectionCardSchema>;

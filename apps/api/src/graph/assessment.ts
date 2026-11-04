@@ -138,8 +138,14 @@ function missingNotice(missing: string[]): string {
   return parts.length > 0 ? `先补上：${parts.join('；')}。` : '这次的数据还不够判断趋势。';
 }
 
+/** 评估建议保持 1–2 条来源：知识路径放宽到 3，评估不跟着变长文 */
+export function assessmentCitationCap(maxCitations: number): number {
+  return Math.min(2, maxCitations);
+}
+
 export function buildAssessmentGraph(deps: AssessmentDeps) {
   const cfg = ragConfig();
+  const assessmentMaxCitations = assessmentCitationCap(cfg.maxCitations);
 
   return (
     new StateGraph(AssessmentState)
@@ -213,7 +219,7 @@ export function buildAssessmentGraph(deps: AssessmentDeps) {
           draft,
           checks,
           candidates: state.candidates,
-          maxCitations: cfg.maxCitations,
+          maxCitations: assessmentMaxCitations,
         });
         return {
           checks,
@@ -231,7 +237,7 @@ export function buildAssessmentGraph(deps: AssessmentDeps) {
           draft,
           checks: state.checks,
           candidates: state.candidates,
-          maxCitations: cfg.maxCitations,
+          maxCitations: assessmentMaxCitations,
         });
         if (assembled.problem) return { failure: GENERATION_FAILURE_NOTICE };
 

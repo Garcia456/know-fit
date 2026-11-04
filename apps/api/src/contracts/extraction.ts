@@ -71,6 +71,7 @@ export const IntentSchema = z.enum([
   'query',
   'assess',
   'mixed',
+  'plan',
   'knowledge',
   'chat',
   'reject',

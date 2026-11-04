@@ -3,10 +3,10 @@ import { formatTraining, parseProfileForm, toFormValues, totalTrainingMonths } f
 
 describe('parseProfileForm', () => {
   it('留空全部保存为 null', () => {
-    const result = parseProfileForm({ height: '', weight: '  ', goal: null, years: null, months: null });
+    const result = parseProfileForm({ height: '', weight: '  ', goal: null, frequency: null, years: null, months: null });
     expect(result).toEqual({
       ok: true,
-      input: { height_cm: null, weight_kg: null, goal: null, training_years: null, training_months: null },
+      input: { height_cm: null, weight_kg: null, goal: null, training_frequency: null, training_years: null, training_months: null },
     });
   });
 
@@ -15,6 +15,7 @@ describe('parseProfileForm', () => {
       height: '180',
       weight: '75.5',
       goal: '增肌+减脂',
+      frequency: '三分化',
       years: 2,
       months: 3,
     });
@@ -22,13 +23,14 @@ describe('parseProfileForm', () => {
       height_cm: 180,
       weight_kg: 75.5,
       goal: '增肌+减脂',
+      training_frequency: '三分化',
       training_years: 2,
       training_months: 3,
     });
   });
 
   it('越界报错且不提交', () => {
-    const result = parseProfileForm({ height: '99', weight: '301', goal: null, years: null, months: null });
+    const result = parseProfileForm({ height: '99', weight: '301', goal: null, frequency: null, years: null, months: null });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errors.height).toContain('100');
@@ -37,7 +39,7 @@ describe('parseProfileForm', () => {
   });
 
   it('非数字报错', () => {
-    const result = parseProfileForm({ height: 'abc', weight: '', goal: null, years: null, months: null });
+    const result = parseProfileForm({ height: 'abc', weight: '', goal: null, frequency: null, years: null, months: null });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.height).toContain('数字');
   });
@@ -50,10 +52,11 @@ describe('toFormValues', () => {
         height_cm: null,
         weight_kg: null,
         goal: null,
+        training_frequency: null,
         training_years: null,
         training_months: null,
       }),
-    ).toEqual({ height: '', weight: '', goal: null, years: null, months: null });
+    ).toEqual({ height: '', weight: '', goal: null, frequency: null, years: null, months: null });
   });
 });
 

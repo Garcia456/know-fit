@@ -187,7 +187,7 @@ export function DataPage() {
           <p>
             记一次就会出趋势。
             <br />
-            跟它说「今天练了背」就行，记不全也没关系。
+            跟它说「今天练了背，高位下拉 60kg×10 四组」就行，记不全也没关系。
           </p>
           <Link className="btn" to="/">
             去记录

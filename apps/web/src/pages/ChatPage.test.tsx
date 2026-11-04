@@ -137,26 +137,21 @@ describe('聊天页', () => {
     ).toBe('卧推 60kg 5×5');
   });
 
-  it('记录类提示词先填进输入框，不直接发', () => {
-    const fetchMock = mockFetchOnce(chatTurn);
+  it('快捷提问不再出现半截话', () => {
     renderChat();
-    fireEvent.click(screen.getByRole('button', { name: '今天练了背' }));
-
-    const input = screen.getByLabelText('训练、饮食或提问') as HTMLInputElement;
-    expect(input.value).toBe('今天练了背');
-    expect(document.activeElement).toBe(input);
-    expect(fetchMock).not.toHaveBeenCalledWith('/api/turns', expect.anything());
+    expect(screen.queryByRole('button', { name: '今天练了背' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '补记昨天的推日' })).toBeNull();
   });
 
   it('完整问题点了直接发出去', async () => {
     const fetchMock = mockFetchOnce(chatTurn);
     renderChat();
-    fireEvent.click(screen.getByRole('button', { name: '上周容量怎么样' }));
+    fireEvent.click(screen.getByRole('button', { name: '增肌一周练几次' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/turns',
-        expect.objectContaining({ body: JSON.stringify({ message: '上周容量怎么样' }) }),
+        expect.objectContaining({ body: JSON.stringify({ message: '增肌一周练几次' }) }),
       ),
     );
   });

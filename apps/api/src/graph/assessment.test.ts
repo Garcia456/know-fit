@@ -4,6 +4,7 @@ import {
   NO_RECORD_NOTICE,
   NO_SOURCE_NOTICE,
   RETRIEVAL_FAILURE_NOTICE,
+  assessmentCitationCap,
   buildAssessmentGraph,
 } from './assessment.js';
 import type { AssessmentRepo, PersistAssessmentInput } from '../assessment/repo.js';
@@ -88,6 +89,14 @@ const invoke = (repo: AssessmentRepo, llm?: LlmClient) =>
     related_record_id: 'session-1',
     trigger: 'explicit',
   });
+
+describe('引用上限', () => {
+  it('知识默认 3 时，评估仍夹到 2', () => {
+    expect(assessmentCitationCap(3)).toBe(2);
+    expect(assessmentCitationCap(2)).toBe(2);
+    expect(assessmentCitationCap(1)).toBe(1);
+  });
+});
 
 describe('有源路径', () => {
   it('起草 → 闸② → 引用落库 → 卡片带逐字短引用', async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { getProfile, putProfile } from '../api/client';
-import type { Account, Goal } from '../api/types';
+import type { Account, Goal, TrainingFrequency } from '../api/types';
 import { useAuthUser } from '../auth/AuthContext';
 import {
   FileTextIcon,
@@ -9,7 +9,6 @@ import {
   IdCardIcon,
   InfoIcon,
   SettingsIcon,
-  WarnIcon,
 } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
 import { OptionField } from '../components/OptionField';
@@ -24,12 +23,14 @@ import {
 } from '../lib/profile';
 
 const GOALS: Goal[] = ['增肌', '减脂', '维持', '增肌+减脂'];
+const TRAINING_FREQUENCIES: TrainingFrequency[] = ['二分化', '三分化', '四分化', '五分化', '不规律'];
 
 /** 读取失败时用它占住表单；此时保存关闭，免得用空白覆盖库里已有档案 */
 const EMPTY_VALUES: ProfileFormValues = {
   height: '',
   weight: '',
   goal: null,
+  frequency: null,
   years: null,
   months: null,
 };
@@ -277,15 +278,22 @@ export function ProfilePage() {
                 />
               </span>
             </div>
-            <button
-              type="button"
-              className="set-row is-disabled"
-              disabled
-              aria-label="每周频率（未开放）"
-            >
-              <span className="lbl">每周频率</span>
-              <span className="val">未开放</span>
-            </button>
+            <div className="set-row">
+              <span className="lbl">训练频率</span>
+              <span className="val">
+                <OptionField
+                  label="训练频率"
+                  value={values.frequency ?? ''}
+                  options={[
+                    { value: '', label: '未填' },
+                    ...TRAINING_FREQUENCIES.map((f) => ({ value: f, label: f })),
+                  ]}
+                  onChange={(v) =>
+                    update('frequency', (v || null) as TrainingFrequency | null)
+                  }
+                />
+              </span>
+            </div>
             <button
               type="button"
               className="set-row is-disabled"
@@ -298,13 +306,7 @@ export function ProfilePage() {
           </div>
         </section>
 
-        {trainingMonths !== null && trainingMonths < 3 ? (
-          <div className="note-inline">
-            <WarnIcon />
-            <p>训练不足 3 个月时，这里只给通用建议，不出基于训练数据的评估。</p>
-          </div>
-        ) : null}
-
+        
         <section className="sec" aria-label="隐私与数据" style={{ marginTop: 16 }}>
           <p className="group-label icon-label">
             <FileTextIcon />

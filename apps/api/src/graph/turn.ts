@@ -24,11 +24,13 @@ import {
 } from '../llm/prompts.js';
 import type { PersistExerciseInput, TurnDeps } from './deps.js';
 import { checkGuard } from './guard.js';
+import { planFollowup } from '../plan/rules.js';
 import { boundaryReply, composeNotice, refusalReply } from './replies.js';
 import { TurnState, type TurnHistoryItem } from './state.js';
 
-/** 空抽取的确定性追问 —— 不交给模型，免得它换个说法又落成记录 */
-export const EMPTY_EXTRACTION_REPLY = '这句里没听出训练内容 —— 是想问动作，还是想记训练？';
+/** 空抽取的确定性引导 —— 不交给模型，免得它换个说法又落成记录 */
+export const EMPTY_EXTRACTION_REPLY =
+  '想记这次训练的话，再补一句动作和组数，比如「高位下拉 60kg×10 四组」；想聊练背的动作，也可以直接问。';
 
 /** 一组有多段但模型没定性时，默认按休息暂停记；明确说递减的保留 drop */
 export function normalizeSetTags(tags: SetTag[] | undefined, hasDrops: boolean): SetTag[] {
@@ -68,19 +70,21 @@ export function buildTurnGraph(deps: TurnDeps) {
       .addNode('preflight_guard', (state) => {
         const hit = checkGuard(state.message);
         if (hit) return { guard_verdict: hit.verdict };
-        // 档案里写着「不足 3 个月」也走非目标用户出口
-        if (state.training_years_band === 'lt_3m') return { guard_verdict: 'non_target_user' as const };
         return { guard_verdict: 'pass' as const };
       })
 
       .addNode('classify_intent', async (state) => {
+        // 上一轮问了频率 / 天数，这一轮就是答案 —— 不重新分类
+        if (planFollowup(state.message, state.history)) return { intent: 'plan' as const };
         const out = await deps.llm.structured({
           system: INTENT_SYSTEM,
           input: state.message,
           schema: IntentResultSchema,
           name: 'intent',
         });
-        return { intent: out.intent };
+        // 合法边界已由规则闸处理；模型再判 boundary 一律当知识问题，不终止回答
+        const intent = out.intent === 'boundary' ? 'knowledge' : out.intent;
+        return { intent };
       })
 
       .addNode('extract_record', async (state) => {
@@ -386,6 +390,25 @@ export function buildTurnGraph(deps: TurnDeps) {
         }
       })
 
+      .addNode('plan_node', async (state) => {
+        if (!deps.answerPlan) {
+          return { card: { kind: 'chat' as const, reply: '训练计划暂时用不了，稍后再试。' } };
+        }
+        try {
+          const card = await deps.answerPlan({
+            user_id: state.user_id,
+            message: state.message,
+            history: state.history,
+            frequency: state.profile_training_frequency,
+            goal: state.profile_goal,
+            band: state.training_years_band,
+          });
+          return { card };
+        } catch {
+          return { card: { kind: 'chat' as const, reply: '这次计划没排出来，再说一次试试。' } };
+        }
+      })
+
       .addNode('reject_node', (state) => {
         // 措辞取自规则表，不重跑 LLM —— 红线内容不允许被即兴改写
         const hit = checkGuard(state.message);
@@ -409,6 +432,7 @@ export function buildTurnGraph(deps: TurnDeps) {
         if (state.intent === 'query') return 'answer_query';
         if (state.intent === 'assess') return 'assess_node';
         if (state.intent === 'weight') return 'record_weight';
+        if (state.intent === 'plan') return 'plan_node';
         if (state.intent === 'knowledge') return 'knowledge_node';
         if (state.intent === 'chat') return 'chat_node';
         if (state.intent === 'boundary') return 'boundary_node';
@@ -424,6 +448,7 @@ export function buildTurnGraph(deps: TurnDeps) {
       .addEdge('record_weight', END)
       .addEdge('apply_edit', END)
       .addEdge('answer_query', END)
+      .addEdge('plan_node', END)
       .addEdge('knowledge_node', END)
       .addEdge('assess_node', END)
       .addEdge('chat_node', END)

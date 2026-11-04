@@ -33,6 +33,7 @@ describe('saveProfile / getProfile', () => {
         height_cm: 180,
         weight_kg: 75,
         goal: '增肌+减脂',
+        training_frequency: '三分化',
         training_years: 1,
         training_months: 0,
       },
@@ -43,6 +44,7 @@ describe('saveProfile / getProfile', () => {
       height_cm: 180,
       weight_kg: 75,
       goal: '增肌+减脂',
+      training_frequency: '三分化',
       training_years: 1,
       training_months: 0,
     });
@@ -56,6 +58,7 @@ describe('saveProfile / getProfile', () => {
         height_cm: 180,
         weight_kg: 76,
         goal: '增肌',
+        training_frequency: null,
         training_years: 1,
         training_months: 0,
       },
@@ -89,6 +92,7 @@ describe('saveProfile / getProfile', () => {
         height_cm: 180,
         weight_kg: null,
         goal: '增肌',
+        training_frequency: null,
         training_years: 1,
         training_months: 2,
       },
@@ -100,6 +104,53 @@ describe('saveProfile / getProfile', () => {
     expect(later).toMatchObject({ training_years: 1, training_months: 5 });
   });
 
+  it('训练频率可写、可清空；库里非法值按未填读', async () => {
+    await saveProfile({
+      user_id: userId,
+      profile: {
+        height_cm: 180,
+        weight_kg: null,
+        goal: '增肌',
+        training_frequency: '五分化',
+        training_years: null,
+        training_months: null,
+      },
+    });
+    expect((await getProfile(userId)).training_frequency).toBe('五分化');
+
+    // 旧客户端不传该字段 —— 保留原值，不清空
+    await saveProfile({
+      user_id: userId,
+      profile: {
+        height_cm: 180,
+        weight_kg: null,
+        goal: '增肌',
+        training_years: null,
+        training_months: null,
+      },
+    });
+    expect((await getProfile(userId)).training_frequency).toBe('五分化');
+
+    await saveProfile({
+      user_id: userId,
+      profile: {
+        height_cm: 180,
+        weight_kg: null,
+        goal: '增肌',
+        training_frequency: null,
+        training_years: null,
+        training_months: null,
+      },
+    });
+    expect((await getProfile(userId)).training_frequency).toBeNull();
+
+    await getPool().query(
+      'UPDATE user_profile SET training_frequency = $1 WHERE user_id = $2',
+      ['六分化', userId],
+    );
+    expect((await getProfile(userId)).training_frequency).toBeNull();
+  });
+
   it('留空可保存，null 原样回读', async () => {
     await saveProfile({
       user_id: userId,
@@ -107,6 +158,7 @@ describe('saveProfile / getProfile', () => {
         height_cm: null,
         weight_kg: null,
         goal: null,
+        training_frequency: null,
         training_years: null,
         training_months: null,
       },

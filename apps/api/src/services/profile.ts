@@ -26,6 +26,7 @@ export async function getProfile(user_id: string, now: Date = new Date()): Promi
     weight_kg: weight?.weight_kg ?? null,
     weight_date: weight?.date ?? null,
     goal: asGoal(row?.goal),
+    training_frequency: asTrainingFrequency(row?.trainingFrequency),
     ...training,
     updated_at: (row?.updatedAt ?? now).toISOString(),
   };
@@ -62,6 +63,12 @@ function asGoal(v: string | null | undefined): Profile['goal'] {
   return v === '增肌' || v === '减脂' || v === '维持' || v === '增肌+减脂' ? v : null;
 }
 
+function asTrainingFrequency(v: string | null | undefined): Profile['training_frequency'] {
+  return v === '二分化' || v === '三分化' || v === '四分化' || v === '五分化' || v === '不规律'
+    ? v
+    : null;
+}
+
 /** 留空也允许保存：null 表示「没填」，不表示「清空历史」。 */
 export async function saveProfile(input: {
   user_id: string;
@@ -74,6 +81,8 @@ export async function saveProfile(input: {
     input.profile.training_years === null || input.profile.training_months === null
       ? null
       : startMonth(input.profile.training_years, input.profile.training_months, now);
+  // 省略 = 旧客户端没这个字段，保留库里原值；显式 null 才清空
+  const frequency = input.profile.training_frequency;
 
   await db.transaction(async (tx) => {
     await tx
@@ -82,6 +91,7 @@ export async function saveProfile(input: {
         userId: input.user_id,
         heightCm: input.profile.height_cm,
         goal: input.profile.goal,
+        trainingFrequency: frequency ?? null,
         trainingStartedOn,
         updatedAt: now,
       })
@@ -90,6 +100,7 @@ export async function saveProfile(input: {
         set: {
           heightCm: input.profile.height_cm,
           goal: input.profile.goal,
+          ...(frequency === undefined ? {} : { trainingFrequency: frequency }),
           trainingStartedOn,
           updatedAt: now,
         },
@@ -109,6 +120,21 @@ export async function saveProfile(input: {
   });
 
   return getProfile(input.user_id, now);
+}
+
+/** 只改训练频率 —— 计划追问得到答案后写回，不碰档案其他字段。 */
+export async function saveTrainingFrequency(
+  user_id: string,
+  frequency: Profile['training_frequency'],
+  now: Date = new Date(),
+): Promise<void> {
+  await getDb()
+    .insert(userProfile)
+    .values({ userId: user_id, trainingFrequency: frequency, updatedAt: now })
+    .onConflictDoUpdate({
+      target: userProfile.userId,
+      set: { trainingFrequency: frequency, updatedAt: now },
+    });
 }
 
 /** 「记录体重」工具落库 —— 同一天覆盖，跨天保留。 */

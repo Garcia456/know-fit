@@ -20,9 +20,11 @@ export const FAKE_UNSUPPORTED_MARK = '【不支撑】';
 const EDIT_HINTS = ['改成', '改为', '改到', '换成', '调成', '更正', '记错了', '说错了'];
 const QUERY_HINTS = [
   '练了什么', '练了啥', '练的什么', '练过什么', '训练记录', '查一下', '看看记录', '做了什么训练',
+  '容量',
 ];
 const CHAT_HINTS = ['不太想', '懒得', '没动力', '心情', '烦', '累', '放弃', 'emo', '休息', 'hi', 'hello', '你好', '嗨', '在吗', '你是谁', '你能干嘛', '你能做什么'];
-const KNOWLEDGE_HINTS = ['推荐动作', '有什么动作', '怎么练', '练法', '动作要领', '训练计划', '新手', '组间休息', '做标准', '替代动作'];
+const PLAN_HINTS = ['训练计划', '健身计划', '力量训练计划', '周计划'];
+const KNOWLEDGE_HINTS = ['推荐动作', '有什么动作', '怎么练', '练法', '动作要领', '新手', '组间休息', '做标准', '替代动作'];
 const ASSESS_HINTS = ['够不够', '怎么样', '行不行', '够吗', '看下', '看看', '帮我看', '评估', '建议'];
 const RECORD_HINTS = [
   '卧推', '深蹲', '硬拉', '飞鸟', '划船', '推', '拉', '蹲', '练', '组', '次',
@@ -40,6 +42,7 @@ function classifyIntent(input: string): Intent {
   if (has(input, EDIT_HINTS)) return 'edit';
   if (has(input, QUERY_HINTS)) return 'query';
   if (has(input, CHAT_HINTS)) return 'chat';
+  if (has(input, PLAN_HINTS)) return 'plan';
   if (has(input, KNOWLEDGE_HINTS)) return 'knowledge';
   const assess = has(input, ASSESS_HINTS);
   const record = has(input, RECORD_HINTS);
@@ -108,7 +111,7 @@ export function createFakeClient(): LlmClient {
         };
       } else if (req.name === 'query') {
         const hint = input.match(
-          /(\d{4}-\d{1,2}-\d{1,2}|\d{4}年\d{1,2}月\d{1,2}[号日]?|\d{1,2}月\d{1,2}[号日]?|\d{1,2}[号日]|今天|昨天|前天)/,
+          /(\d{4}-\d{1,2}-\d{1,2}|\d{4}年\d{1,2}月\d{1,2}[号日]?|\d{1,2}月\d{1,2}[号日]?|\d{1,2}[号日]|最近\s*[1-9\d]+\s*个?周|近\s*[1-9\d]+\s*个?周|本周|这周|上周|今天|昨天|前天)/,
         );
         raw = { day_hint: hint ? hint[1] : null };
       } else if (req.name === 'extraction') {
@@ -144,6 +147,20 @@ export function createFakeClient(): LlmClient {
           : { claims: [personal] };
       } else if (req.name === 'draft_knowledge') {
         raw = { claims: [{ claim: '先把动作做标准，再逐步加重量', source_index: 0 }] };
+      } else if (req.name === 'plan') {
+        const count = Number(input.match(/训练日数量：(\d+)/)?.[1] ?? 3);
+        const focuses = ['胸+三头', '背+二头', '腿+肩', '全身'];
+        raw = {
+          title: '周训练计划',
+          training_days: Array.from({ length: count }, (_, i) => ({
+            focus: focuses[i % focuses.length],
+            exercises: [
+              { name: '卧推', sets: 4, reps: '8-12', note: null },
+              { name: '划船', sets: 4, reps: '8-12', note: null },
+              { name: '深蹲', sets: 3, reps: '10-12', note: null },
+            ],
+          })),
+        };
       } else if (req.name === 'verify_citation') {
         raw = gateFixture(input);
       } else {
