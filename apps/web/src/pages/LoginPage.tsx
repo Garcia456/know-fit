@@ -3,12 +3,6 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { AuthLayout } from './AuthLayout';
 
-const DEMO_EMAIL = 'demo@knowfit.local';
-
-/**
- * 登录页。演示账号只填邮箱 —— 密码是 seed 脚本生成的独立随机值，
- * 不能硬编码在前端（会随镜像发出去）。
- */
 export function LoginPage() {
   const { status, signIn } = useAuth();
   const navigate = useNavigate();
@@ -80,23 +74,6 @@ export function LoginPage() {
       <p className="auth-links">
         还没有账号？<Link to="/register">注册一个</Link>
       </p>
-
-      <div className="auth-demo">
-        <p>演示账号</p>
-        <button
-          type="button"
-          className="auth-demo__fill"
-          onClick={() => {
-            setEmail(DEMO_EMAIL);
-            setError(null);
-          }}
-        >
-          {DEMO_EMAIL}
-        </button>
-        <p className="card-meta">
-          密码由作者单独发放。demo 账号里有已有的训练记录；新注册的账号从空白开始。
-        </p>
-      </div>
     </AuthLayout>
   );
 }

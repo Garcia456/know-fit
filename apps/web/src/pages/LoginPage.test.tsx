@@ -7,7 +7,7 @@ import { LoginPage } from './LoginPage';
 
 const me: Account = {
   id: 'u-1',
-  email: 'demo@knowfit.local',
+  email: 'user@example.com',
   nickname: 'Garcia',
   birthday: '2000-01-15',
   gender: '男',
@@ -54,16 +54,14 @@ afterEach(() => {
 });
 
 describe('登录页', () => {
-  it('演示账号一键填入邮箱，提交后进入首页', async () => {
+  it('填写邮箱密码，提交后进入首页', async () => {
     const fetchMock = stubLogin(200);
     renderLogin();
 
-    fireEvent.click(await screen.findByRole('button', { name: /demo@knowfit\.local/ }));
-    expect((screen.getByLabelText('邮箱') as HTMLInputElement).value).toBe('demo@knowfit.local');
-    // 密码不再硬编码在前端 —— 由 seed 脚本生成、作者单独发放
-    expect((screen.getByLabelText('密码') as HTMLInputElement).value).toBe('');
-
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'demo-pass-1' } });
+    fireEvent.change(await screen.findByLabelText('邮箱'), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'pass-123456' } });
     fireEvent.click(screen.getByRole('button', { name: '登录' }));
 
     expect(await screen.findByText('会话首页')).toBeDefined();
@@ -71,9 +69,18 @@ describe('登录页', () => {
       '/api/auth/login',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ email: 'demo@knowfit.local', password: 'demo-pass-1' }),
+        body: JSON.stringify({ email: 'user@example.com', password: 'pass-123456' }),
       }),
     );
+  });
+
+  it('不显示演示账号入口', async () => {
+    stubLogin(401);
+    renderLogin();
+
+    await screen.findByLabelText('邮箱');
+    expect(screen.queryByText('演示账号')).toBeNull();
+    expect(screen.queryByRole('button', { name: /demo@/ })).toBeNull();
   });
 
   it('密码不对时留在页面并显示后端原文', async () => {
@@ -81,7 +88,7 @@ describe('登录页', () => {
     renderLogin();
 
     fireEvent.change(await screen.findByLabelText('邮箱'), {
-      target: { value: 'demo@knowfit.local' },
+      target: { value: 'user@example.com' },
     });
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'wrong-pass' } });
     fireEvent.click(screen.getByRole('button', { name: '登录' }));

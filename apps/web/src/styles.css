@@ -1253,35 +1253,6 @@ body.sheet-open .page-body {
   font-weight: 600;
 }
 
-.auth-demo {
-  margin-top: var(--s-6);
-  padding-top: var(--s-4);
-  border-top: 1px solid var(--line);
-}
-
-.auth-demo p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.auth-demo__fill {
-  width: 100%;
-  margin: 6px 0;
-  padding: 8px 10px;
-  border: 1px dashed var(--line-2);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.auth-demo__fill:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
-}
-
 /* ---------- 我的 · 账号摘要 ---------- */
 
 .profile--account .avatar {
