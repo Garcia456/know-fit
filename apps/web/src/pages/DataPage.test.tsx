@@ -88,19 +88,34 @@ function stubApi(list: HistoryItem[]) {
       const id = decodeURIComponent(url.slice('/api/sessions/'.length));
       const base: SessionDetail = details[id] ?? details['s-prev']!;
       const patch = JSON.parse(String(init.body)) as {
-        exercises: { raw_name: string; sets: { weight_kg: number | null; reps: number | null }[] }[];
+        exercises: {
+          raw_name: string;
+          sets: {
+            weight_kg: number | null;
+            reps: number | null;
+            tags?: string[];
+            drops?: unknown;
+          }[];
+        }[];
       };
+      // 服务端整份重建：提交什么就回来什么
       const updated: SessionDetail = {
         ...base,
         status: 'complete',
         missing_fields: [],
-        exercises: base.exercises.map((ex, i) => ({
-          ...ex,
-          raw_name: patch.exercises[i]?.raw_name ?? ex.raw_name,
-          sets: ex.sets.map((set, j) => ({
-            ...set,
-            weight_kg: patch.exercises[i]?.sets[j]?.weight_kg ?? set.weight_kg,
-            reps: patch.exercises[i]?.sets[j]?.reps ?? set.reps,
+        exercises: patch.exercises.map((ex) => ({
+          raw_name: ex.raw_name,
+          exercise_id: null,
+          name_zh: null,
+          region_fallback: null,
+          name_confidence: 'low',
+          sets: ex.sets.map((set) => ({
+            weight_kg: set.weight_kg,
+            reps: set.reps,
+            set_type: 'working' as const,
+            is_inferred: false,
+            ...(set.tags ? { tags: set.tags as never } : {}),
+            ...(set.drops ? { drops: set.drops as never } : {}),
           })),
         })),
       };
@@ -240,6 +255,175 @@ describe('历史页', () => {
       ],
       note: null,
     });
+  });
+
+  it('编辑训练：省略号菜单里复制组，在下方插入一组相同的数据', async () => {
+    const fetchMock = stubApi(items);
+    renderPage(`/data?date=${todayKey}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑这次训练' }));
+    fireEvent.click(screen.getByRole('button', { name: '组操作（第 1 组）' }));
+    expect(screen.getByRole('menu')).toBeDefined();
+    fireEvent.click(screen.getByRole('menuitem', { name: '复制组' }));
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(
+      (screen.getByLabelText('第 1 个动作第 2 组重量') as HTMLInputElement).value,
+    ).toBe('70');
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+    await screen.findAllByText(/70 kg ×/);
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({
+      exercises: [
+        {
+          raw_name: '引体向上',
+          sets: [
+            { weight_kg: 70, reps: null },
+            { weight_kg: 70, reps: null },
+          ],
+        },
+      ],
+      note: null,
+    });
+  });
+
+  it('编辑训练：省略号菜单里删除组，只剩一组时删除禁用', async () => {
+    const twoSets = detail('s-two', todayKey, '腿日');
+    twoSets.exercises = [
+      {
+        ...twoSets.exercises[0]!,
+        sets: [
+          { weight_kg: 70, reps: 8, set_type: 'working', is_inferred: false },
+          { weight_kg: 75, reps: 6, set_type: 'working', is_inferred: false },
+        ],
+      },
+    ];
+    details['s-two'] = twoSets;
+    const fetchMock = stubApi([{ ...items[0]!, session_id: 's-two' }]);
+    renderPage(`/data?date=${todayKey}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑这次训练' }));
+    fireEvent.click(screen.getByRole('button', { name: '组操作（第 2 组）' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '删除组' }));
+
+    expect(screen.queryByLabelText('第 1 个动作第 2 组重量')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+    await screen.findByText(/70 kg × 8/);
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(JSON.parse(String(put?.[1]?.body)).exercises[0].sets).toEqual([
+      { weight_kg: 70, reps: 8 },
+    ]);
+
+    // 只剩一组：菜单还在，但删除不可用
+    fireEvent.click(screen.getByRole('button', { name: '编辑这次训练' }));
+    fireEvent.click(screen.getByRole('button', { name: '组操作（第 1 组）' }));
+    expect(
+      (screen.getByRole('menuitem', { name: '删除组' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('编辑训练：编辑态可以删掉整个动作，只剩一个动作时禁用', async () => {
+    const twoEx = detail('s-twoex', todayKey, '推日');
+    twoEx.exercises = [
+      { ...twoEx.exercises[0]!, raw_name: '卧推' },
+      {
+        ...twoEx.exercises[0]!,
+        raw_name: '飞鸟',
+        region_fallback: null,
+        sets: [{ weight_kg: 10, reps: 12, set_type: 'working', is_inferred: false }],
+      },
+    ];
+    details['s-twoex'] = twoEx;
+    const fetchMock = stubApi([{ ...items[0]!, session_id: 's-twoex' }]);
+    renderPage(`/data?date=${todayKey}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑这次训练' }));
+    fireEvent.click(screen.getByRole('button', { name: '删除动作（第 2 个）' }));
+    expect(screen.queryByLabelText('第 2 个动作名称')).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: '删除动作（第 1 个）' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(JSON.parse(String(put?.[1]?.body)).exercises.map((e: { raw_name: string }) => e.raw_name)).toEqual(
+      ['卧推'],
+    );
+  });
+
+  it('编辑训练：改动作名清掉推测图标，未识别提示改为保存后重新核对', async () => {
+    const unknown = detail('s-unknown', todayKey, '腿日');
+    unknown.exercises = [
+      {
+        ...unknown.exercises[0]!,
+        raw_name: '飞鸟',
+        region_fallback: null,
+        sets: [{ weight_kg: 10, reps: 12, set_type: 'working', is_inferred: true }],
+      },
+    ];
+    unknown.volume.unrecognized_exercises = 1;
+    details['s-unknown'] = unknown;
+    stubApi([{ ...items[0]!, session_id: 's-unknown' }]);
+    renderPage(`/data?date=${todayKey}`);
+
+    expect(await screen.findByText(/有 1 个动作没认出来/)).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: '编辑这次训练' }));
+    expect(screen.getByRole('button', { name: '含系统推测的数字' })).toBeDefined();
+
+    fireEvent.change(screen.getByLabelText('第 1 个动作名称'), {
+      target: { value: '哑铃飞鸟' },
+    });
+
+    expect(screen.queryByRole('button', { name: '含系统推测的数字' })).toBeNull();
+    expect(screen.getByText(/改过名的 1 个动作保存后重新核对/)).toBeDefined();
+  });
+
+  it('编辑训练：拖住一组往下挪，松手后保存的顺序与界面一致', async () => {
+    const three = detail('s-three', todayKey, '腿日');
+    three.exercises = [
+      {
+        ...three.exercises[0]!,
+        sets: [
+          { weight_kg: 50, reps: 10, set_type: 'working', is_inferred: false },
+          { weight_kg: 55, reps: 8, set_type: 'working', is_inferred: false },
+          { weight_kg: 60, reps: 6, set_type: 'working', is_inferred: false },
+        ],
+      },
+    ];
+    details['s-three'] = three;
+    const fetchMock = stubApi([{ ...items[0]!, session_id: 's-three' }]);
+    renderPage(`/data?date=${todayKey}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑这次训练' }));
+
+    // jsdom 没有布局：给每行造一个 40px 高的位置
+    const rows = document.querySelectorAll<HTMLElement>('.edit-set');
+    rows.forEach((row, i) => {
+      Object.defineProperty(row, 'offsetTop', { value: i * 40, configurable: true });
+      Object.defineProperty(row, 'offsetHeight', { value: 40, configurable: true });
+    });
+
+    const handle = screen.getByRole('button', { name: '拖动排序（第 1 组）' });
+    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 120 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 240 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 240 });
+
+    expect(
+      (screen.getByLabelText('第 1 个动作第 1 组重量') as HTMLInputElement).value,
+    ).toBe('55');
+    expect(
+      (screen.getByLabelText('第 1 个动作第 3 组重量') as HTMLInputElement).value,
+    ).toBe('50');
+
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(JSON.parse(String(put?.[1]?.body)).exercises[0].sets).toEqual([
+      { weight_kg: 55, reps: 8 },
+      { weight_kg: 60, reps: 6 },
+      { weight_kg: 50, reps: 10 },
+    ]);
   });
 
   it('撤销修改不改动卡片', async () => {

@@ -97,9 +97,16 @@ interface Props {
   /** 当前会话 —— 从抽屉选中或刷新恢复时变化 */
   activeConversationId?: string | null;
   onConversationChange?: (id: string | null) => void;
+  /** 会话页是否在前台；隐藏时不挂输入栏，避免在 display:none 里量高度 */
+  active?: boolean;
 }
 
-export function ChatPage({ resetToken, activeConversationId, onConversationChange }: Props) {
+export function ChatPage({
+  resetToken,
+  activeConversationId,
+  onConversationChange,
+  active = true,
+}: Props) {
   const [draft, setDraft] = useState(readDraft);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [sending, setSending] = useState(false);
@@ -117,7 +124,7 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
   /** 已经画出来的会话 —— 发送后自己写进来的响应不必再拉一次 */
   const loadedConversation = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const draftRef = useRef(draft);
 
   // 进首页取一次提示；StrictMode 下也不会取两次（第二次会被服务端去重成 null）
@@ -432,13 +439,15 @@ export function ChatPage({ resetToken, activeConversationId, onConversationChang
         ) : null}
       </div>
 
-      <Composer
-        value={draft}
-        onChange={updateDraft}
-        onSend={() => void send(draft)}
-        sending={sending}
-        inputRef={inputRef}
-      />
+      {active ? (
+        <Composer
+          value={draft}
+          onChange={updateDraft}
+          onSend={() => void send(draft)}
+          sending={sending}
+          inputRef={inputRef}
+        />
+      ) : null}
     </>
   );
 }

@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { Link, useSearchParams } from 'react-router';
 import {
@@ -15,11 +23,15 @@ import {
   ChartIcon,
   CheckIcon,
   CloseIcon,
+  CopyIcon,
+  DragHandleIcon,
+  EllipsisIcon,
   InfoIcon,
   SquarePenIcon,
   TrashIcon,
 } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
+import { Tip } from '../components/Tip';
 import { VolumeHookView } from '../components/VolumeHookView';
 import { addMonths, monthGrid, parseDateKey, startOfMonth, toDateKey } from '../lib/calendar';
 import { formatKg, formatMd, formatMonthDay } from '../lib/format';
@@ -364,6 +376,8 @@ interface DraftDrop {
 }
 
 interface DraftSet {
+  /** 稳定 id：拖动换位时 React 不重挂行，动画才跟得上 */
+  key: string;
   weight: string;
   reps: string;
   setType: 'warmup' | 'working';
@@ -374,13 +388,26 @@ interface DraftSet {
 
 interface DraftExercise {
   raw_name: string;
+  /** 改名前，用来判断是否动过名字 */
+  original_name: string;
+  /** 服务端当初的归一结论：改过名就作废，等保存后重新判定 */
+  recognized: boolean;
   sets: DraftSet[];
+}
+
+let setKeySeq = 0;
+function nextSetKey(): string {
+  setKeySeq += 1;
+  return `set-${setKeySeq}`;
 }
 
 function toDraft(detail: SessionDetail): DraftExercise[] {
   return detail.exercises.map((ex) => ({
     raw_name: ex.raw_name,
+    original_name: ex.raw_name,
+    recognized: ex.exercise_id !== null || ex.region_fallback !== null,
     sets: ex.sets.map((set) => ({
+      key: nextSetKey(),
       weight: set.weight_kg === null ? '' : String(set.weight_kg),
       reps: set.reps === null ? '' : String(set.reps),
       setType: set.set_type,
@@ -467,6 +494,21 @@ function decimalText(value: string) {
   return `${cleaned.slice(0, dot)}.${cleaned.slice(dot + 1).replace(/\./g, '')}`;
 }
 
+/** 编辑态：没改名的照原结论计；改过名的等保存后由服务端重新归一 */
+function unrecognizedHint(draft: DraftExercise[]) {
+  const renamed = (ex: DraftExercise) => ex.raw_name.trim() !== ex.original_name.trim();
+  const unknown = draft.filter((ex) => !ex.recognized && !renamed(ex)).length;
+  const pending = draft.filter((ex) => !ex.recognized && renamed(ex)).length;
+  if (unknown === 0 && pending === 0) return null;
+  return (
+    <p className="page-hint">
+      {unknown > 0 ? `有 ${unknown} 个动作没认出来，未计入肌群分摊` : null}
+      {unknown > 0 && pending > 0 ? '；' : null}
+      {pending > 0 ? `改过名的 ${pending} 个动作保存后重新核对` : null}
+    </p>
+  );
+}
+
 function DayCard({ item, detail, onSaved, onDeleted }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<DraftExercise[]>([]);
@@ -474,20 +516,85 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 拖动中的组：动作下标 + 组的 key */
+  const [dragging, setDragging] = useState<{ ex: number; key: string } | null>(null);
+  /** 组行末尾的省略号菜单 */
+  const [menu, setMenu] = useState<{ ex: number; key: string } | null>(null);
+  const dragRef = useRef<{
+    ex: number;
+    key: string;
+    startY: number;
+    startTop: number;
+    height: number;
+    offset: number;
+  } | null>(null);
+  /** 换位前各行的位置，供 useLayoutEffect 做 FLIP */
+  const flipRef = useRef<Map<string, number> | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLLIElement>());
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const status = detail?.status ?? item.status;
+
+  // 换位后：其余行从旧位置平滑滑到新位置；被拖的行贴住指针
+  useLayoutEffect(() => {
+    const tops = flipRef.current;
+    flipRef.current = null;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+    for (const [key, el] of rowRefs.current) {
+      if (!el.isConnected) continue;
+      if (dragging && key === dragging.key) {
+        const drag = dragRef.current;
+        if (drag) el.style.transform = `translateY(${drag.startTop + drag.offset - el.offsetTop}px)`;
+        continue;
+      }
+      const before = tops?.get(key);
+      if (before === undefined || reduce) continue;
+      const dy = before - el.offsetTop;
+      if (Math.abs(dy) < 1 || typeof el.animate !== 'function') continue;
+      el.animate(
+        [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+        { duration: 180, easing: 'cubic-bezier(.2, .8, .2, 1)' },
+      );
+    }
+  }, [draft, dragging]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      // 触发按钮自己负责开合，点它不在这里关
+      if (target?.closest('.set-menu-trigger')) return;
+      if (menuRef.current?.contains(target)) return;
+      setMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenu(null);
+    };
+    const close = () => setMenu(null);
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [menu]);
 
   function startEdit() {
     if (!detail) return;
     setDraft(toDraft(detail));
     setEditing(true);
     setConfirming(false);
+    setMenu(null);
     setError(null);
   }
 
   function cancelEdit() {
     setEditing(false);
     setDraft([]);
+    setMenu(null);
     setError(null);
   }
 
@@ -533,6 +640,147 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
       ),
     );
   }
+
+  /** 改动作名 = 用户认领这个动作：推测标记全部撤销；识别结论交回服务端 */
+  function renameExercise(exIndex: number, raw_name: string) {
+    setDraft((prev) =>
+      prev.map((ex, i) =>
+        i === exIndex
+          ? {
+              ...ex,
+              raw_name,
+              sets: ex.sets.map((set) => ({ ...set, isInferred: false })),
+            }
+          : ex,
+      ),
+    );
+  }
+
+  function removeExercise(exIndex: number) {
+    setDraft((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== exIndex)));
+  }
+
+  /** 在某组下方插入一组相同的数据 */
+  function duplicateSet(exIndex: number, setIndex: number) {
+    setDraft((prev) =>
+      prev.map((ex, i) => {
+        if (i !== exIndex) return ex;
+        const source = ex.sets[setIndex];
+        if (!source) return ex;
+        return {
+          ...ex,
+          sets: [
+            ...ex.sets.slice(0, setIndex + 1),
+            {
+              ...source,
+              key: nextSetKey(),
+              isInferred: false,
+              tags: [...source.tags],
+              drops: source.drops.map((drop) => ({ ...drop })),
+            },
+            ...ex.sets.slice(setIndex + 1),
+          ],
+        };
+      }),
+    );
+  }
+
+  function removeSet(exIndex: number, setIndex: number) {
+    setDraft((prev) =>
+      prev.map((ex, i) => {
+        if (i !== exIndex || ex.sets.length <= 1) return ex;
+        return { ...ex, sets: ex.sets.filter((_, j) => j !== setIndex) };
+      }),
+    );
+  }
+
+  function moveSet(exIndex: number, from: number, to: number) {
+    if (from === to) return;
+    setDraft((prev) =>
+      prev.map((ex, i) => {
+        if (i !== exIndex) return ex;
+        const sets = [...ex.sets];
+        const [moved] = sets.splice(from, 1);
+        if (!moved) return ex;
+        sets.splice(to, 0, moved);
+        return { ...ex, sets };
+      }),
+    );
+  }
+
+  function startDrag(event: ReactPointerEvent<HTMLButtonElement>, exIndex: number, key: string) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const el = rowRefs.current.get(key);
+    dragRef.current = {
+      ex: exIndex,
+      key,
+      startY: event.clientY,
+      startTop: el?.offsetTop ?? 0,
+      height: el?.offsetHeight ?? 0,
+      offset: 0,
+    };
+    setMenu(null);
+    setDragging({ ex: exIndex, key });
+  }
+
+  /**
+   * 被拖的行跟着指针走；它的中心越过谁的中间线，就跟谁换位。
+   * 量 offsetTop 而不是 getBoundingClientRect —— 别把正在播的让位动画算进去。
+   */
+  function moveDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    drag.offset = event.clientY - drag.startY;
+
+    const self = rowRefs.current.get(drag.key);
+    const list = self?.parentElement;
+    if (!self || !list) return;
+    const rows = Array.from(list.children).filter(
+      (el): el is HTMLElement => el instanceof HTMLElement && el.classList.contains('edit-set'),
+    );
+    const from = rows.indexOf(self);
+
+    const center = drag.startTop + drag.offset + drag.height / 2;
+    const above = rows.filter(
+      (row) => row !== self && row.offsetTop + row.offsetHeight / 2 < center,
+    ).length;
+
+    if (above === from) {
+      self.style.transform = `translateY(${drag.startTop + drag.offset - self.offsetTop}px)`;
+      return;
+    }
+
+    const tops = new Map<string, number>();
+    for (const row of rows) {
+      if (row.dataset.setKey) tops.set(row.dataset.setKey, row.offsetTop);
+    }
+    flipRef.current = tops;
+    moveSet(drag.ex, from, above);
+    setDragging({ ex: drag.ex, key: drag.key });
+  }
+
+  function endDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (drag) {
+      const el = rowRefs.current.get(drag.key);
+      const from = el?.style.transform ?? '';
+      if (el) el.style.transform = '';
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      if (el && from && !reduce && typeof el.animate === 'function') {
+        el.animate([{ transform: from }, { transform: 'translateY(0)' }], {
+          duration: 180,
+          easing: 'cubic-bezier(.2, .8, .2, 1)',
+        });
+      }
+    }
+    setDragging(null);
+  }
+
 
   async function handleSave() {
     if (!detail) return;
@@ -622,50 +870,54 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
           <div className="card-actions">
             {editing ? (
               <>
-                <button
-                  type="button"
-                  className="icon-btn icon-btn--sm"
-                  aria-label="撤销修改"
-                  title="撤销修改"
-                  onClick={cancelEdit}
-                  disabled={saving}
-                >
-                  <CloseIcon />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn icon-btn--sm"
-                  aria-label="保存修改"
-                  title="保存修改"
-                  onClick={handleSave}
-                  disabled={saving}
-                >
-                  <CheckIcon />
-                </button>
+                <Tip text="撤销修改" align="end">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn--sm"
+                    aria-label="撤销修改"
+                    onClick={cancelEdit}
+                    disabled={saving}
+                  >
+                    <CloseIcon />
+                  </button>
+                </Tip>
+                <Tip text="保存修改" align="end">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn--sm"
+                    aria-label="保存修改"
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    <CheckIcon />
+                  </button>
+                </Tip>
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  className="icon-btn icon-btn--sm"
-                  aria-label="编辑这次训练"
-                  title="编辑"
-                  onClick={startEdit}
-                >
-                  <SquarePenIcon />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn icon-btn--sm"
-                  aria-label="删除这次训练"
-                  title="删除"
-                  onClick={() => {
-                    setConfirming(true);
-                    setError(null);
-                  }}
-                >
-                  <TrashIcon />
-                </button>
+                <Tip text="编辑" align="end">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn--sm"
+                    aria-label="编辑这次训练"
+                    onClick={startEdit}
+                  >
+                    <SquarePenIcon />
+                  </button>
+                </Tip>
+                <Tip text="删除" align="end">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn--sm"
+                    aria-label="删除这次训练"
+                    onClick={() => {
+                      setConfirming(true);
+                      setError(null);
+                    }}
+                  >
+                    <TrashIcon />
+                  </button>
+                </Tip>
               </>
             )}
           </div>
@@ -718,20 +970,39 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
                         className="edit-box__input"
                         aria-label={`第 ${exIndex + 1} 个动作名称`}
                         value={ex.raw_name}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev.map((row, i) =>
-                              i === exIndex ? { ...row, raw_name: e.target.value } : row,
-                            ),
-                          )
-                        }
+                        onChange={(e) => renameExercise(exIndex, e.target.value)}
                       />
                     </label>
                     {ex.sets.some((set) => set.isInferred) ? <InferredDot /> : null}
+                    <Tip text={draft.length <= 1 ? '至少留一个动作' : '删除动作'}>
+                      <button
+                        type="button"
+                        className="set-tool edit-remove"
+                        aria-label={`删除动作（第 ${exIndex + 1} 个）`}
+                        disabled={draft.length <= 1}
+                        onClick={() => removeExercise(exIndex)}
+                      >
+                        <CloseIcon size={14} />
+                      </button>
+                    </Tip>
                   </div>
                   <ul className="set-list">
                     {ex.sets.map((set, setIndex) => (
-                      <li key={setIndex} className="edit-set">
+                      <li
+                        key={set.key}
+                        ref={(el) => {
+                          if (el) rowRefs.current.set(set.key, el);
+                          else rowRefs.current.delete(set.key);
+                        }}
+                        className={
+                          dragging?.ex === exIndex && dragging.key === set.key
+                            ? 'edit-set is-dragging'
+                            : 'edit-set'
+                        }
+                        data-set-row={setIndex}
+                        data-set-key={set.key}
+                      >
+
                         <label className="edit-box">
                           <input
                             className="edit-box__input"
@@ -804,6 +1075,67 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
                           </span>
                         ))}
                         {set.setType === 'warmup' ? <span className="tag">热身</span> : null}
+                        <span className="edit-set__tools">
+                          <span className="set-menu">
+                            <Tip text="组操作" align="end" hidden={menu?.key === set.key}>
+                              <button
+                                type="button"
+                                className="set-tool set-menu-trigger"
+                                aria-label={`组操作（第 ${setIndex + 1} 组）`}
+                                aria-haspopup="menu"
+                                aria-expanded={menu?.key === set.key}
+                                onClick={() =>
+                                  setMenu((prev) =>
+                                    prev?.key === set.key ? null : { ex: exIndex, key: set.key },
+                                  )
+                                }
+                              >
+                                <EllipsisIcon size={16} />
+                              </button>
+                            </Tip>
+                            {menu?.key === set.key ? (
+                              <div className="set-menu__panel" role="menu" ref={menuRef}>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    duplicateSet(exIndex, setIndex);
+                                    setMenu(null);
+                                  }}
+                                >
+                                  <CopyIcon />
+                                  复制组
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="is-danger"
+                                  disabled={ex.sets.length <= 1}
+                                  onClick={() => {
+                                    removeSet(exIndex, setIndex);
+                                    setMenu(null);
+                                  }}
+                                >
+                                  <TrashIcon size={14} />
+                                  删除组
+                                </button>
+                              </div>
+                            ) : null}
+                          </span>
+                          <Tip text="拖动排序" align="end">
+                            <button
+                              type="button"
+                              className="set-tool set-tool--drag"
+                              aria-label={`拖动排序（第 ${setIndex + 1} 组）`}
+                              onPointerDown={(e) => startDrag(e, exIndex, set.key)}
+                              onPointerMove={moveDrag}
+                              onPointerUp={endDrag}
+                              onPointerCancel={endDrag}
+                            >
+                              <DragHandleIcon />
+                            </button>
+                          </Tip>
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -852,7 +1184,9 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
             </p>
           ) : null}
           {detail.note ? <p className="card-meta">备注：{detail.note}</p> : null}
-          {detail.volume.unrecognized_exercises > 0 ? (
+          {editing ? (
+            unrecognizedHint(draft)
+          ) : detail.volume.unrecognized_exercises > 0 ? (
             <p className="page-hint">
               有 {detail.volume.unrecognized_exercises} 个动作没认出来，未计入肌群分摊
             </p>

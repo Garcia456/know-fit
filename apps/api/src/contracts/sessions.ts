@@ -82,7 +82,7 @@ export const PatchSessionRequestSchema = z.object({
   note: z.string().min(1).nullable().optional(),
 });
 
-/** 手动编辑：按现有顺序覆盖动作名 / 重量 / 次数；不增删动作与组 */
+/** 手动编辑：整份重建 —— 未提交的动作与组直接删除；至少留一个动作（ADR-065） */
 export const UpdateSessionRequestSchema = z.object({
   exercises: z
     .array(
@@ -93,6 +93,7 @@ export const UpdateSessionRequestSchema = z.object({
             z.object({
               weight_kg: z.number().min(0).max(2000).nullable(),
               reps: z.number().int().min(0).max(1000).nullable(),
+              set_type: z.enum(['warmup', 'working']).optional(),
               tags: z.array(SetTagSchema).optional(),
               drops: z.array(SetDropSchema).nullable().optional(),
             }),

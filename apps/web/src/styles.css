@@ -194,15 +194,44 @@ select:active,
 
 /* ---------- 输入栏 ---------- */
 
+/* 输入框随内容向上长高；高度由 Composer 按 scrollHeight 写入 */
+.composer .pill {
+  align-items: flex-end;
+  height: auto;
+  min-height: 50px;
+}
+
 .composer .pill-input {
   flex: 1;
   min-width: 0;
-  height: 100%;
-  padding: 0;
+  min-height: 22px;
+  max-height: 132px;
+  padding: 8px 0;
   border: 0;
   background: transparent;
   color: var(--ink);
+  font-family: inherit;
   font-size: 14.5px;
+  line-height: 22px;
+  resize: none;
+  overflow-y: hidden;
+}
+
+/* 多行：胶囊收成小圆角矩形，发送键钉在右下角，不压字 */
+.composer .pill--multi {
+  align-items: flex-end;
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--r-3);
+}
+
+.composer .pill--multi .pill-input {
+  align-self: stretch;
+  padding: 4px 0;
+}
+
+.composer .pill--multi .send {
+  flex: none;
+  margin-bottom: 2px;
 }
 
 .composer .pill-input::placeholder {
@@ -666,11 +695,13 @@ select:active,
   cursor: pointer;
 }
 
-.inferred-tip {
+/* 白底小提示：推测说明与按钮悬停提示共用一套外观 */
+.inferred-tip,
+.tip {
   position: absolute;
   top: calc(100% + 6px);
   left: -8px;
-  z-index: 20;
+  z-index: 30;
   padding: 6px 10px;
   border-radius: 8px;
   background: #fff;
@@ -681,6 +712,21 @@ select:active,
   white-space: nowrap;
   box-shadow: 0 4px 14px rgb(0 0 0 / 14%);
   pointer-events: none;
+}
+
+/* 贴着页面右边缘的元素：改成向左对齐，免得被裁掉 */
+.tip--end {
+  left: auto;
+  right: -8px;
+}
+
+.tip-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.inferred-tip {
   animation: inferred-tip-fade 3s ease forwards;
 }
 
@@ -702,8 +748,21 @@ select:active,
 }
 
 .exercise__hd .edit-box--name {
-  flex: 1;
-  width: auto;
+  flex: 0 1 auto;
+  width: 46%;
+  max-width: 200px;
+}
+
+/* 动作名右侧的删除按钮：空出右边的位置，不跟 input 抢宽度 */
+.edit-remove {
+  flex: none;
+}
+
+.edit-remove:disabled {
+  opacity: 0.35;
+  cursor: default;
+  /* 禁用的按钮不派发指针事件；让事件落到外层，提示才浮得出来 */
+  pointer-events: none;
 }
 
 .set-plus {
@@ -906,6 +965,18 @@ select:active,
   flex-direction: column;
   overflow: hidden;
   will-change: transform;
+}
+
+/* 常驻页面占位：会话页切走后隐藏但保留状态 */
+.page-slot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-slot[hidden] {
+  display: none;
 }
 
 /* 隐藏视觉滚动条，滚动能力保留 */
@@ -1229,6 +1300,54 @@ body.sheet-open .page-body {
 }
 
 .auth-field input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.auth-field.has-error input {
+  border-color: #b3261e;
+}
+
+.auth-field.has-error input:focus-visible {
+  outline-color: #b3261e;
+}
+
+.auth-field__error {
+  color: #b3261e;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* 密码框：右侧显示 / 隐藏 */
+.auth-field__control {
+  position: relative;
+  display: block;
+}
+
+.auth-field__control input {
+  padding-right: 42px;
+}
+
+.auth-field__reveal {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.auth-field__reveal:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 1px;
 }
@@ -1581,6 +1700,98 @@ body.sheet-open .page-body {
 
 .edit-set__x {
   color: var(--muted);
+}
+
+/* 组行末尾：下方插入 + 拖动排序 */
+.edit-set__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.set-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-2);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.set-tool:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.set-tool--drag {
+  opacity: 0.45;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.set-tool--drag:active {
+  cursor: grabbing;
+}
+
+.edit-set.is-dragging {
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+}
+
+/* 组行省略号菜单：跟会话历史的行内菜单同一套外观 */
+.set-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.set-menu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  width: 132px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+
+.set-menu__panel button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.set-menu__panel button:hover {
+  background: var(--surface-2);
+}
+
+.set-menu__panel button.is-danger {
+  color: #c0392b;
+}
+
+.set-menu__panel button:disabled {
+  color: var(--faint);
+  cursor: default;
+  background: transparent;
 }
 
 /* ---------- 头像 ---------- */

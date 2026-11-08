@@ -8,8 +8,13 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Copy,
+  EllipsisVertical,
+  Eye,
+  EyeOff,
   FileText,
   Flame,
+  GripVertical,
   History,
   IdCard,
   Info,
@@ -74,8 +79,8 @@ export function NewConversationIcon() {
   return <LineIcon icon={SquarePen} size={15} />;
 }
 
-export function CloseIcon() {
-  return <LineIcon icon={X} />;
+export function CloseIcon({ size = 18 }: { size?: number }) {
+  return <LineIcon icon={X} size={size} />;
 }
 
 export function SquarePenIcon() {
@@ -94,6 +99,19 @@ export function ChevronRightIcon({ size = 14 }: { size?: number }) {
   return <LineIcon icon={ChevronRight} size={size} />;
 }
 
+export function EyeIcon({ size = 16 }: { size?: number }) {
+  return <LineIcon icon={Eye} size={size} />;
+}
+
+export function EyeOffIcon({ size = 16 }: { size?: number }) {
+  return <LineIcon icon={EyeOff} size={size} />;
+}
+
+/** 编辑态拖动排序的手柄 */
+export function DragHandleIcon({ size = 16 }: { size?: number }) {
+  return <LineIcon icon={GripVertical} size={size} />;
+}
+
 export function ArrowLeftIcon() {
   return <LineIcon icon={ArrowLeft} />;
 }
@@ -105,6 +123,17 @@ export function ArrowDownIcon({ size = 12 }: { size?: number }) {
 export function ArrowUpIcon({ size = 12 }: { size?: number }) {
   return <LineIcon icon={ArrowUp} size={size} />;
 }
+
+/** 行尾省略号：点开小菜单 */
+export function EllipsisIcon({ size = 16 }: { size?: number }) {
+  return <LineIcon icon={EllipsisVertical} size={size} />;
+}
+
+/** 复制一份 */
+export function CopyIcon({ size = 16 }: { size?: number }) {
+  return <LineIcon icon={Copy} size={size} />;
+}
+
 
 /** 发送中等候的转圈 */
 export function LoadingIcon() {

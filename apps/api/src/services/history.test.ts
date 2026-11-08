@@ -230,6 +230,158 @@ describe('updateSession', () => {
     });
     expect(detail).toBe('not_found');
   });
+
+  it('删动作：没提交的动作从库里消失', async () => {
+    const detail = await updateSession({
+      user_id: SINGLE_USER_ID,
+      session_id: sessionId,
+      patch: { exercises: [{ raw_name: 'e2e-history-引体向上', sets: [{ weight_kg: 72.5, reps: 10 }] }] },
+    });
+    if (detail === 'not_found') throw new Error('session 不见了');
+
+    const { session_id } = await persistWorkout({
+      user_id: SINGLE_USER_ID,
+      date: '2031-03-16',
+      split_label: 'e2e-history-删动作',
+      status: 'complete',
+      missing_fields: [],
+      notes: null,
+      exercises: [
+        {
+          order: 0,
+          raw_name: 'e2e-history-保留',
+          exercise_id: null,
+          name_confidence: 'low',
+          region_fallback: null,
+          sets: [{ order: 0, weight_kg: 50, reps: 10, set_type: 'working', is_inferred: false }],
+        },
+        {
+          order: 1,
+          raw_name: 'e2e-history-删掉',
+          exercise_id: null,
+          name_confidence: 'low',
+          region_fallback: null,
+          sets: [{ order: 0, weight_kg: 40, reps: 10, set_type: 'working', is_inferred: false }],
+        },
+      ],
+    });
+
+    const next = await updateSession({
+      user_id: SINGLE_USER_ID,
+      session_id,
+      patch: {
+        exercises: [
+          { raw_name: 'e2e-history-保留', sets: [{ weight_kg: 50, reps: 10 }] },
+        ],
+      },
+    });
+    if (next === 'not_found') throw new Error('session 不见了');
+    expect(next.exercises.map((e) => e.raw_name)).toEqual(['e2e-history-保留']);
+
+    await getDb().delete(workoutSession).where(eq(workoutSession.id, session_id));
+  });
+
+  it('删组：少提交的组从库里消失，多提交的组补进来', async () => {
+    const { session_id } = await persistWorkout({
+      user_id: SINGLE_USER_ID,
+      date: '2031-03-17',
+      split_label: 'e2e-history-删组',
+      status: 'complete',
+      missing_fields: [],
+      notes: null,
+      exercises: [
+        {
+          order: 0,
+          raw_name: 'e2e-history-三组',
+          exercise_id: null,
+          name_confidence: 'low',
+          region_fallback: null,
+          sets: [
+            { order: 0, weight_kg: 50, reps: 10, set_type: 'working', is_inferred: false },
+            { order: 1, weight_kg: 55, reps: 8, set_type: 'working', is_inferred: false },
+            { order: 2, weight_kg: 60, reps: 6, set_type: 'working', is_inferred: false },
+          ],
+        },
+      ],
+    });
+
+    const fewer = await updateSession({
+      user_id: SINGLE_USER_ID,
+      session_id,
+      patch: {
+        exercises: [
+          {
+            raw_name: 'e2e-history-三组',
+            sets: [
+              { weight_kg: 50, reps: 10 },
+              { weight_kg: 60, reps: 6 },
+            ],
+          },
+        ],
+      },
+    });
+    if (fewer === 'not_found') throw new Error('session 不见了');
+    expect(fewer.exercises[0]?.sets.map((s) => s.weight_kg)).toEqual([50, 60]);
+
+    const more = await updateSession({
+      user_id: SINGLE_USER_ID,
+      session_id,
+      patch: {
+        exercises: [
+          {
+            raw_name: 'e2e-history-三组',
+            sets: [
+              { weight_kg: 50, reps: 10 },
+              { weight_kg: 60, reps: 6 },
+              { weight_kg: 60, reps: 6 },
+            ],
+          },
+        ],
+      },
+    });
+    if (more === 'not_found') throw new Error('session 不见了');
+    expect(more.exercises[0]?.sets.map((s) => s.weight_kg)).toEqual([50, 60, 60]);
+
+    await getDb().delete(workoutSession).where(eq(workoutSession.id, session_id));
+  });
+
+  it('改名即认领：该动作的推测标记全部清掉，可识别名称让未识别数下降', async () => {
+    const { session_id } = await persistWorkout({
+      user_id: SINGLE_USER_ID,
+      date: '2031-03-18',
+      split_label: 'e2e-history-改名',
+      status: 'complete',
+      missing_fields: [],
+      notes: null,
+      exercises: [
+        {
+          order: 0,
+          raw_name: 'e2e-history-飞鸟',
+          exercise_id: null,
+          name_confidence: 'low',
+          region_fallback: null,
+          sets: [{ order: 0, weight_kg: 10, reps: 12, set_type: 'working', is_inferred: true }],
+        },
+      ],
+    });
+
+    const before = await getSessionDetail({ user_id: SINGLE_USER_ID, session_id });
+    expect(before?.volume.unrecognized_exercises).toBe(1);
+
+    const renamed = await updateSession({
+      user_id: SINGLE_USER_ID,
+      session_id,
+      patch: {
+        exercises: [{ raw_name: '哑铃飞鸟', sets: [{ weight_kg: 10, reps: 12 }] }],
+      },
+    });
+    if (renamed === 'not_found') throw new Error('session 不见了');
+    expect(renamed.exercises[0]?.raw_name).toBe('哑铃飞鸟');
+    expect(renamed.exercises[0]?.sets[0]?.is_inferred).toBe(false);
+    expect(renamed.volume.unrecognized_exercises).toBe(0);
+
+    await getDb().delete(workoutSession).where(eq(workoutSession.id, session_id));
+  });
 });
 
 describe('deleteSession', () => {

@@ -114,6 +114,26 @@ describe('聊天页', () => {
     expect(screen.queryByText('思考中...')).toBeNull();
   });
 
+  it('回车发送，Shift+回车只换行', async () => {
+    const fetchMock = mockFetchOnce(chatTurn);
+    renderChat();
+
+    const input = screen.getByLabelText('训练、饮食或提问') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: '第一行' } });
+
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+    expect(input.value).toBe('第一行');
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/turns', expect.anything());
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/turns',
+        expect.objectContaining({ body: JSON.stringify({ message: '第一行' }) }),
+      ),
+    );
+  });
+
   it('失败时文字不丢，给出重试', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('网络断了'));
     vi.stubGlobal('fetch', fetchMock);

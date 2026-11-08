@@ -83,7 +83,49 @@ describe('登录页', () => {
     expect(screen.queryByRole('button', { name: /demo@/ })).toBeNull();
   });
 
-  it('密码不对时留在页面并显示后端原文', async () => {
+  it('空提交不发请求，两个字段分别提示并聚焦邮箱', async () => {
+    const fetchMock = stubLogin(401);
+    renderLogin();
+
+    const email = await screen.findByLabelText('邮箱');
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+
+    expect(screen.getByText('请输入邮箱')).toBeDefined();
+    expect(screen.getByText('请输入密码')).toBeDefined();
+    expect(document.activeElement).toBe(email);
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/auth/login')).toBe(false);
+  });
+
+it('邮箱格式不对时在字段下提示，修正后消失', async () => {
+    stubLogin(401);
+    renderLogin();
+
+    const email = await screen.findByLabelText('邮箱');
+    fireEvent.change(email, { target: { value: 'not-an-email' } });
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+
+    expect(screen.getByText('邮箱格式不对，比如 you@example.com')).toBeDefined();
+    expect(email.getAttribute('aria-invalid')).toBe('true');
+
+    fireEvent.change(email, { target: { value: 'user@example.com' } });
+    expect(screen.queryByText('邮箱格式不对，比如 you@example.com')).toBeNull();
+    expect(email.getAttribute('aria-invalid')).toBe('false');
+  });
+
+it('密码可以切换显示', async () => {
+    stubLogin(401);
+    renderLogin();
+
+    const password = (await screen.findByLabelText('密码')) as HTMLInputElement;
+    expect(password.type).toBe('password');
+
+    fireEvent.click(screen.getByRole('button', { name: '显示密码' }));
+    expect(password.type).toBe('text');
+    fireEvent.click(screen.getByRole('button', { name: '隐藏密码' }));
+    expect(password.type).toBe('password');
+  });
+
+it('密码不对时留在页面并显示后端原文', async () => {
     stubLogin(401);
     renderLogin();
 

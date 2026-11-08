@@ -1,6 +1,6 @@
 import { LazyMotion, domAnimation } from 'motion/react';
 import { useCallback, useState } from 'react';
-import { BrowserRouter, Route, Routes, useNavigate } from 'react-router';
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { AuthGate } from './auth/AuthGate';
 import { AuthProvider } from './auth/AuthContext';
 import { HistoryDrawer } from './components/HistoryDrawer';
@@ -15,28 +15,10 @@ import { RegisterPage } from './pages/RegisterPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StatsPage } from './pages/StatsPage';
 
-/** 四页路由；resetToken 传给聊天页做「新会话」。 */
-export function AppRoutes({
-  resetToken = 0,
-  activeConversationId = null,
-  onConversationChange,
-}: {
-  resetToken?: number;
-  activeConversationId?: string | null;
-  onConversationChange?: (id: string | null) => void;
-}) {
+/** 非会话三页路由；会话页常驻在 AppShell 里，不随 tab 切换卸载。 */
+export function AppRoutes() {
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          <ChatPage
-            resetToken={resetToken}
-            activeConversationId={activeConversationId}
-            onConversationChange={onConversationChange}
-          />
-        }
-      />
       <Route path="/stats" element={<StatsPage />} />
       <Route path="/data" element={<DataPage />} />
       <Route path="/profile" element={<ProfilePage />} />
@@ -54,6 +36,8 @@ export function AppShell() {
     return null;
   });
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const chatActive = pathname === '/';
 
   const onConversationChange = useCallback((id: string | null) => {
     setActiveConversationId(id);
@@ -90,11 +74,16 @@ export function AppShell() {
           onNewConversation={newConversation}
         />
         <PageSwipe>
-          <AppRoutes
-            resetToken={resetToken}
-            activeConversationId={activeConversationId}
-            onConversationChange={onConversationChange}
-          />
+          {/* 会话页常驻：切 tab 不卸载，未回复的消息与「思考中」不会丢 */}
+          <div className="page-slot" hidden={!chatActive}>
+            <ChatPage
+              resetToken={resetToken}
+              activeConversationId={activeConversationId}
+              onConversationChange={onConversationChange}
+              active={chatActive}
+            />
+          </div>
+          <AppRoutes />
         </PageSwipe>
         <HistoryDrawer
           open={drawerOpen}

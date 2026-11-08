@@ -386,8 +386,10 @@ export async function appendToSession(input: {
 }
 
 /**
- * 手动编辑：按现有顺序覆盖动作名 / 重量 / 次数。
- * 不增删动作与组 —— 补全仍走 appendToSession，这里只改展示与数值。
+ * 手动编辑：按提交的数组整份重建。
+ * 动作按 raw_name 对齐已有行（对得上的复用，对不上的新建，没提交的删除）；
+ * 动作改名 = 用户认领，该动作的组不再算推测。
+ * 不新增动作入口 —— 新增仍走对话录入（ADR-065）。
  */
 export async function updateSession(input: {
   user_id: string;
@@ -410,46 +412,98 @@ export async function updateSession(input: {
       .where(eq(exerciseEntry.sessionId, session.id))
       .orderBy(asc(exerciseEntry.order));
 
-    for (const [i, patchExercise] of input.patch.exercises.entries()) {
-      const entry = entries[i];
-      if (!entry) break;
+    const entriesBySet = new Map<string, typeof setEntry.$inferSelect[]>();
+    if (entries.length > 0) {
+      const rows = await tx
+        .select()
+        .from(setEntry)
+        .where(
+          inArray(
+            setEntry.exerciseEntryId,
+            entries.map((e) => e.id),
+          ),
+        )
+        .orderBy(asc(setEntry.order));
+      for (const row of rows) {
+        const bucket = entriesBySet.get(row.exerciseEntryId) ?? [];
+        bucket.push(row);
+        entriesBySet.set(row.exerciseEntryId, bucket);
+      }
+    }
 
+    const bodyweightKg = await bodyweightOn(input.user_id, session.date);
+    const usedIds = new Set<string>();
+
+    for (const [i, patchExercise] of input.patch.exercises.entries()) {
       const norm = normalizeExerciseName(patchExercise.raw_name);
       const isBodyweight = isBodyweightExercise(norm.exercise_id);
+
+      // 同名且没用过的行 = 同一个动作；改名后的不再匹配，按新行动重建
+      const match = entries.find((e) => e.rawName === patchExercise.raw_name && !usedIds.has(e.id));
+
+      if (!match) {
+        const [created] = await tx
+          .insert(exerciseEntry)
+          .values({
+            sessionId: session.id,
+            order: i,
+            rawName: patchExercise.raw_name,
+            exerciseId: norm.exercise_id,
+            nameConfidence: norm.level === 1 ? 'high' : 'low',
+            regionFallback: norm.region_fallback,
+            isBodyweight,
+          })
+          .returning({ id: exerciseEntry.id });
+        if (!created) throw new Error('exercise_entry 插入没有返回 id');
+
+        await tx.insert(setEntry).values(
+          patchExercise.sets.map((s, j) => ({
+            exerciseEntryId: created.id,
+            order: j,
+            weightKg: s.weight_kg,
+            reps: s.reps,
+            setType: 'working' as const,
+            isInferred: false,
+            bodyweightKg: isBodyweight ? bodyweightKg : null,
+            tags: s.tags ?? [],
+            drops: s.drops ?? null,
+          })),
+        );
+        continue;
+      }
+
+      usedIds.add(match.id);
       await tx
         .update(exerciseEntry)
         .set({
+          order: i,
           rawName: patchExercise.raw_name,
           exerciseId: norm.exercise_id,
           nameConfidence: norm.level === 1 ? 'high' : 'low',
           regionFallback: norm.region_fallback,
           isBodyweight,
         })
-        .where(eq(exerciseEntry.id, entry.id));
+        .where(eq(exerciseEntry.id, match.id));
 
-      // 自重与否变了，组的自重部分跟着改 —— 已有组不重算，只换基准
-      if (isBodyweight !== entry.isBodyweight) {
-        const bodyweightKg = isBodyweight
-          ? await bodyweightOn(input.user_id, session.date)
-          : null;
+      if (isBodyweight !== match.isBodyweight) {
         await tx
           .update(setEntry)
-          .set({ bodyweightKg })
-          .where(eq(setEntry.exerciseEntryId, entry.id));
+          .set({ bodyweightKg: isBodyweight ? bodyweightKg : null })
+          .where(eq(setEntry.exerciseEntryId, match.id));
       }
 
-      const sets = await tx
-        .select()
-        .from(setEntry)
-        .where(eq(setEntry.exerciseEntryId, entry.id))
-        .orderBy(asc(setEntry.order));
-      for (const [j, patchSet] of patchExercise.sets.entries()) {
-        const set = sets[j];
-        if (!set) break;
+      const existingSets = entriesBySet.get(match.id) ?? [];
+      const kept = Math.min(existingSets.length, patchExercise.sets.length);
+
+      for (let j = 0; j < kept; j += 1) {
+        const set = existingSets[j]!;
+        const patchSet = patchExercise.sets[j]!;
+        const setType = patchSet.set_type ?? (set.setType === 'warmup' ? 'warmup' : 'working');
         // 手动改过的组不再算推测 —— 没动的组保留原标记
         const changed =
           patchSet.weight_kg !== set.weightKg ||
           patchSet.reps !== set.reps ||
+          setType !== set.setType ||
           (patchSet.tags !== undefined &&
             JSON.stringify(patchSet.tags) !== JSON.stringify(set.tags)) ||
           (patchSet.drops !== undefined &&
@@ -457,14 +511,46 @@ export async function updateSession(input: {
         await tx
           .update(setEntry)
           .set({
+            order: j,
             weightKg: patchSet.weight_kg,
             reps: patchSet.reps,
+            setType,
             ...(patchSet.tags !== undefined ? { tags: patchSet.tags } : {}),
             ...(patchSet.drops !== undefined ? { drops: patchSet.drops } : {}),
             ...(changed ? { isInferred: false } : {}),
           })
           .where(eq(setEntry.id, set.id));
       }
+
+      // 多出来的组删掉；用户新复制的组追加在末尾
+      if (existingSets.length > kept) {
+        await tx.delete(setEntry).where(
+          inArray(
+            setEntry.id,
+            existingSets.slice(kept).map((s) => s.id),
+          ),
+        );
+      }
+      if (patchExercise.sets.length > kept) {
+        await tx.insert(setEntry).values(
+          patchExercise.sets.slice(kept).map((s, k) => ({
+            exerciseEntryId: match.id,
+            order: kept + k,
+            weightKg: s.weight_kg,
+            reps: s.reps,
+            setType: s.set_type ?? 'working',
+            isInferred: false,
+            bodyweightKg: isBodyweight ? bodyweightKg : null,
+            tags: s.tags ?? [],
+            drops: s.drops ?? null,
+          })),
+        );
+      }
+    }
+
+    const removed = entries.filter((e) => !usedIds.has(e.id)).map((e) => e.id);
+    if (removed.length > 0) {
+      await tx.delete(exerciseEntry).where(inArray(exerciseEntry.id, removed));
     }
 
     const allEntries = await tx

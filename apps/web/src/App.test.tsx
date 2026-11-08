@@ -231,6 +231,54 @@ describe('顶部导航', () => {
   });
 });
 
+describe('会话页保活', () => {
+  it('等回复时切走再切回，已发消息与思考中不丢', async () => {
+    const fetchMock = stubApi();
+    const base = fetchMock.getMockImplementation()!;
+    type FakeResponse = Awaited<ReturnType<typeof json>>;
+    let resolveTurn!: (value: FakeResponse) => void;
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/turns') {
+        return new Promise<FakeResponse>((resolve) => {
+          resolveTurn = resolve;
+        });
+      }
+      return base(url);
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AppShell />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText('训练、饮食或提问'), {
+      target: { value: '今天休息' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    expect(screen.getByText('今天休息')).toBeDefined();
+    expect(screen.getByText('思考中...')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('link', { name: '统计' }));
+    expect(await screen.findByText('训练容量')).toBeDefined();
+    fireEvent.click(screen.getByRole('link', { name: '会话' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: '会话' }).getAttribute('aria-current')).toBe(
+        'page',
+      ),
+    );
+    expect(screen.getByText('今天休息')).toBeDefined();
+    expect(screen.getByText('思考中...')).toBeDefined();
+
+    resolveTurn({ ok: true, status: 200, json: async () => chatTurn });
+    expect(
+      await screen.findByText('收到，今天先好好休息。', undefined, { timeout: 3000 }),
+    ).toBeDefined();
+    expect(screen.queryByText('思考中...')).toBeNull();
+  });
+});
+
 describe('对话历史抽屉', () => {
   it('打开后按时间分组，行内是会话标题与最后一条消息', async () => {
     renderShell('/');
