@@ -42,6 +42,8 @@ Thumbs.db
 
 # 本机部署验证用的临时件
 tmp-test/
+# kb:sync 导出中间件（含知识库转写原文，绝不入库）
+tmp/
 
 # 浏览器核对工作件（playwright-cli 的快照 / 截图，只在本机）
 .playwright-cli/
