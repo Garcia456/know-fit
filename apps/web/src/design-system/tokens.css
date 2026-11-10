@@ -1,0 +1,43 @@
+/* 本文件由 build.mjs 从 tokens.json 生成 —— 不要手改这里，改 tokens.json 再跑：
+ *   node apps/web/src/design-system/build.mjs
+ *
+ * 来源：Figma https://www.figma.com/design/5CWT6TIPdCxZ2re7bkJ2dm
+ *       库 Simple Design System（light 模式）
+ * 注：字阶（typeStyles / typeSteps）与阴影（effect）目前只作为规范记录在 tokens.json 里，
+ *     未变量化 —— 理由见 design-system/README.md「未变量化的部分」。
+ */
+
+:root {
+  --ink: #1E1E1E;  /* Text/Default/Default */
+  --ink-2: #4A4A4A;  /* local */
+  --muted: #757575;  /* Text/Default/Secondary */
+  --faint: #B3B3B3;  /* Text/Default/Tertiary */
+  --surface: #FFFFFF;  /* Background/Default/Default */
+  --surface-2: #F5F5F5;  /* Background/Default/Secondary */
+  --line: #E6E6E6;  /* local */
+  --line-2: #D9D9D9;  /* Border/Default/Default */
+  --brand: #2C2C2C;  /* Background/Brand/Default */
+  --chart-green: #14AE5C;  /* Background/Positive/Default */
+  --green-text: #0B7A45;  /* local */
+  --s-1: 4px;  /* Space/100 */
+  --s-2: 8px;  /* Space/200 */
+  --s-3: 12px;  /* Space/300 */
+  --s-4: 16px;  /* Space/400 */
+  --s-6: 24px;  /* Space/600 */
+  --s-8: 32px;  /* Space/800 */
+  --r-1: 4px;  /* Radius/100 */
+  --r-2: 8px;  /* Radius/200 */
+  --r-3: 12px;  /* local */
+  --r-4: 16px;  /* Radius/400 */
+  --r-full: 999px;  /* Radius/Full */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;  /* Simple Design System 使用 Inter */
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}

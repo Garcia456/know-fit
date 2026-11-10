@@ -7,10 +7,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // 设计系统仍以 docs/08-prototype/design-system 为唯一事实来源，不复制一份
-      '@design': fileURLToPath(
-        new URL('../../docs/08-prototype/design-system', import.meta.url),
-      ),
+      // 设计系统随前端源码走 —— 构建不该依赖 docs/（docs 不进公开仓库）。
+      // 原型里那一份保留原样，只作设计留档，不再被 import。
+      '@design': fileURLToPath(new URL('./src/design-system', import.meta.url)),
     },
   },
   server: {

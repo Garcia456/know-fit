@@ -1,0 +1,41 @@
+# 发布到公开仓库时排除的路径（每行一个，见 scripts/publish-public.sh）
+# 这些内容只在私有仓里维护；公开仓由脚本从私有仓的历史中剥掉它们后生成。
+# 语法：git filter-repo 的 --path / --path-glob，前缀匹配。
+
+# ── 产品文档与决策记录 ────────────────────────────────────────
+docs/
+CLAUDE.md
+AGENTS.md
+apps/api/AGENTS.md
+apps/web/AGENTS.md
+
+# ── 项目管理与过程日志 ────────────────────────────────────────
+feature_list.json
+progress.md
+progress-archive.md
+session-handoff.md
+session-handoff-archive.md
+# init.sh 现在被 .gitignore 忽略（本地环境检查，只服务私有仓），
+# 但历史里还留着旧版本 —— 一并剥掉，否则公开仓会带出一个过时的 init.sh。
+init.sh
+
+# ── 只服务文档的闸门 ──────────────────────────────────────────
+scripts/check-docs.mjs
+
+# ── 评测数据（含博主转写原文；评测脚本与 README 保留）────────
+# 一次 ab 评估会产出三种文件：ab-*.jsonl（两组回答）、ab-key-*.json（人工盲评的
+# 答案键）、results-*.jsonl（打分结果）。三种都是过程产物，若要复现，本地重跑即可。
+apps/api/evals/claim-type/dataset.jsonl
+apps/api/evals/claim-type/review-2026-10-24.md
+apps/api/evals/rag/ab-*.jsonl
+apps/api/evals/rag/ab-key-*.json
+apps/api/evals/rag/queries.jsonl
+apps/api/evals/rag/report-*.md
+apps/api/evals/rag/results-*.jsonl
+apps/api/evals/rag/states.jsonl
+apps/api/evals/rag-retrieval/tests.jsonl
+# states.template.jsonl 是模板（无真实数据），随公开仓一起保留。
+
+# ── 本地 AI 协作工作件 ────────────────────────────────────────
+.claude/
+.worktreeinclude

@@ -13,3 +13,16 @@ https://github.com/vulovix/body-muscles
 
 用途：热力图的人体解剖路径数据（`FRONT_MUSCLES` / `BACK_MUSCLES`）。
 本项目只取路径数据自行渲染，未使用其 `BodyChart` 组件与配色。
+
+思源黑体（Source Han Sans）
+--------------------------
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+Licensed under the SIL Open Font License, Version 1.1 —— 全文见
+`apps/web/public/fonts/OFL.txt`。
+
+用途：界面中文字体。本项目取子集化后以 `KnowFitSans-*.woff2` 随仓库分发。
+
+PingFang SC（苹方）
+-------------------
+Apple 专有字体。仓库内**不含**其字体文件（已列入 `.gitignore`）；
+本地若存在 `PingFangSC-*.woff2`，仅为开发机上的系统字体留档，不随仓库分发。
