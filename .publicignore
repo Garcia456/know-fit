@@ -26,6 +26,11 @@ scripts/check-docs.mjs
 # 公开仓是它的产物，不是它的使用者 —— 它会指向一个公开仓里不存在的私有源。
 scripts/publish-public.sh
 
+# ── 部署流水线 ────────────────────────────────────────────────
+# release.yml 把镜像推到 ghcr.io/<owner>/know-fit-api，和生产部署用的是同一串。
+# 公开仓每次 push main 都会覆盖生产镜像 —— 公开仓只要 CI，不要 release。
+.github/workflows/release.yml
+
 # ── 评测数据（含博主转写原文；评测脚本与 README 保留）────────
 # 一次 ab 评估会产出三种文件：ab-*.jsonl（两组回答）、ab-key-*.json（人工盲评的
 # 答案键）、results-*.jsonl（打分结果）。三种都是过程产物，若要复现，本地重跑即可。

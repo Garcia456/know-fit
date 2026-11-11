@@ -1,5 +1,7 @@
 # know-fit
 
+[![CI](https://github.com/Garcia456/know-fit/actions/workflows/ci.yml/badge.svg)](https://github.com/Garcia456/know-fit/actions/workflows/ci.yml)
+
 健身 / 运动人群的 AI Agent：用一句话录入训练与饮食，Agent 解析成结构化记录、算训练量与热量、
 给评估与建议；**建议锚定头部健身博主的视频，并附时间戳链接，点得回原片**。
 
@@ -7,6 +9,9 @@
 
 > **状态：** 功能完整、已部署。开发过程中带 AI 协作（提交里有 `Co-Authored-By`），
 > 项目文档与决策记录不在本仓库。
+>
+> 提交信息里会出现 `ADR-0xx`、`dev-0xx`、`feat-0xx` 这类编号 —— 那是内部文档的索引，
+> 对应文档不随仓库公开。
 
 ---
 
@@ -43,7 +48,7 @@ know-fit 做两件事：
 **前置：** Node ≥ 22.22、pnpm 12、Docker Desktop。
 
 ```bash
-git clone https://github.com/<you>/know-fit.git
+git clone https://github.com/Garcia456/know-fit.git
 cd know-fit
 pnpm install
 cp .env.example .env          # 默认 LLM_PROVIDER=fake，不填 key 也能跑通
@@ -114,6 +119,7 @@ docker compose -f compose.prod.yml --env-file deploy/.env.production up -d
 **不要**先 migrate 再 `--data-only` 导入 —— 知识表会静默变成 0 行。
 
 `.github/workflows/release.yml` 构建镜像并推到 GHCR（`sha-<12>` tag），不做自动 SSH 部署。
+本仓库只保留 CI，发布流水线不随仓库公开 —— 自己部署时按上面的 `docker compose` 命令来即可。
 
 ---
 
@@ -137,6 +143,7 @@ apps/web/src/design-system   设计令牌与组件样式（构建直接消费）
   提供下架通道；但各平台用户协议明文禁止爬虫，这一点没有干净的解法。
 - **评测集不公开**（含博主转写原文）。
 - 流式输出、多端同步、离线记录都还没做。
+- 这是求职作品集项目，**不接受 PR**；有问题欢迎开 issue。
 
 ---
 
