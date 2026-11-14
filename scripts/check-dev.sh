@@ -126,6 +126,13 @@ fi
 
 # ── 2/4 代码正确性闸门：typecheck + lint + test ───────────────────────
 bold "2/4  pnpm verify （typecheck && lint && test）"
+# CLAUDE.md 与 AGENTS.md 是同一份内容的两个副本（Windows 建不了符号链接）。
+# 改了一个忘了另一个，两边就会各说各话 —— 这里挡住。
+if cmp -s AGENTS.md CLAUDE.md; then
+  ok "AGENTS.md 与 CLAUDE.md 一致"
+else
+  bad "AGENTS.md 与 CLAUDE.md 已分叉 —— 改完记得 cp AGENTS.md CLAUDE.md"
+fi
 if pnpm verify; then
   ok "pnpm verify 通过"
 else

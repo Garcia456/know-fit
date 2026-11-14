@@ -58,3 +58,8 @@ apps/web/public/fonts/PingFangSC-*.woff2
 progress.md
 session-handoff.md
 init.sh
+# 项目管理文件不进公开仓（本仓库是私有仓剥完私有路径后的产物）。
+# feature_list.json 尤其危险 —— 它不匹配任何通配符，误加一次就推上去了。
+feature_list.json
+progress-archive.md
+session-handoff-archive.md
