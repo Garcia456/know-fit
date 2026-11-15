@@ -15,5 +15,12 @@ session-handoff.md
 session-handoff-archive.md
 .claude
 
+# 文档层与项目管理文件不进镜像。
+# .gitignore 管不到 docker build 的上下文，这里得单列一遍。
+feature_list.json
+docs
+CLAUDE.md
+AGENTS.md
+
 # 苹果专有字体只在本机开发用，不进镜像
 apps/web/public/fonts/PingFangSC-*.woff2
