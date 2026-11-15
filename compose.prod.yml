@@ -149,6 +149,11 @@ services:
     ports:
       - "${PUBLIC_HTTP_PORT:-80}:80"
       - "${PUBLIC_HTTPS_PORT:-443}:443"
+    # Caddyfile 用 {$APP_SITE_ADDR} 决定监听哪个站点。
+    # --env-file 只做 compose 自身的变量插值，不会自动注入容器环境 ——
+    # 不显式写在这里，Caddy 会退回默认值 http://:80，HTTPS 永远不开。
+    environment:
+      APP_SITE_ADDR: ${APP_SITE_ADDR:-http://:80}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - knowfit-prod-caddy-data:/data
