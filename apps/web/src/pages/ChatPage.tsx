@@ -310,7 +310,7 @@ export function ChatPage({
 
   return (
     <>
-      <div className="body page-body" ref={bodyRef}>
+      <div className="body page-body chat-page" ref={bodyRef}>
         {nudge && !nudgeDone ? (
           <div className="strip" role="status">
             <p>{nudge.message}</p>
@@ -331,27 +331,37 @@ export function ChatPage({
         ) : null}
 
         {entries.length === 0 && !completeId ? (
-          <>
-            <div className="spacer" />
-            <p className="agent-text">
-              今天练了什么？直接说就行 —— 比如「<strong>卧推 70kg×8 四组</strong>」。
-              <br />
-              动作怎么练、要不要加重量，也能直接问我。
-            </p>
-            <div className="chips">
-              {QUICK_ASKS.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  className="chip"
-                  onClick={() => void send(label)}
-                  disabled={sending}
-                >
-                  {label}
-                </button>
-              ))}
+          <div className="chat-empty">
+            <div className="chat-hero">
+              <span className="chat-hero__badge">KNOW-FIT · 训练助手</span>
+              <h1 className="chat-hero__title">
+                练明白，
+                <br />
+                再练狠一点。
+              </h1>
+              <p className="agent-text">
+                今天练了什么？直接说就行 —— 比如「<strong>卧推 70kg×8 四组</strong>」。
+                <br />
+                动作怎么练、要不要加重量，也能直接问我。
+              </p>
             </div>
-          </>
+            <div className="chat-quick">
+              <p className="chat-quick__label">从这些开始</p>
+              <div className="chips">
+                {QUICK_ASKS.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className="chip"
+                    onClick={() => void send(label)}
+                    disabled={sending}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {entries.map((entry) => {

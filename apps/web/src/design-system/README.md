@@ -4,6 +4,12 @@
 > **一件事说清楚**：这不是"Figma 文件的导出物"，而是**从 Figma 读出来的值 + 在这里被代码化**的结果。
 > 两者的区别见文末「和 Figma 的关系」。
 
+> **2026-11 UI refresh**：在保留原 Figma 令牌语义的前提下，新增了一组 `origin=local` 的
+> 画布 / 高光 / 玻璃层令牌（`canvas` `canvas-2` `accent` `accent-soft` `accent-ink`
+> `accent-strong` `ink-3` `glass` `glass-line`）与 20 / 28 两档圆角。整体仍是黑白简约：
+> `--accent` 是近黑填充（不是彩色），`--accent-soft` 是暖灰底；层次靠明暗、留白与阴影，
+> 不靠高饱和色。完整值见 `tokens.json` 的 `color` / `radius` 分组。
+
 ---
 
 ## 一、为什么要有这一层
@@ -55,9 +61,17 @@
 | `--surface-2` | `#F5F5F5` | `Background/Default/Secondary` | Figma | 用户气泡、来源卡、判定块、输入胶囊 |
 | `--line` | `#E6E6E6` | — | local | 卡片内分隔线（比外框更浅，密集列表里减噪） |
 | `--line-2` | `#D9D9D9` | `Border/Default/Default` | Figma | 卡片外框、未选中胶囊描边 |
-| `--brand` | `#2C2C2C` | `Background/Brand/Default` | Figma | 主按钮、选中胶囊、图表当前值 |
+| `--brand` | `#11140D` | `Background/Brand/Default` | Figma（值已收紧） | 主按钮、选中胶囊、图表当前值 |
 | `--chart-green` | `#14AE5C` | `Background/Positive/Default` | Figma | **仅图形**（上升柱、达标标记） |
-| `--green-text` | `#0B7A45` | — | local | 正文里的"上升 / 达标"文字（`#14AE5C` 当文字只有 2.5:1） |
+| `--green-text` | `#0B7A45` | — | local | 正文里的"上升 / 达标"文字（黑白改版后 `.delta` 走 `--ink`，此值暂作预留） |
+| `--canvas` | `#F4F4F0` | — | local | 应用画布 / 登录页底（暖白） |
+| `--canvas-2` | `#E9E9E3` | — | local | 画布上的次级块、日历未选中格 |
+| `--ink-3` | `#5F615B` | — | local | 画布上的次级文字 |
+| `--accent` | `#14170F` | — | local | 近黑高光填充；配 `--accent-ink` 使用 |
+| `--accent-strong` | `#2B2F26` | — | local | 高光渐变深端 / 悬停 / 焦点描边 |
+| `--accent-soft` | `#ECEDE6` | — | local | 浅暖灰提示底、判定块 |
+| `--accent-ink` | `#FFFFFF` | — | local | 近黑底上的文字与图标 |
+| `--glass` / `--glass-line` | `rgba(255,255,255,.74)` / `rgba(17,20,13,.08)` | — | local | 浮层导航、输入栏、细边 |
 
 ### 间距 / 圆角 / 字体
 
@@ -66,6 +80,8 @@
 | `--s-1 … --s-8` | 4 / 8 / 12 / 16 / 24 / 32 | `Space/100 … /800` | Figma |
 | `--r-1` `--r-2` `--r-4` `--r-full` | 4 / 8 / 16 / 999 | `Radius/100` `/200` `/400` `/Full` | Figma |
 | `--r-3` | 12 | — | local（库里 4/8/16 之间是空的，卡片内层需要中间档） |
+| `--r-5` | 20 | — | local（2026 refresh：卡片 / 列表容器） |
+| `--r-6` | 28 | — | local（2026 refresh：浮层导航 / 登录卡 / 档案卡） |
 | `--font` | Inter 栈 | 库使用 Inter | Figma |
 
 ---

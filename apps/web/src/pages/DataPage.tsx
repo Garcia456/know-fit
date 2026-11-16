@@ -34,7 +34,7 @@ import { LoadError } from '../components/LoadError';
 import { Tip } from '../components/Tip';
 import { VolumeHookView } from '../components/VolumeHookView';
 import { addMonths, monthGrid, parseDateKey, startOfMonth, toDateKey } from '../lib/calendar';
-import { formatKg, formatMd, formatMonthDay } from '../lib/format';
+import { formatKg, formatMonthDay, formatNumber } from '../lib/format';
 
 const MISSING_LABELS: Record<string, string> = {
   exercises: '动作',
@@ -43,6 +43,13 @@ const MISSING_LABELS: Record<string, string> = {
 };
 
 const STATUS_LABELS = { complete: '已记完', incomplete: '待补全' } as const;
+
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'] as const;
+
+function weekdayLabel(key: string): string {
+  const d = parseDateKey(key);
+  return d ? `周${WEEKDAYS[d.getDay()]}` : '';
+}
 
 type Order = 'desc' | 'asc';
 
@@ -153,6 +160,17 @@ export function DataPage() {
     return map;
   }, [history]);
 
+  const monthDays = useMemo(() => {
+    let days = 0;
+    for (const key of byDate.keys()) {
+      const d = parseDateKey(key);
+      if (d && d.getFullYear() === month.getFullYear() && d.getMonth() === month.getMonth()) {
+        days += 1;
+      }
+    }
+    return days;
+  }, [byDate, month]);
+
   const visible = useMemo(() => {
     const rows = selected ? (byDate.get(selected) ?? []) : (history ?? []);
     return [...rows].sort((a, b) =>
@@ -190,7 +208,14 @@ export function DataPage() {
 
   if (history !== null && history.length === 0 && !error) {
     return (
-      <div className="body page-body">
+      <div className="body page-body data-page">
+        <header className="page-head">
+          <div>
+            <p className="page-head__eyebrow">训练记录</p>
+            <h1>历史</h1>
+            <p className="page-head__sub">按日期回看每次训练；先在会话里记一次，这里就有内容了。</p>
+          </div>
+        </header>
         <div className="empty">
           <span className="glyph" aria-hidden="true">
             <ChartIcon />
@@ -210,16 +235,25 @@ export function DataPage() {
   }
 
   return (
-    <div className="body page-body">
+    <div className="body page-body data-page">
+      <header className="page-head">
+        <div>
+          <p className="page-head__eyebrow">训练记录</p>
+          <h1>历史</h1>
+          <p className="page-head__sub">日历选日期，回看每次的动作、组数和容量。</p>
+        </div>
+      </header>
+
       {error ? (
         <LoadError message={`训练记录没读出来 · ${error}`} onRetry={retry} />
       ) : history === null ? (
         <p className="page-hint">正在加载…</p>
       ) : null}
 
-      <section className="sec" aria-label="日历">
+      <section className="sec data-calendar" aria-label="日历">
         <div className="sec-hd">
           <h2>{monthTitle}</h2>
+          <span className="hint">左右滑动换月</span>
         </div>
 
         <div
@@ -283,29 +317,42 @@ export function DataPage() {
             </div>
           </div>
         </div>
+        <div className="calendar__foot">
+          <span>
+            <i aria-hidden="true" />
+            有训练
+          </span>
+          <span>{monthDays > 0 ? `本月 ${monthDays} 天` : '本月还没训练'}</span>
+        </div>
       </section>
 
-      <section className="sec" aria-label={selected ? '当天训练' : '全部训练记录'}>
+      <section
+        className="sec data-records"
+        aria-label={selected ? '当天训练' : '全部训练记录'}
+      >
         <div className="sec-hd">
           <h2>{selected ? formatMonthDay(selected) : '全部训练记录'}</h2>
-          <button
-            type="button"
-            className="sort-toggle"
-            aria-label={`切换排序，当前${order === 'desc' ? '倒序' : '正序'}`}
-            onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
-          >
-            {order === 'desc' ? (
-              <>
-                倒序
-                <ArrowDownIcon />
-              </>
-            ) : (
-              <>
-                正序
-                <ArrowUpIcon />
-              </>
-            )}
-          </button>
+          <div className="sec-hd__actions">
+            <span className="hint">{visible.length} 次</span>
+            <button
+              type="button"
+              className="sort-toggle"
+              aria-label={`切换排序，当前${order === 'desc' ? '倒序' : '正序'}`}
+              onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
+            >
+              {order === 'desc' ? (
+                <>
+                  倒序
+                  <ArrowDownIcon />
+                </>
+              ) : (
+                <>
+                  正序
+                  <ArrowUpIcon />
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {visible.length === 0 ? (
@@ -335,6 +382,11 @@ export function DataPage() {
                   if (d) setMonth(startOfMonth(d));
                 }}
               >
+                <div className="row-date" aria-hidden="true">
+                  <span className="row-date__mon">{Number(item.date.slice(5, 7))} 月</span>
+                  <b>{Number(item.date.slice(8))}</b>
+                  <span>{weekdayLabel(item.date)}</span>
+                </div>
                 <div className="grow">
                   <p className="t1">
                     {item.split_label ?? '训练'} · {item.exercise_count} 个动作 /{' '}
@@ -348,11 +400,15 @@ export function DataPage() {
                 </div>
                 <div className="meta">
                   <div className="m1">{formatKg(item.volume_kg)}</div>
-                  <div className="m2">
+                  <span
+                    className={
+                      item.status === 'incomplete' ? 'row-status is-incomplete' : 'row-status'
+                    }
+                  >
                     {item.status === 'incomplete'
                       ? `待补 ${item.missing_fields.length} 项`
-                      : formatMd(item.date)}
-                  </div>
+                      : STATUS_LABELS[item.status]}
+                  </span>
                 </div>
               </button>
             ))}
@@ -924,6 +980,18 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
         ) : null}
       </div>
 
+      <div className="workout-sum">
+        <span>
+          <b>{detail?.exercises.length ?? item.exercise_count}</b> 个动作
+        </span>
+        <span>
+          <b>{detail?.volume.working_sets ?? item.working_sets}</b> 个正式组
+        </span>
+        <span>
+          <b>{formatNumber(detail?.volume.total_volume_kg ?? item.volume_kg)}</b> kg
+        </span>
+      </div>
+
       {confirming ? (
         <div className="danger-box" role="alertdialog" aria-label="确认删除这次训练">
           <p>删掉这次训练？训练记录和评估会一起删除，不能恢复。</p>
@@ -1145,7 +1213,7 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
           ) : (
             <ul className="exercise-list">
               {detail.exercises.map((ex, exIndex) => (
-                <li key={`${ex.raw_name}-${exIndex}`} className="exercise">
+                <li key={`${ex.raw_name}-${exIndex}`} className="exercise exercise--view">
                   <div className="exercise__name">
                     {ex.raw_name}
                     {ex.sets.some((set) => set.is_inferred) ? <InferredDot /> : null}

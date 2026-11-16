@@ -31,18 +31,18 @@ export function WeightChart({ points }: { points: WeightPoint[] }) {
           .map((p) => `${formatMd(p.date)} ${formatNumber(p.weight_kg)} 千克`)
           .join('，')}`}
       >
-        <line x1="0" y1="20" x2={width} y2="20" stroke="#E6E6E6" strokeWidth="1" />
-        <line x1="0" y1="46" x2={width} y2="46" stroke="#E6E6E6" strokeWidth="1" />
-        <line x1="0" y1="72" x2={width} y2="72" stroke="#E6E6E6" strokeWidth="1" />
+        <line x1="0" y1="20" x2={width} y2="20" stroke="#E8E8E2" strokeWidth="1" />
+        <line x1="0" y1="46" x2={width} y2="46" stroke="#E8E8E2" strokeWidth="1" />
+        <line x1="0" y1="72" x2={width} y2="72" stroke="#E8E8E2" strokeWidth="1" />
         <polyline
           points={coords.map((c) => `${c.x},${c.y}`).join(' ')}
           fill="none"
-          stroke="#2C2C2C"
+          stroke="#11140D"
           strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"
         />
-        <circle cx={last.x} cy={last.y} r="4" fill="#1E1E1E" />
+        <circle cx={last.x} cy={last.y} r="4.5" fill="#FFFFFF" stroke="#11140D" strokeWidth="2" />
       </svg>
       <div className="axis">
         <span>{formatMd(first.date)}</span>

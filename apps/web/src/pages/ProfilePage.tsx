@@ -144,7 +144,7 @@ export function ProfilePage() {
 
   if (!values) {
     return (
-      <div className="body page-body">
+      <div className="body page-body profile-page">
         <p className="page-hint">正在加载…</p>
       </div>
     );
@@ -158,7 +158,7 @@ export function ProfilePage() {
   const trainingMonths = totalTrainingMonths(values.years, values.months);
 
   return (
-    <div className="body page-body">
+    <div className="body page-body profile-page">
       <div className="profile profile--account">
         <span className="avatar" aria-hidden="true">
           {user?.avatar ? (
@@ -196,7 +196,7 @@ export function ProfilePage() {
         />
       ) : null}
 
-      <div>
+      <div className="profile-sections">
         <section className="sec" aria-label="身体数据">
           <p className="group-label icon-label">
             <IdCardIcon />
@@ -258,7 +258,7 @@ export function ProfilePage() {
           <p className="card-meta">体重保存时记入当天；同一天再改会覆盖当天数字。</p>
         </section>
 
-        <section className="sec" aria-label="训练" style={{ marginTop: 16 }}>
+        <section className="sec" aria-label="训练">
           <p className="group-label icon-label">
             <FlameIcon />
             训练
@@ -307,7 +307,7 @@ export function ProfilePage() {
         </section>
 
         
-        <section className="sec" aria-label="隐私与数据" style={{ marginTop: 16 }}>
+        <section className="sec" aria-label="隐私与数据">
           <p className="group-label icon-label">
             <FileTextIcon />
             隐私与数据
