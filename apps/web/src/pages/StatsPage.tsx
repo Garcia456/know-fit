@@ -82,20 +82,43 @@ export function StatsPage() {
   }, [range.from, range.to, rangeProblem, reloadTick]);
 
   return (
-    <div className="body page-body">
-      <section className="sec" aria-label="统计范围">
-        <div className="chips">
-          {RANGES.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              className={`chip${rangeKey === key ? ' is-on' : ''}`}
-              aria-pressed={rangeKey === key}
-              onClick={() => setRangeKey(key)}
-            >
-              {label}
-            </button>
-          ))}
+    <div className="body page-body stats-page">
+      <header className="page-head">
+        <div>
+          <p className="page-head__eyebrow">训练数据</p>
+          <h1>统计</h1>
+          <p className="page-head__sub">容量、体重和肌群分布，按你选的区间汇总。</p>
+        </div>
+      </header>
+
+      <section className="sec stats-range" aria-label="统计范围">
+        <div className="range-bar">
+          <div className="segmented" role="group" aria-label="统计范围">
+            {RANGES.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={`chip${rangeKey === key ? ' is-on' : ''}`}
+                aria-pressed={rangeKey === key}
+                onClick={() => setRangeKey(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="range-summary">
+            <b>
+              {formatMonthDay(range.from)}
+              {range.from === range.to ? '' : ` – ${formatMonthDay(range.to)}`}
+            </b>
+            <span>
+              {rangeProblem
+                ? '范围需要调整'
+                : stats
+                  ? `${stats.training_days} 天有训练 · ${formatNumber(stats.total_volume_kg)} kg`
+                  : '正在读取区间…'}
+            </span>
+          </p>
         </div>
 
         {rangeKey === 'custom' ? (
@@ -103,12 +126,7 @@ export function StatsPage() {
             <DateField label="开始" value={customFrom} max={todayKey} onChange={setCustomFrom} />
             <DateField label="结束" value={customTo} max={todayKey} onChange={setCustomTo} />
           </div>
-        ) : (
-          <p className="page-hint">
-            范围：{formatMonthDay(range.from)}
-            {range.from === range.to ? '' : ` – ${formatMonthDay(range.to)}`}
-          </p>
-        )}
+        ) : null}
 
         {rangeProblem ? (
           <p className="error-text" role="alert">
@@ -138,7 +156,7 @@ export function StatsPage() {
           <VolumeSection stats={stats} />
           <WeightSection stats={stats} />
           {stats.total_volume_kg > 0 ? (
-            <section className="sec" aria-label="肌肉热力图">
+            <section className="sec stats-heat" aria-label="肌肉热力图">
               <div className="sec-hd">
                 <h2>肌肉热力图</h2>
                 <span className="hint">整个范围聚合 · 5 档</span>

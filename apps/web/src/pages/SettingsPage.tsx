@@ -201,7 +201,7 @@ function SettingsForm({ user }: { user: Account }) {
         <span className="settings-hd__spacer" aria-hidden="true" />
       </header>
 
-      <div className="body page-body">
+      <div className="body page-body settings-body">
         <form onSubmit={handleSave} noValidate>
           <section className="sec" aria-label="账号资料">
             <p className="group-label">账号资料</p>
