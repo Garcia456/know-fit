@@ -15,12 +15,23 @@ describe('calendar', () => {
     expect(monthRange(new Date(2026, 1, 1)).to).toBe('2026-02-28');
   });
 
-  it('周一开头，长度是 7 的倍数', () => {
+  it('周一开头，默认补满 6 周', () => {
     const grid = monthGrid(new Date(2026, 9, 1));
-    expect(grid.length % 7).toBe(0);
+    expect(grid).toHaveLength(42);
     // 2026-10-01 是周四 → 前面空 3 格（一 二 三）
     expect(grid.slice(0, 4)).toEqual([null, null, null, '2026-10-01']);
     expect(grid.filter(Boolean)).toHaveLength(31);
+  });
+
+  it('每月行数不同，补满后高度一致', () => {
+    // 2027-02：28 天、周一开头 → 不补满只有 4 行
+    expect(monthGrid(new Date(2027, 1, 1), false)).toHaveLength(28);
+    expect(monthGrid(new Date(2027, 1, 1))).toHaveLength(42);
+    // 2026-02：28 天、周日开头 → 不补满 5 行
+    expect(monthGrid(new Date(2026, 1, 1), false)).toHaveLength(35);
+    for (let m = 0; m < 12; m++) {
+      expect(monthGrid(new Date(2026, m, 1))).toHaveLength(42);
+    }
   });
 
   it('翻月只动月份', () => {

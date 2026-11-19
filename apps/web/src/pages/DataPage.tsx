@@ -132,21 +132,25 @@ export function DataPage() {
     setMonth(startOfMonth(d));
   }, [paramDate]);
 
-  // 滑到相邻月：换月份后回到中间那页
+  // 换月：等惯性停了（settle）再换内容。
+  // select 在松手算出目标页时就发，此时惯性动画还在跑；这时换 key 重挂三页，
+  // 动画会被打断重来，看起来就是「快滑到下一月时卡一下」。
   useEffect(() => {
     if (!emblaApi) return;
-    const onSelect = () => {
+    const onSettle = () => {
       const at = emblaApi.selectedScrollSnap();
       if (at === 1) return;
       setMonth((m) => addMonths(m, at - 1));
     };
-    emblaApi.on('select', onSelect);
+    emblaApi.on('settle', onSettle);
     return () => {
-      emblaApi.off('select', onSelect);
+      emblaApi.off('settle', onSettle);
     };
   }, [emblaApi]);
 
-  useEffect(() => {
+  // 换月后在提交帧内跳回中间那页：新月份正好补在用户正看着的那一页上，视觉上不位移。
+  // 必须是 layout effect —— 等 paint 完再跳，会先闪一帧相邻月份。
+  useLayoutEffect(() => {
     emblaApi?.scrollTo(1, true);
   }, [emblaApi, month]);
 
@@ -269,8 +273,10 @@ export function DataPage() {
         >
           <div className="calendar__viewport" ref={emblaRef}>
             <div className="calendar__track">
-              {slides.map((slideMonth) => (
-                <div className="calendar__slide" key={`${slideMonth.getFullYear()}-${slideMonth.getMonth()}`}>
+              {slides.map((slideMonth, i) => (
+                // 按位置做 key：换月时只换格子内容，不让三页整块重挂 ——
+                // 重挂会让 embla 的 MutationObserver 触发 reInit，动画也跟着抖一下。
+                <div className="calendar__slide" key={i}>
                   <div className="calendar__weekdays" aria-hidden="true">
                     {['一', '二', '三', '四', '五', '六', '日'].map((w) => (
                       <span key={w}>{w}</span>

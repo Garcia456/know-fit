@@ -39,8 +39,14 @@ export function monthRange(d: Date): { from: string; to: string } {
   return { from: toDateKey(first), to: toDateKey(last) };
 }
 
-/** 周一开头的格子；非本月的位置是 null（不显示上下月，避免误点） */
-export function monthGrid(d: Date): (string | null)[] {
+/**
+ * 周一开头的格子；非本月的位置是 null（不显示上下月，避免误点）。
+ *
+ * 默认补满 6 周（42 格）：一个月的行数在 4–6 之间浮动，不补满的话每页高度不同，
+ * 翻月时日历盒子会忽高忽低。主流日历库都这么做 —— react-day-picker 的 `fixedWeeks`、
+ * MUI X 的 `fixedWeekNumber={6}`。
+ */
+export function monthGrid(d: Date, fixedWeeks = true): (string | null)[] {
   const first = startOfMonth(d);
   const leading = (first.getDay() + 6) % 7;
   const days = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
@@ -49,5 +55,8 @@ export function monthGrid(d: Date): (string | null)[] {
     cells.push(toDateKey(new Date(d.getFullYear(), d.getMonth(), day)));
   }
   while (cells.length % 7 !== 0) cells.push(null);
+  if (fixedWeeks) {
+    while (cells.length < 42) cells.push(null);
+  }
   return cells;
 }
