@@ -19,6 +19,7 @@ import {
   IdCard,
   Info,
   Link2,
+  ListChecks,
   LoaderCircle,
   Pencil,
   Pin,
@@ -38,8 +39,8 @@ function LineIcon({ icon: Icon, size = 18 }: { icon: LucideIcon; size?: number }
   return <Icon size={size} strokeWidth={1.8} aria-hidden="true" />;
 }
 
-export function CheckIcon() {
-  return <LineIcon icon={Check} />;
+export function CheckIcon({ size = 18 }: { size?: number }) {
+  return <LineIcon icon={Check} size={size} />;
 }
 
 export function WarnIcon() {
@@ -166,4 +167,9 @@ export function FileTextIcon({ size = 14 }: { size?: number }) {
 
 export function SettingsIcon({ size = 16 }: { size?: number }) {
   return <LineIcon icon={Settings} size={size} />;
+}
+
+/** 多选：会话列表批量操作 */
+export function ListChecksIcon({ size = 18 }: { size?: number }) {
+  return <LineIcon icon={ListChecks} size={size} />;
 }

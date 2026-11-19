@@ -506,8 +506,140 @@ select:active,
   color: #b3261e;
 }
 
+/* 分组标签行：多选开关直接放进标签里，贴在置顶那一行的右端 */
 .drawer-body .group-label {
-  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.drawer-body .group-label > span {
+  min-width: 0;
+}
+
+.conv-select-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.conv-select-toggle:hover,
+.conv-select-toggle:focus-visible {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  opacity: 1;
+}
+
+.conv-select-toggle:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+/* 已进入多选：灰图标变成描边圆形里的 X */
+.conv-select-toggle.is-on {
+  background: var(--surface-2);
+  color: var(--ink);
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.conv-select-toggle:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* 多选状态：左侧圆形 checkbox —— 外层占位从 0 平滑撑开，整行随之右移 */
+.conv-check-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: 16px;
+  overflow: hidden;
+}
+
+.conv-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--surface);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.conv-row.is-checked .conv-check {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+
+.conv-row.is-selecting {
+  gap: 2px;
+}
+
+.conv-row.is-checked .conv-main {
+  background: var(--surface-2);
+}
+
+.conv-row.is-selecting .conv-main {
+  cursor: pointer;
+}
+
+/* 多选时底栏左右各一个动作 */
+.drawer-ft--select {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.drawer-ft--select .btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  font-size: 14px;
+}
+
+.drawer-ft--select .btn--ghost {
+  border: 1px solid var(--line-2);
+  color: var(--ink);
+}
+
+.drawer-ft--select .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
+.drawer-ft__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* 居中弹窗：重命名 / 删除确认 */
