@@ -3,7 +3,7 @@
  * 端到端 —— 身份 / 知识问答 / 空抽取 / 会话记录。
  *
  * 走 5173 代理发真请求，再用裸 SQL 验落库：
- *   1. 「hi」→ chat 卡含「枝链」，不新增 workout_session
+ *   1. 「hi」→ chat 卡自称健身助手，不新增 workout_session
  *   2. 「练胸有什么推荐动作」→ knowledge 卡，不新增 workout_session
  *   3. 真训练 → workout 卡，workout_session +1
  *   4. 「今天练了背」→ 引导补一句动作，不落库
@@ -111,8 +111,8 @@ try {
   if (hiConversation) createdConversations.push(hiConversation);
 
   if (hi.intent === 'chat' && hi.card?.kind === 'chat') {
-    if (hi.card.reply.includes('枝链')) ok(`「hi」→ chat 卡，自称枝链：${hi.card.reply.slice(0, 24)}…`);
-    else bad(`「hi」的回复没提「枝链」：${hi.card.reply}`);
+    if (hi.card.reply.includes('健身')) ok(`「hi」→ chat 卡，自称健身助手：${hi.card.reply.slice(0, 24)}…`);
+    else bad(`「hi」的回复没提「健身」：${hi.card.reply}`);
   } else {
     bad(`「hi」应为 chat 卡，实为 intent=${hi.intent} card=${hi.card?.kind}`);
   }
