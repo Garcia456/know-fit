@@ -134,11 +134,22 @@ describe('知识起草', () => {
     expect(out.problem).toBe('empty_claim');
   });
 
-  it('两条指向同一视频 → duplicate_source', async () => {
+  it('两条指向同一视频 → 起草放行（同源交给装配层去重，ADR-068）', async () => {
     const { llm } = stubLlm([{ claims: [claim(0), claim(0)] }]);
     const out = await draftKnowledge(llm, '练胸练什么', [candidate('a')]);
 
-    expect(out.problem).toBe('duplicate_source');
+    expect(out.problem).toBeNull();
+    expect(out.draft?.claims.map((c) => c.source_index)).toEqual([0, 0]);
+  });
+
+  it('提示词要求写具体（60–120 字）且允许同一视频两条', async () => {
+    const { llm, systems } = stubLlm([{ claims: [claim(0)] }]);
+    await draftKnowledge(llm, '练胸练什么', [candidate('a')]);
+
+    expect(systems[0]).toContain('60–120 字');
+    expect(systems[0]).toContain('每条视频最终只会展示一次');
+    expect(systems[0]).not.toContain('不同 claim 必须来自不同视频');
+    expect(systems[0]).not.toContain('1–2 句');
   });
 
   it('同一视频多片先去重，模型编号能换回候选全集下标', async () => {

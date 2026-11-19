@@ -1,20 +1,24 @@
-import { randomUUID } from 'node:crypto';
+import type { AssessmentCandidate } from '../assessment/types.js';
 import type { Citation } from '../contracts/assessment.js';
 import type { KnowledgeCard, KnowledgeClaim } from '../contracts/turn.js';
-import type { AssessmentCandidate } from '../assessment/types.js';
 import { ragConfig } from '../assessment/types.js';
 import { verifyClaims } from '../assessment/verify.js';
 import type { RetrieveResult } from '../assessment/repo.js';
 import { bindSignal, type LlmClient } from '../llm/client.js';
 import { createLlmClient } from '../llm/index.js';
-import { retrieveKnowledge, withDeadline, ASSESSMENT_DEADLINE_MS } from '../services/assessment.js';
+import type { UsageRecorder } from '../llm/usage.js';
+import { createEmbeddingClient } from '../kb/embedding.js';
+import { createRerankClient } from '../kb/rerank.js';
+import { createAssessmentRepo, retrieveKnowledge, withDeadline, ASSESSMENT_DEADLINE_MS } from '../services/assessment.js';
 import { draftKnowledge } from './draft.js';
+import { assembleKnowledge } from './assemble.js';
 import { KNOWLEDGE_NO_SOURCE_SYSTEM, knowledgeNoSourceInput } from './prompts.js';
 
 /**
  * 知识问答 —— 检索、闸②、组装卡片。
  *
- * 有源：每条 claim 都过闸②，引用由服务端按窗口切出。
+ * 有源：每条 claim 都过闸②，引用由服务端按窗口切出；
+ * 不过闸② / 同源的 claim 只丢自己，一条不剩才整卡降级（ADR-068）。
  * 无源 / 失败：通用回答 + 显式标注，绝不暗示有来源。
  */
 
@@ -27,6 +31,20 @@ const SOURCE_HINT = /博主|up主|UP主|视频里说|视频里讲/;
 export interface KnowledgeInput {
   user_id: string;
   query: string;
+  /** 用量打点；不传就不打点（线上链路开销为零） */
+  usage?: UsageRecorder;
+}
+
+/**
+ * 与 `retrieveKnowledge` 同一条检索链路，只是把 usage 记录器接进两个客户端。
+ * 不传记录器时仍然走 `retrieveKnowledge` —— 线上不重复造一份。
+ */
+function retrieveWithUsage(input: KnowledgeInput): Promise<RetrieveResult> {
+  if (!input.usage) return retrieveKnowledge({ user_id: input.user_id, query: input.query });
+  return createAssessmentRepo({
+    embedder: createEmbeddingClient(undefined, { usage: input.usage }),
+    reranker: createRerankClient(undefined, { usage: input.usage }),
+  }).retrieve({ user_id: input.user_id, query: input.query });
 }
 
 function noSourceCard(answer: string, notice: string): KnowledgeCard {
@@ -54,44 +72,22 @@ async function generalAnswer(llm: LlmClient, query: string): Promise<string> {
 }
 
 function assemble(
-  claims: { claim: string; source_index: number }[],
+  claims: { claim: string; source_index: number | null }[],
   checks: { supported: boolean; quote: string; quote_start: number | null; quote_end: number | null }[],
   candidates: AssessmentCandidate[],
 ): { knowledgeClaims: KnowledgeClaim[]; citations: Citation[] } | null {
-  const max = Math.min(3, ragConfig().maxCitations);
-  const citations: Citation[] = [];
-  const knowledgeClaims: KnowledgeClaim[] = [];
-  const usedSources = new Set<string>();
-
-  for (const [i, claim] of claims.entries()) {
-    const check = checks[i];
-    const candidate = candidates[claim.source_index];
-    if (!check?.supported || !candidate || check.quote_start === null || check.quote_end === null) {
-      return null;
-    }
-    if (usedSources.has(candidate.source_id)) return null;
-    if (citations.length >= max) return null;
-    usedSources.add(candidate.source_id);
-
-    const citation_id = randomUUID();
-    citations.push({
-      citation_id,
-      creator: candidate.creator,
-      title: candidate.title,
-      url: candidate.url,
-      start_ts: candidate.start_ts,
-      short_quote: check.quote,
-    });
-    knowledgeClaims.push({ claim: claim.claim.trim(), citation_id });
-  }
-
-  return { knowledgeClaims, citations };
+  return assembleKnowledge({
+    claims,
+    checks,
+    candidates,
+    maxCitations: ragConfig().maxCitations,
+  });
 }
 
 export async function answerKnowledge(input: KnowledgeInput): Promise<KnowledgeCard> {
   try {
     return await withDeadline(ASSESSMENT_DEADLINE_MS, (signal) =>
-      run(input, bindSignal(createLlmClient(), signal)),
+      run(input, bindSignal(createLlmClient(undefined, { usage: input.usage }), signal)),
     );
   } catch {
     return noSourceCard(FALLBACK_ANSWER, KNOWLEDGE_RETRIEVAL_FAILURE_NOTICE);
@@ -101,7 +97,7 @@ export async function answerKnowledge(input: KnowledgeInput): Promise<KnowledgeC
 async function run(input: KnowledgeInput, llm: LlmClient): Promise<KnowledgeCard> {
   let retrieved: RetrieveResult;
   try {
-    retrieved = await retrieveKnowledge({ user_id: input.user_id, query: input.query });
+    retrieved = await retrieveWithUsage(input);
   } catch {
     return noSourceCard(await generalAnswer(llm, input.query), KNOWLEDGE_RETRIEVAL_FAILURE_NOTICE);
   }
@@ -119,9 +115,12 @@ async function run(input: KnowledgeInput, llm: LlmClient): Promise<KnowledgeCard
     return noSourceCard(await generalAnswer(llm, input.query), KNOWLEDGE_NO_SOURCE_NOTICE);
   }
 
-  // 起草时的 source_index 已换回候选全集下标
-  const gateClaims = draft.claims.map((claim, i) => {
-    const candidate = candidates[claim.source_index!]!;
+  // 起草时的 source_index 已换回候选全集下标；校验层保证非 null（防御性再滤一次）
+  const sourced = draft.claims.flatMap((c) =>
+    c.source_index === null ? [] : [{ claim: c.claim, source_index: c.source_index }],
+  );
+  const gateClaims = sourced.map((claim, i) => {
+    const candidate = candidates[claim.source_index]!;
     return {
       claim_id: `C${i}`,
       claim: claim.claim,
@@ -131,9 +130,10 @@ async function run(input: KnowledgeInput, llm: LlmClient): Promise<KnowledgeCard
     };
   });
   const checks = await verifyClaims(llm, null, gateClaims);
+  // 按下标回填闸② 结果 —— verifyClaims 与输入同序，缺位按不支撑（fail-closed）
   const assembled = assemble(
-    draft.claims.map((c) => ({ claim: c.claim, source_index: c.source_index! })),
-    checks.map((c) => c.check),
+    sourced,
+    gateClaims.map((_, i) => checks[i]?.check ?? { supported: false, quote: '', quote_start: null, quote_end: null }),
     candidates,
   );
   if (!assembled) {

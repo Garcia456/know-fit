@@ -4,15 +4,17 @@
  * 转写稿没有标点，让模型「数 40–60 字」它数不准：实测抄 135–304 字，
  * 或者用省略号把两段拼起来（那就不是连续子串了）。
  * 让模型选「起点 + 终点」也不行：它会一路选到片段末尾（实测 to 几乎总是最后一窗）。
- * 所以终点不收：模型只给 from_window，长度由服务端固定为最多 3 个窗口。
+ * 所以终点不收：模型只给 from_window，长度由服务端固定为最多 5 个窗口（ADR-068）。
  */
 
 /**
- * 窗口做小（30–40 字），从起点起取 3 个 —— 3 × 40 刚好不超过 GATE_QUOTE_MAX（120）。
+ * 窗口做小（30–40 字），从起点起取 5 个 —— 5 × 40 刚好不超过 GATE_QUOTE_MAX（200）。
+ * 窗口数从 3 放宽到 5 是 ADR-068 的产品口径变更（更长的 claim 需要更长的证据段）；
+ * 12 字下限、逐字、数字守卫不变。
  */
 export const GATE_WINDOW_TARGET = 30;
 export const GATE_WINDOW_MAX = 40;
-export const GATE_MAX_WINDOWS = 3;
+export const GATE_MAX_WINDOWS = 5;
 
 /** 太短的尾窗并进前一个 —— 否则单独选中也过不了闸（12 字下限） */
 const MIN_WINDOW = 12;
@@ -97,7 +99,7 @@ function toWindows(text: string, ranges: { start: number; end: number }[]): Gate
   }));
 }
 
-/** 从 from 起取最多 3 个窗口（到片段末尾就少取）；编号不合法返回 null */
+/** 从 from 起取最多 5 个窗口（到片段末尾就少取）；编号不合法返回 null */
 export function windowSpan(
   windows: GateWindow[],
   from: number,

@@ -21,8 +21,9 @@ import { buildVolumeHook } from '../metrics/hook.js';
 
 const SPLIT = '推日';
 const VERDICT = buildVolumeHook({ current: 2000, baseline: 2500, split_label: SPLIT });
+// > 240 字：5 个窗口（≤200 字）切不出整段，卡片里就不可能出现全文
 const CHUNK =
-  '先说一句背景，这句话也得够长但不该是最长的。容量下降的时候先把离心放慢，等动作稳住了再考虑加重量。训练日志要记到每一组，别只记总容量，不然下次没法判断是哪一组掉了。另外每次训练后把感受记下来，过两周再回看会清楚很多。';
+  '先说一句背景，这句话也得够长但不该是最长的。容量下降的时候先把离心放慢，等动作稳住了再考虑加重量。训练日志要记到每一组，别只记总容量，不然下次没法判断是哪一组掉了。另外每次训练后把感受记下来，过两周再回看会清楚很多。训练时先热身五分钟，把心率慢慢提上来，别一上来就冲重量。每个动作第一组先用六成重量做八次找感觉，第二组再上正式重量。';
 
 const candidate = (text = CHUNK): AssessmentCandidate => ({
   chunk_id: 'chunk-1',

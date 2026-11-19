@@ -490,6 +490,11 @@ try {
   );
   const kClaims = (kCard?.claims ?? []) as Record<string, unknown>[];
   expect(kClaims.length <= 3, `知识建议 ≤3 条（实为 ${kClaims.length}）`, `知识建议超过 3 条：${kClaims.length}`);
+  expect(
+    kClaims.length === kCitations.length,
+    '知识建议与引用一一对应',
+    `知识建议 ${kClaims.length} 条但引用 ${kCitations.length} 条`,
+  );
 
   // ── 9. 全端点扫一遍 + R-C 计数 ───────────────────────────────────
   const sweep: { label: string; result: HttpResult }[] = [];

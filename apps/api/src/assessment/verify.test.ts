@@ -111,14 +111,29 @@ describe('verifyClaims', () => {
     expect(out[0]!.check.supported).toBe(true);
   });
 
-  it('判定为 null 时数字仍要能在引文里找到', async () => {
+  it('判定为 null 时数字仍要能在片段里找到', async () => {
     const llm = client(async () => ok('C0'));
     const withNumber = { ...claim('C0'), claim: '每组做 12 次' };
+    // 数字只在片段里、不在被截出的引文里也放行（ADR-069）
+    const sixWindows = Array.from({ length: 6 }, (_, i) => ({
+      index: i,
+      start: i * 20,
+      end: i * 20 + 20,
+      text: '甲'.repeat(20),
+    }));
+    const inChunk = {
+      ...withNumber,
+      chunk_text: `${'甲'.repeat(120)}每组做 12 次`,
+      windows: sixWindows,
+    };
 
-    const out = await verifyClaims(llm, null, [withNumber]);
+    const rejected = await verifyClaims(llm, null, [withNumber]);
+    expect(rejected[0]!.check.supported).toBe(false);
+    expect(rejected[0]!.check.reason).toContain('数字');
 
-    expect(out[0]!.check.supported).toBe(false);
-    expect(out[0]!.check.reason).toContain('数字');
+    // 数字只在片段里、不在被截出的引文里也放行（ADR-069）
+    const accepted = await verifyClaims(llm, null, [inChunk]);
+    expect(accepted[0]!.check.supported).toBe(true);
   });
 
   it('闸② 提示词要求 reason 短', async () => {

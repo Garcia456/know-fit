@@ -7,6 +7,7 @@ import { KNOWLEDGE_DRAFT_SYSTEM, knowledgeDraftInput } from './prompts.js';
  * 知识回答的起草与校验。
  *
  * 与评估不同：没有 personal_data claim，每条都必须来自候选片段。
+ * 同源不在这里判失败 —— 装配层逐条去重（ADR-068）。
  */
 
 export const KnowledgeDraftSchema = z.object({
@@ -19,18 +20,13 @@ export const KnowledgeDraftSchema = z.object({
 });
 
 export type KnowledgeDraft = z.infer<typeof KnowledgeDraftSchema>;
-export type KnowledgeDraftProblem =
-  | 'claim_count'
-  | 'empty_claim'
-  | 'bad_source_index'
-  | 'duplicate_source';
+export type KnowledgeDraftProblem = 'claim_count' | 'empty_claim' | 'bad_source_index';
 
 function repairHint(problem: KnowledgeDraftProblem, maxClaims: number): string {
   const hints: Record<KnowledgeDraftProblem, string> = {
     claim_count: `claims 总数必须 1–${maxClaims} 条，每条都要带 source_index。`,
     empty_claim: '每条 claim 都要有实际内容。',
     bad_source_index: 'source_index 必须是候选编号（0 到候选数减一）。',
-    duplicate_source: '不同 claim 必须指向不同的候选编号。',
   };
   return hints[problem];
 }
@@ -43,14 +39,11 @@ function validateDraft(
   if (draft.claims.length < 1 || draft.claims.length > maxClaims) return 'claim_count';
   if (draft.claims.some((c) => c.claim.trim().length === 0)) return 'empty_claim';
 
-  const sourceIds = new Set<string>();
+  // 同源不再判整卡失败：装配层按 source_id / url 去重（ADR-068）
   for (const claim of draft.claims) {
     if (claim.source_index === null || claim.source_index < 0 || claim.source_index >= candidates.length) {
       return 'bad_source_index';
     }
-    const id = candidates[claim.source_index]!.source_id;
-    if (sourceIds.has(id)) return 'duplicate_source';
-    sourceIds.add(id);
   }
   return null;
 }
@@ -79,7 +72,7 @@ export async function draftKnowledge(
 ): Promise<KnowledgeDraftOutcome> {
   const { picked, keep } = dedupeBySource(candidates);
   const input = knowledgeDraftInput(query, picked);
-  // 起草上限必须与引用上限一致：模型多写一条，assemble 会整卡降级无源
+  // 起草上限与引用上限一致；多出来的截掉 —— 装配层逐条保留，不会因此整卡降级
   const maxClaims = Math.max(1, Math.min(3, ragConfig().maxCitations));
   const baseSystem = `${KNOWLEDGE_DRAFT_SYSTEM}\n【上限】最多 ${maxClaims} 条 claim。`;
 
@@ -92,7 +85,7 @@ export async function draftKnowledge(
       schema: KnowledgeDraftSchema,
       name: 'draft_knowledge',
     });
-    // 超出的 claim 直接截掉：保留的每条仍要逐条过闸②，不是「删掉不过的」
+    // 超出的 claim 直接截掉 —— 装配层还会按闸② 与同源逐条筛
     if (draft.claims.length > maxClaims) draft.claims = draft.claims.slice(0, maxClaims);
     for (const claim of draft.claims) {
       if (claim.source_index !== null) claim.source_index = keep[claim.source_index] ?? null;

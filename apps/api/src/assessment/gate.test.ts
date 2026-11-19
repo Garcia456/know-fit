@@ -82,22 +82,37 @@ describe('checkGateResult', () => {
     }
   });
 
-  it('从起点起最多取 3 个窗口 —— 终点不受模型控制', () => {
-    const four = [
+  it('从起点起最多取 5 个窗口 —— 终点不受模型控制', () => {
+    const six = [
       win(0, 10, 0, '1234567890'),
       win(10, 30, 1, '12345678901234567890'),
       win(30, 50, 2, '12345678901234567890'),
-      win(50, 60, 3, '1234567890'),
+      win(50, 70, 3, '12345678901234567890'),
+      win(70, 90, 4, '12345678901234567890'),
+      win(90, 100, 5, '1234567890'),
     ];
-    const chunk = four.map((w) => w.text).join('');
+    const chunk = six.map((w) => w.text).join('');
     const out = checkGateResult({
       result: result({ from_window: 0 }),
-      claim: { ...CLAIM, chunk_text: chunk, windows: four },
+      claim: { ...CLAIM, chunk_text: chunk, windows: six },
       verdict: VERDICT,
     });
     expect(out.supported).toBe(true);
-    expect(out.quote).toBe(four.slice(0, 3).map((w) => w.text).join(''));
-    expect(out.quote_end).toBe(50);
+    expect(out.quote).toBe(six.slice(0, 5).map((w) => w.text).join(''));
+    expect(out.quote_end).toBe(90);
+  });
+
+  it('从第 2 个窗口起取到片段末尾就少取（6 个窗口只够再取 4 个）', () => {
+    const six = Array.from({ length: 6 }, (_, i) => win(i * 10, i * 10 + 10, i, '一二三四五六七八九十'));
+    const chunk = six.map((w) => w.text).join('');
+    const out = checkGateResult({
+      result: result({ from_window: 2 }),
+      claim: { ...CLAIM, chunk_text: chunk, windows: six },
+      verdict: VERDICT,
+    });
+    expect(out.supported).toBe(true);
+    expect(out.quote_start).toBe(20);
+    expect(out.quote_end).toBe(60);
   });
 
   it('引文太短 / 太长 → 不支撑', () => {
@@ -110,11 +125,8 @@ describe('checkGateResult', () => {
       }).supported,
     ).toBe(false);
 
-    const long = [
-      win(0, 70, 0, '甲'.repeat(70)),
-      win(70, 140, 1, '乙'.repeat(70)),
-      win(140, 210, 2, '丙'.repeat(70)),
-    ];
+    // 单个 ASR 段本身超长时窗口可能 >40 字 —— 一次切出仍须守住 200 字上限
+    const long = [win(0, 210, 0, '甲'.repeat(210)), win(210, 280, 1, '乙'.repeat(70))];
     const out = checkGateResult({
       result: result({ from_window: 0 }),
       claim: { ...CLAIM, chunk_text: long.map((w) => w.text).join(''), windows: long },
@@ -161,6 +173,29 @@ describe('checkGateResult', () => {
       verdict: VERDICT,
     });
     expect(out.supported).toBe(true);
+  });
+
+  it('数字只在片段里、不在引文里 → 放行（ADR-069）', () => {
+    // 6 个窗口，引文只取前 5 个（100 字）；数字在片段末尾，永远进不了引文
+    const six = Array.from({ length: 6 }, (_, i) => win(i * 20, i * 20 + 20, i, '甲'.repeat(20)));
+    const chunk = `${six.map((w) => w.text).join('')}每组做 12 次`;
+    const out = checkGateResult({
+      result: result({ from_window: 0 }),
+      claim: { ...CLAIM, claim: '每组做 12 次，别贪多', chunk_text: chunk, windows: six },
+      verdict: null,
+    });
+    expect(out.supported).toBe(true);
+    expect(out.quote).not.toContain('12');
+  });
+
+  it('数字片段与判定都没有 → 仍判不支撑', () => {
+    const out = checkGateResult({
+      result: result(),
+      claim: { ...CLAIM, claim: '每周练 6 次' },
+      verdict: null,
+    });
+    expect(out.supported).toBe(false);
+    expect(out.reason).toContain('数字');
   });
 });
 
