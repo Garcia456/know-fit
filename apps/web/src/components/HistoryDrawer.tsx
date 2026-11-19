@@ -8,7 +8,7 @@ import {
 } from '../api/client';
 import type { ConversationSummary } from '../api/types';
 import { toDateKey } from '../lib/calendar';
-import { PencilIcon, PinIcon, PlusIcon, TrashIcon } from './Icons';
+import { CheckIcon, CloseIcon, ListChecksIcon, PencilIcon, PinIcon, PlusIcon, TrashIcon } from './Icons';
 
 interface Props {
   open: boolean;
@@ -51,6 +51,10 @@ export function HistoryDrawer({
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  /** 多选模式：置顶分组标签行右侧的按钮开关，开启后每一行左侧出现圆形 checkbox */
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
   const reduced = useReducedMotion();
   const drawerRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -58,13 +62,21 @@ export function HistoryDrawer({
   const skipClickRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setSelecting(false);
+      setSelected(new Set());
+      setBulkConfirm(false);
+      return;
+    }
     let alive = true;
     setFailed(false);
     setEditingId(null);
     setConfirmId(null);
     setMenu(null);
     setActionError(null);
+    setSelecting(false);
+    setSelected(new Set());
+    setBulkConfirm(false);
     getConversations()
       .then((res) => {
         if (alive) setItems(res.conversations);
@@ -81,9 +93,18 @@ export function HistoryDrawer({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (bulkConfirm) {
+        setBulkConfirm(false);
+        return;
+      }
       if (editingId || confirmId) {
         setEditingId(null);
         setConfirmId(null);
+        return;
+      }
+      if (selecting) {
+        setSelecting(false);
+        setSelected(new Set());
         return;
       }
       if (menu) {
@@ -94,7 +115,7 @@ export function HistoryDrawer({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose, editingId, confirmId, menu]);
+  }, [open, onClose, editingId, confirmId, menu, selecting, bulkConfirm]);
 
   // 点菜单外面收起
   useEffect(() => {
@@ -231,9 +252,78 @@ export function HistoryDrawer({
     }
   }
 
+  function toggleSelecting() {
+    setMenu(null);
+    setEditingId(null);
+    setConfirmId(null);
+    setActionError(null);
+    setSelected(new Set());
+    setSelecting((prev) => !prev);
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** 选中的都置顶了就是「取消置顶」，否则把没置顶的那几个置顶 */
+  async function bulkPin() {
+    const targets = (items ?? []).filter((item) => selected.has(item.id));
+    if (targets.length === 0 || busy) return;
+    const pin = targets.some((item) => item.pinned_at === null);
+    setBusy(true);
+    setActionError(null);
+    try {
+      const results = await Promise.all(
+        targets
+          .filter((item) => (item.pinned_at === null) === pin)
+          .map((item) => setConversationPinned(item.id, pin)),
+      );
+      for (const res of results) applyItem(res.conversation);
+      setSelecting(false);
+      setSelected(new Set());
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : '置顶失败，请重试');
+      setReloadTick((n) => n + 1);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function bulkRemove() {
+    const ids = [...selected];
+    if (ids.length === 0 || busy) return;
+    setBusy(true);
+    setActionError(null);
+    let failedCount = 0;
+    for (const id of ids) {
+      try {
+        await deleteConversation(id);
+        setItems((prev) => (prev ? prev.filter((item) => item.id !== id) : prev));
+        onDeleted(id);
+      } catch {
+        failedCount += 1;
+      }
+    }
+    setBusy(false);
+    setBulkConfirm(false);
+    setSelecting(false);
+    setSelected(new Set());
+    if (failedCount > 0) {
+      setActionError(`有 ${failedCount} 个会话没删掉，请重试`);
+      setReloadTick((n) => n + 1);
+    }
+  }
+
   const groups = groupByTime(items ?? []);
   const menuItem = menu ? items?.find((item) => item.id === menu.id) : null;
   const editingItem = editingId ? items?.find((item) => item.id === editingId) : null;
+  const selectedItems = (items ?? []).filter((item) => selected.has(item.id));
+  const canSelect = (items?.length ?? 0) > 0;
 
   return (
     <>
@@ -268,7 +358,7 @@ export function HistoryDrawer({
             }
           >
             <div className="drawer-hd">
-              <h2>对话历史</h2>
+              <h2>{selecting ? '选择会话' : '对话历史'}</h2>
             </div>
 
             <div className="drawer-body" onScroll={() => setMenu(null)}>
@@ -294,35 +384,85 @@ export function HistoryDrawer({
               ) : items.length === 0 ? (
                 <p className="drawer-state">还没有会话</p>
               ) : (
-                groups.map((group) => (
+                groups.map((group, index) => (
                   <div key={group.label}>
-                    <p className="group-label">{group.label}</p>
-                    {group.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`conv-row${item.id === activeConversationId ? ' is-active' : ''}`}
-                      >
+                    <p className="group-label">
+                      <span>{group.label}</span>
+                      {index === 0 ? (
                         <button
                           type="button"
-                          className="conv conv-main"
-                          aria-haspopup="menu"
-                          onClick={() => selectRow(item.id)}
-                          onPointerDown={(e) => startPress(e, item)}
-                          onPointerUp={cancelPress}
-                          onPointerLeave={cancelPress}
-                          onPointerCancel={cancelPress}
-                          onPointerMove={movePress}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            cancelPress();
-                            openMenu(item, e.currentTarget);
-                          }}
+                          className={`conv-select-toggle${selecting ? ' is-on' : ''}`}
+                          aria-pressed={selecting}
+                          aria-label={selecting ? '退出多选' : '多选'}
+                          title={selecting ? '退出多选' : '多选'}
+                          disabled={!canSelect}
+                          onClick={toggleSelecting}
                         >
-                          <p>{item.title}</p>
-                          {previewText(item) ? <span>{previewText(item)}</span> : null}
+                          {selecting ? <CloseIcon size={12} /> : <ListChecksIcon size={16} />}
                         </button>
-                      </div>
-                    ))}
+                      ) : null}
+                    </p>
+                    {group.items.map((item) => {
+                      const checked = selected.has(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          className={`conv-row${item.id === activeConversationId ? ' is-active' : ''}${selecting ? ' is-selecting' : ''}${checked ? ' is-checked' : ''}`}
+                        >
+                          <AnimatePresence initial={false}>
+                            {selecting ? (
+                              <m.span
+                                key="check"
+                                className="conv-check-slot"
+                                aria-hidden="true"
+                                initial={reduced ? false : { width: 0, opacity: 0 }}
+                                animate={{ width: 16, opacity: 1 }}
+                                exit={reduced ? { opacity: 0 } : { width: 0, opacity: 0 }}
+                                transition={
+                                  reduced ? { duration: 0 } : { duration: 0.18, ease: 'easeOut' }
+                                }
+                              >
+                                <span className="conv-check">
+                                  {checked ? <CheckIcon size={11} /> : null}
+                                </span>
+                              </m.span>
+                            ) : null}
+                          </AnimatePresence>
+                          <button
+                            type="button"
+                            className="conv conv-main"
+                            role={selecting ? 'checkbox' : undefined}
+                            aria-checked={selecting ? checked : undefined}
+                            aria-haspopup={selecting ? undefined : 'menu'}
+                            aria-label={
+                              selecting ? `${checked ? '取消选择' : '选择'} ${item.title}` : undefined
+                            }
+                            onClick={() =>
+                              selecting ? toggleSelected(item.id) : selectRow(item.id)
+                            }
+                            onPointerDown={
+                              selecting ? undefined : (e) => startPress(e, item)
+                            }
+                            onPointerUp={selecting ? undefined : cancelPress}
+                            onPointerLeave={selecting ? undefined : cancelPress}
+                            onPointerCancel={selecting ? undefined : cancelPress}
+                            onPointerMove={selecting ? undefined : movePress}
+                            onContextMenu={
+                              selecting
+                                ? (e) => e.preventDefault()
+                                : (e) => {
+                                    e.preventDefault();
+                                    cancelPress();
+                                    openMenu(item, e.currentTarget);
+                                  }
+                            }
+                          >
+                            <p>{item.title}</p>
+                            {previewText(item) ? <span>{previewText(item)}</span> : null}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 ))
               )}
@@ -371,12 +511,37 @@ export function HistoryDrawer({
               </div>
             ) : null}
 
-            <div className="drawer-ft">
-              <button type="button" className="btn" onClick={onNewConversation}>
-                <PlusIcon />
-                创建新会话
-              </button>
-            </div>
+            {selecting ? (
+              <div className="drawer-ft drawer-ft--select">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  disabled={busy || selected.size === 0}
+                  onClick={() => void bulkPin()}
+                >
+                  <PinIcon size={15} />
+                  置顶
+                  {selected.size > 0 ? <span className="drawer-ft__count">{selected.size}</span> : null}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--danger"
+                  disabled={busy || selected.size === 0}
+                  onClick={() => setBulkConfirm(true)}
+                >
+                  <TrashIcon size={15} />
+                  删除
+                  {selected.size > 0 ? <span className="drawer-ft__count">{selected.size}</span> : null}
+                </button>
+              </div>
+            ) : (
+              <div className="drawer-ft">
+                <button type="button" className="btn" onClick={onNewConversation}>
+                  <PlusIcon />
+                  创建新会话
+                </button>
+              </div>
+            )}
           </m.aside>
         ) : null}
       </AnimatePresence>
@@ -423,6 +588,43 @@ export function HistoryDrawer({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {open && bulkConfirm ? (
+        <div
+          className="modal-layer"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !busy) setBulkConfirm(false);
+          }}
+        >
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-title">
+            <h2 id="bulk-delete-title">删除 {selected.size} 个会话</h2>
+            <p className="modal-text">删除后不可恢复；训练记录不受影响。</p>
+            {actionError ? (
+              <p className="error-text" role="alert">
+                {actionError}
+              </p>
+            ) : null}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={busy}
+                onClick={() => setBulkConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                disabled={busy || selectedItems.length === 0}
+                onClick={() => void bulkRemove()}
+              >
+                {busy ? '删除中…' : '确认删除'}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -135,3 +135,124 @@ describe('长按菜单', () => {
     expect(await screen.findByText('改过的标题')).toBeDefined();
   });
 });
+
+describe('多选', () => {
+  const rows = [
+    item('a', new Date(2026, 9, 29, 10)),
+    item('b', new Date(2026, 9, 28, 10)),
+    item('c', new Date(2026, 9, 27, 10)),
+  ];
+
+  function renderDrawer() {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        return Promise.resolve({ ok: true, status: 204, json: async () => undefined });
+      }
+      if (init?.method === 'PATCH') {
+        const { pinned } = JSON.parse(String(init.body)) as { pinned?: boolean };
+        const id = String(url).split('/').pop() ?? 'a';
+        const base = rows.find((r) => r.id === id) ?? rows[0]!;
+        return json({
+          conversation: {
+            ...base,
+            pinned_at: pinned ? new Date().toISOString() : null,
+          },
+        });
+      }
+      return json({ conversations: rows });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <HistoryDrawer
+        open
+        onClose={() => undefined}
+        onSelectConversation={() => undefined}
+        onDeleted={() => undefined}
+        onNewConversation={() => undefined}
+      />,
+    );
+    return fetchMock;
+  }
+
+  async function enterSelecting() {
+    fireEvent.click(await screen.findByRole('button', { name: '多选' }));
+    expect(screen.getByRole('heading', { name: '选择会话' })).toBeDefined();
+  }
+
+  it('点标题右侧按钮进入多选，每行出现 checkbox，底栏换成置顶/删除', async () => {
+    renderDrawer();
+    await enterSelecting();
+
+    expect(screen.getAllByRole('checkbox')).toHaveLength(rows.length);
+    expect(screen.queryByRole('button', { name: '创建新会话' })).toBeNull();
+    expect(screen.getByRole('button', { name: /置顶/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: /删除/ })).toBeDefined();
+  });
+
+  it('多选时点行只切换选中，不打开会话', async () => {
+    const onSelectConversation = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => json({ conversations: rows })),
+    );
+    render(
+      <HistoryDrawer
+        open
+        onClose={() => undefined}
+        onSelectConversation={onSelectConversation}
+        onDeleted={() => undefined}
+        onNewConversation={() => undefined}
+      />,
+    );
+    await enterSelecting();
+
+    const box = screen.getByRole('checkbox', { name: '选择 会话 a' });
+    fireEvent.click(box);
+
+    expect(screen.getByRole('checkbox', { name: '取消选择 会话 a' })).toBeDefined();
+    expect(onSelectConversation).not.toHaveBeenCalled();
+  });
+
+  it('置顶按钮只 PATCH 选中的会话', async () => {
+    const fetchMock = renderDrawer();
+    await enterSelecting();
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择 会话 a' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择 会话 b' }));
+    fireEvent.click(screen.getByRole('button', { name: /置顶/ }));
+
+    await waitFor(() => {
+      const patches = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH');
+      expect(patches).toHaveLength(2);
+      const ids = patches.map(([url]) => String(url).split('/').pop());
+      expect(new Set(ids)).toEqual(new Set(['a', 'b']));
+      for (const [, init] of patches) {
+        expect(JSON.parse(String(init?.body))).toEqual({ pinned: true });
+      }
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: '选择会话' })).toBeNull();
+    });
+  });
+
+  it('删除要先弹窗确认，确认后才 DELETE 每个选中的会话', async () => {
+    const fetchMock = renderDrawer();
+    await enterSelecting();
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择 会话 a' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择 会话 c' }));
+    fireEvent.click(screen.getByRole('button', { name: /删除/ }));
+
+    const dialog = await screen.findByRole('dialog', { name: '删除 2 个会话' });
+    expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE'),
+    ).toBe(false);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认删除' }));
+
+    await waitFor(() => {
+      const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE');
+      expect(deletes).toHaveLength(2);
+      const ids = deletes.map(([url]) => String(url).split('/').pop());
+      expect(new Set(ids)).toEqual(new Set(['a', 'c']));
+    });
+  });
+});
