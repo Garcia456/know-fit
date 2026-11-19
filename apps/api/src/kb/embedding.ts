@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { UsageRecorder } from '../llm/usage.js';
 
 /**
  * 向量化 —— 可注入的两档实现（承 `LlmClient` / `Fetcher` 同型）。
@@ -66,10 +67,14 @@ export interface OpenAiEmbeddingOptions {
   model?: string;
   baseUrl?: string;
   apiKey?: string;
+  /** 用量打点；不传就不打点 */
+  usage?: UsageRecorder;
 }
 
 interface EmbeddingResponse {
   data: { embedding: number[]; index: number }[];
+  /** 百炼 / OpenAI 兼容端点给的是 prompt_tokens；有的实现不给 */
+  usage?: { prompt_tokens?: number; total_tokens?: number };
 }
 
 export function createOpenAiEmbeddingClient(options: OpenAiEmbeddingOptions = {}): EmbeddingClient {
@@ -77,6 +82,7 @@ export function createOpenAiEmbeddingClient(options: OpenAiEmbeddingOptions = {}
   const apiKey = options.apiKey ?? required('OPENAI_API_KEY');
   const baseUrl = (options.baseUrl ?? required('OPENAI_BASE_URL')).replace(/\/+$/, '');
   const endpoint = `${baseUrl}/embeddings`;
+  const usage = options.usage;
 
   return {
     model,
@@ -94,6 +100,13 @@ export function createOpenAiEmbeddingClient(options: OpenAiEmbeddingOptions = {}
           throw new Error(`embedding 请求失败 ${res.status}：${body.slice(0, 300)}`);
         }
         const payload = (await res.json()) as EmbeddingResponse;
+        usage?.record({
+          stage: 'embedding',
+          label: 'query',
+          model,
+          input_tokens: payload.usage?.prompt_tokens ?? payload.usage?.total_tokens ?? null,
+          output_tokens: null,
+        });
         const rows = [...payload.data].sort((a, b) => a.index - b.index);
         if (rows.length !== batch.length) {
           throw new Error(`embedding 返回 ${rows.length} 条，发出 ${batch.length} 条`);
@@ -114,6 +127,7 @@ export function createOpenAiEmbeddingClient(options: OpenAiEmbeddingOptions = {}
 
 export function createEmbeddingClient(
   provider: EmbeddingProvider = resolveEmbeddingProvider(),
+  options: OpenAiEmbeddingOptions = {},
 ): EmbeddingClient {
-  return provider === 'real' ? createOpenAiEmbeddingClient() : createFakeEmbeddingClient();
+  return provider === 'real' ? createOpenAiEmbeddingClient(options) : createFakeEmbeddingClient();
 }

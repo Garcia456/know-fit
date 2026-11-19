@@ -1,6 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage, isAIMessage } from '@langchain/core/messages';
 import type { LlmCallOptions, LlmClient, StructuredRequest } from './client.js';
+import { llmEntry, type UsageRecorder } from './usage.js';
 
 export type StructuredMethod = 'jsonSchema' | 'functionCalling' | 'jsonMode';
 
@@ -11,6 +12,8 @@ export interface OpenAiClientOptions {
   temperature?: number;
   /** 思考模式；不传则读 LLM_ENABLE_THINKING（默认关） */
   enableThinking?: boolean;
+  /** 用量打点；不传就不打点（线上链路开销为零） */
+  usage?: UsageRecorder;
 }
 
 /**
@@ -42,6 +45,7 @@ function requiredModel(): string {
 export function createOpenAiClient(options: OpenAiClientOptions = {}): LlmClient {
   const modelName = options.model ?? requiredModel();
   const method = options.method ?? 'jsonMode';
+  const usage = options.usage;
   const model = new ChatOpenAI({
     model: modelName,
     temperature: options.temperature ?? 0,
@@ -54,20 +58,35 @@ export function createOpenAiClient(options: OpenAiClientOptions = {}): LlmClient
       req: StructuredRequest<T>,
       options?: LlmCallOptions,
     ): Promise<T> {
-      const runnable = model.withStructuredOutput<T>(req.schema, { name: req.name, method });
+      // includeRaw 才能拿到原始消息 —— 它上面挂着 usage_metadata；解析后的对象里没有
+      const runnable = model.withStructuredOutput<T>(req.schema, { name: req.name, method, includeRaw: true });
       const out = await runnable.invoke([new SystemMessage(req.system), new HumanMessage(req.input)], {
         signal: options?.signal,
       });
-      if (out === undefined || out === null) {
+      if (out.parsed === undefined || out.parsed === null) {
         throw new Error(`结构化输出为空（method=${method}）—— 模型没回可解析的 JSON`);
       }
-      return out;
+      usage?.record(
+        llmEntry({
+          label: req.name,
+          model: modelName,
+          usage_metadata: isAIMessage(out.raw) ? out.raw.usage_metadata : null,
+        }),
+      );
+      return out.parsed;
     },
 
     async generate(req, options): Promise<string> {
       const res = await model.invoke([new SystemMessage(req.system), new HumanMessage(req.input)], {
         signal: options?.signal,
       });
+      usage?.record(
+        llmEntry({
+          label: 'generate',
+          model: modelName,
+          usage_metadata: isAIMessage(res) ? res.usage_metadata : null,
+        }),
+      );
       if (typeof res.content === 'string') return res.content;
       return res.content
         .map((part) => (typeof part === 'string' ? part : 'text' in part ? part.text : ''))

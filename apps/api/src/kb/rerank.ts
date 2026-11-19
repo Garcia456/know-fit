@@ -7,6 +7,7 @@
  *
  * 🔴 `gte-rerank-v2` 已下线，不要换回去。
  */
+import type { UsageRecorder } from '../llm/usage.js';
 
 export interface RerankHit {
   index: number;
@@ -68,19 +69,27 @@ function required(name: string): string {
 }
 
 interface RerankPayload {
-  output?: { results?: { index?: number; relevance_score?: number; score?: number }[] };
+  output?: {
+    results?: { index?: number; relevance_score?: number; score?: number }[];
+    /** DashScope 的 text-rerank 会回 total_tokens；不同版本有的放在 output 里、有的在顶层 */
+    usage?: { total_tokens?: number };
+  };
   results?: { index?: number; relevance_score?: number; score?: number }[];
+  usage?: { total_tokens?: number };
 }
 
 export function createQwenRerankClient(options: {
   model?: string;
   url?: string;
   apiKey?: string;
+  /** 用量打点；不传就不打点 */
+  usage?: UsageRecorder;
 } = {}): RerankClient {
   // 空串按「没配」处理：.env 里留空的 RERANK_API_KEY 要能回落到 OPENAI_API_KEY
   const model = options.model || process.env.RERANK_MODEL || DEFAULT_RERANK_MODEL;
   const url = options.url || process.env.RERANK_BASE_URL || DEFAULT_RERANK_URL;
   const apiKey = options.apiKey || process.env.RERANK_API_KEY?.trim() || required('OPENAI_API_KEY');
+  const usage = options.usage;
 
   return {
     model,
@@ -101,6 +110,13 @@ export function createQwenRerankClient(options: {
         throw new Error(`rerank 请求失败 ${res.status}：${body.slice(0, 300)}`);
       }
       const payload = (await res.json()) as RerankPayload;
+      usage?.record({
+        stage: 'rerank',
+        label: 'query',
+        model,
+        input_tokens: payload.usage?.total_tokens ?? payload.output?.usage?.total_tokens ?? null,
+        output_tokens: null,
+      });
       const rows = payload.output?.results ?? payload.results ?? [];
       return rows.flatMap((r) => {
         const index = r.index;
@@ -111,6 +127,9 @@ export function createQwenRerankClient(options: {
   };
 }
 
-export function createRerankClient(provider: RerankProvider = resolveRerankProvider()): RerankClient {
-  return provider === 'real' ? createQwenRerankClient() : createFakeRerankClient();
+export function createRerankClient(
+  provider: RerankProvider = resolveRerankProvider(),
+  options: { model?: string; url?: string; apiKey?: string; usage?: UsageRecorder } = {},
+): RerankClient {
+  return provider === 'real' ? createQwenRerankClient(options) : createFakeRerankClient();
 }

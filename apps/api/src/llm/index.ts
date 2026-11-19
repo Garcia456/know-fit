@@ -19,6 +19,8 @@ export function createLlmClient(
 }
 
 export type { ChatRequest, LlmClient, StructuredRequest } from './client.js';
+export type { UsageEntry, UsageRecorder, UsageStage, UsageSummary } from './usage.js';
+export { createUsageRecorder, llmEntry, summarizeUsage } from './usage.js';
 export { createFakeClient } from './fake.js';
 export { createOpenAiClient } from './openai.js';
 export type { OpenAiClientOptions, StructuredMethod } from './openai.js';

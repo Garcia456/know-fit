@@ -1,0 +1,61 @@
+description: 单次「训练动作类问询」的成本画像 —— 调用次数 / token / 费用（元）。不进 CI / check-dev.sh
+prompts:
+  - '{{query}}'
+providers:
+  - id: file://./provider.ts
+    label: 完整链路(classify→检索→起草→闸②)
+tests: file://./tests.template.jsonl
+defaultTest:
+  assert:
+    # ① 意图必须真的落到 knowledge —— 否则这条测的不是知识链路
+    - type: javascript
+      value: |
+        const r = JSON.parse(output);
+        const pass = r.intent === 'knowledge';
+        return { pass, score: pass ? 1 : 0, reason: `intent=${r.intent}` };
+
+    # ② 调用次数落在代码允许的范围内（3–5 次 LLM、各 1 次 embed / rerank）
+    - type: javascript
+      value: |
+        const r = JSON.parse(output);
+        const c = r.usage.calls;
+        const checks = [
+          ['llm', c.llm >= 3 && c.llm <= 6, `LLM=${c.llm}（期望 3–5，起草重试到 6）`],
+          ['embedding', c.embedding === 1, `embedding=${c.embedding}`],
+          ['rerank', c.rerank === 1, `rerank=${c.rerank}`],
+        ];
+        const bad = checks.filter(([, ok]) => !ok).map(([name, , why]) => `${name}: ${why}`);
+        return { pass: bad.length === 0, score: bad.length === 0 ? 1 : 0, reason: bad.length ? bad.join('；') : '调用次数符合预期' };
+
+    # ③ 三条分阶段费用都出得来（单价表认得出这些模型）
+    - type: javascript
+      value: |
+        const r = JSON.parse(output);
+        const missing = [];
+        if (r.usage.cost.llm.cost === null) missing.push('llm');
+        if (r.usage.cost.embedding.cost === null) missing.push('embedding');
+        if (r.usage.cost.rerank.cost === null) missing.push('rerank');
+        const unknown = r.usage.cost.llm.unknown_models.concat(r.usage.cost.embedding.unknown_models, r.usage.cost.rerank.unknown_models);
+        const pass = missing.length === 0 && unknown.length === 0;
+        return {
+          pass,
+          score: pass ? 1 : 0,
+          reason: pass ? `总费用 ¥${r.usage.cost.total.toFixed(6)}` : `缺费用：${missing.join('/') || '无'}；认不出的模型：${unknown.join('/') || '无'}`,
+        };
+
+    # ④ 分阶段断言：把每段费用挂成 metric，表格里能横向比
+    - type: javascript
+      metric: cost_llm
+      value: |
+        const c = JSON.parse(output).usage.cost.llm.cost;
+        return { pass: c !== null, score: c ?? 0, reason: c === null ? '没有 llm 费用' : `LLM ¥${c.toFixed(6)}` };
+    - type: javascript
+      metric: cost_embedding
+      value: |
+        const c = JSON.parse(output).usage.cost.embedding.cost;
+        return { pass: c !== null, score: c ?? 0, reason: c === null ? '没有 embedding 费用' : `embedding ¥${c.toFixed(6)}` };
+    - type: javascript
+      metric: cost_rerank
+      value: |
+        const c = JSON.parse(output).usage.cost.rerank.cost;
+        return { pass: c !== null, score: c ?? 0, reason: c === null ? '没有 rerank 费用' : `rerank ¥${c.toFixed(6)}` };
