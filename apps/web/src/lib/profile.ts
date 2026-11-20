@@ -36,23 +36,38 @@ export type ProfileParseResult =
 
 function parseNumber(
   raw: string,
-  range: [number, number],
+  range: readonly [number, number],
   label: string,
+  unit = '',
 ): { value: number | null } | { error: string } {
   const text = raw.trim();
   if (text === '') return { value: null };
   const value = Number(text);
   if (!Number.isFinite(value)) return { error: `${label}请输入数字` };
   if (value < range[0] || value > range[1]) {
-    return { error: `${label}需在 ${range[0]}–${range[1]} 之间` };
+    return { error: `${label}需在 ${range[0]}–${range[1]}${unit} 之间` };
   }
   return { value };
 }
 
+const BODY_FIELDS = {
+  height: { range: [100, 250], label: '身高' },
+  weight: { range: [30, 300], label: '体重', unit: 'kg' },
+} as const satisfies Record<
+  'height' | 'weight',
+  { range: [number, number]; label: string; unit?: string }
+>;
+
+/** 单个身高 / 体重字段的动态校验：留空算合法，越界或非数字立刻返回提示。 */
+export function validateBodyField(key: 'height' | 'weight', raw: string): string | undefined {
+  const field = BODY_FIELDS[key];
+  const result = parseNumber(raw, field.range, field.label, 'unit' in field ? field.unit : '');
+  return 'error' in result ? result.error : undefined;
+}
+
 export function parseProfileForm(values: ProfileFormValues): ProfileParseResult {
   const height = parseNumber(values.height, [100, 250], '身高');
-  const weight = parseNumber(values.weight, [30, 300], '体重');
-  const errors: Partial<Record<'height' | 'weight', string>> = {};
+  const weight = parseNumber(values.weight, [30, 300], '体重', 'kg');  const errors: Partial<Record<'height' | 'weight', string>> = {};
   if ('error' in height) errors.height = height.error;
   if ('error' in weight) errors.weight = weight.error;
   if (Object.keys(errors).length > 0) return { ok: false, errors };

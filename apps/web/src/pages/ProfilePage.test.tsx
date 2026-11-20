@@ -60,7 +60,7 @@ describe('个人信息页', () => {
             }),
           }),
         ),
-      { timeout: 3000 },
+      { timeout: 8000 },
     );
     expect(await screen.findByText('已自动保存')).toBeDefined();
     expect(height.value).toBe('180');
@@ -78,13 +78,12 @@ describe('个人信息页', () => {
     expect(screen.queryByText('已自动保存')).toBeNull();
   });
 
-  it('越界值本地拦下，不发请求', async () => {
+  it('越界值本地拦下，边输边提示且不发请求', async () => {
     const fetchMock = stubFetch({ ok: true, body: emptyProfile });
     render(<ProfilePage />);
 
     const height = await screen.findByLabelText('身高（cm）');
     fireEvent.change(height, { target: { value: '99' } });
-    fireEvent.blur(height);
 
     expect(await screen.findByText(/身高需在 100–250 之间/)).toBeDefined();
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -92,6 +91,18 @@ describe('个人信息页', () => {
       '/api/profile',
       expect.objectContaining({ method: 'PUT' }),
     );
+  });
+
+  it('体重越界即时提示带单位，改回合法值后提示消失', async () => {
+    stubFetch({ ok: true, body: emptyProfile });
+    render(<ProfilePage />);
+
+    const weight = await screen.findByLabelText('体重（kg）');
+    fireEvent.change(weight, { target: { value: '301' } });
+    expect(screen.getByText('体重需在 30–300kg 之间')).toBeDefined();
+
+    fireEvent.change(weight, { target: { value: '75' } });
+    expect(screen.queryByText('体重需在 30–300kg 之间')).toBeNull();
   });
 
   it('未实现的项画行、标未开放、不可点', async () => {

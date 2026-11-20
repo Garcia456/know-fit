@@ -19,6 +19,7 @@ import {
   parseProfileForm,
   toFormValues,
   totalTrainingMonths,
+  validateBodyField,
   type ProfileFormValues,
 } from '../lib/profile';
 
@@ -91,7 +92,9 @@ export function ProfilePage() {
     setSaved(false);
     setSaveError(null);
     if (key === 'height' || key === 'weight') {
-      setErrors((prev) => ({ ...prev, [key]: undefined }));
+      // 边输边校验，不等到提交或失焦才报错
+      const error = validateBodyField(key, value as string);
+      setErrors((prev) => ({ ...prev, [key]: error }));
     }
   }
 
@@ -136,11 +139,6 @@ export function ProfilePage() {
 
     return () => clearTimeout(timer);
   }, [values, loaded, loadError]);
-
-  function showErrors() {
-    const parsed = parseProfileForm(values ?? EMPTY_VALUES);
-    setErrors(parsed.ok ? {} : parsed.errors);
-  }
 
   if (!values) {
     return (
@@ -206,14 +204,19 @@ export function ProfilePage() {
             <label className="set-row">
               <span className="lbl">身高</span>
               <span className="val">
+                {errors.height ? (
+                  <span className="field-error" id="profile-height-error">
+                    {errors.height}
+                  </span>
+                ) : null}
                 <input
                   className="set-input"
                   inputMode="decimal"
                   aria-label="身高（cm）"
+                  aria-describedby={errors.height ? 'profile-height-error' : undefined}
                   placeholder="—"
                   value={values.height}
                   onChange={(e) => update('height', e.target.value)}
-                  onBlur={showErrors}
                   aria-invalid={errors.height ? true : undefined}
                 />
                 <span className="unit">cm</span>
@@ -222,18 +225,23 @@ export function ProfilePage() {
             <label className="set-row">
               <span className="lbl">体重</span>
               <span className="val">
+                {errors.weight ? (
+                  <span className="field-error" id="profile-weight-error">
+                    {errors.weight}
+                  </span>
+                ) : null}
                 <input
                   className="set-input"
                   inputMode="decimal"
                   aria-label="体重（kg）"
+                  aria-describedby={errors.weight ? 'profile-weight-error' : undefined}
                   placeholder="—"
                   value={values.weight}
                   onChange={(e) => update('weight', e.target.value)}
-                  onBlur={showErrors}
                   aria-invalid={errors.weight ? true : undefined}
                 />
                 <span className="unit">kg</span>
-                {weightDate ? (
+                {weightDate && !errors.weight ? (
                   <span className="date-hint">· {formatMd(weightDate)}</span>
                 ) : null}
               </span>
@@ -253,8 +261,6 @@ export function ProfilePage() {
               </span>
             </div>
           </div>
-          {errors.height ? <p className="error-text">{errors.height}</p> : null}
-          {errors.weight ? <p className="error-text">{errors.weight}</p> : null}
           <p className="card-meta">体重保存时记入当天；同一天再改会覆盖当天数字。</p>
         </section>
 

@@ -18,6 +18,7 @@ const TABS = [
 /** 顶部导航：左抽屉 / 中四 tab（共用一块滑动色块）/ 右新会话。 */
 export function TopNav({ onOpenHistory, onNewConversation }: Props) {
   const { pathname } = useLocation();
+  const chatActive = pathname === '/';
   const reduced = useReducedMotion();
   const tabsRef = useRef<HTMLDivElement>(null);
   const [pill, setPill] = useState({ x: 0, w: 0 });
@@ -61,14 +62,16 @@ export function TopNav({ onOpenHistory, onNewConversation }: Props) {
         <span className="topnav__brand" aria-hidden="true">
           know-fit
         </span>
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label="对话历史"
-          onClick={onOpenHistory}
-        >
-          <HistoryIcon />
-        </button>
+        {chatActive ? (
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="对话历史"
+            onClick={onOpenHistory}
+          >
+            <HistoryIcon />
+          </button>
+        ) : null}
       </div>
       <div className="tabs" ref={tabsRef}>
         {pill.w > 0 ? (
@@ -91,14 +94,16 @@ export function TopNav({ onOpenHistory, onNewConversation }: Props) {
         ))}
       </div>
       <div className="topnav__side topnav__side--end">
-        <button
-          type="button"
-          className="icon-btn icon-btn--dark"
-          aria-label="创建新会话"
-          onClick={onNewConversation}
-        >
-          <NewConversationIcon />
-        </button>
+        {chatActive ? (
+          <button
+            type="button"
+            className="icon-btn icon-btn--dark"
+            aria-label="创建新会话"
+            onClick={onNewConversation}
+          >
+            <NewConversationIcon />
+          </button>
+        ) : null}
       </div>
     </nav>
   );
