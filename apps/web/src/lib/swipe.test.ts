@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideSwipe } from './swipe';
+import { decideSwipe, isSubpage, pageIndexOf } from './swipe';
 
 describe('decideSwipe', () => {
   it('短距离慢滑不换页', () => {
@@ -17,5 +17,27 @@ describe('decideSwipe', () => {
 
   it('短距离快速甩也算', () => {
     expect(decideSwipe({ dx: -60, dy: 4, vx: -500 })).toBe(1);
+  });
+});
+
+describe('pageIndexOf', () => {
+  it('主路由按下标返回', () => {
+    expect(pageIndexOf('/')).toBe(0);
+    expect(pageIndexOf('/stats')).toBe(1);
+    expect(pageIndexOf('/data')).toBe(2);
+    expect(pageIndexOf('/profile')).toBe(3);
+  });
+
+  it('二级页归到所属主页，不返回 -1', () => {
+    expect(pageIndexOf('/stats/hard-sets')).toBe(pageIndexOf('/stats'));
+  });
+
+  it('未知路由仍是 -1', () => {
+    expect(pageIndexOf('/nowhere')).toBe(-1);
+  });
+
+  it('只有二级页禁用滑动手势', () => {
+    expect(isSubpage('/stats/hard-sets')).toBe(true);
+    expect(isSubpage('/stats')).toBe(false);
   });
 });

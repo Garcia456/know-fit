@@ -2,7 +2,7 @@ import { animate, m, useMotionValue, useReducedMotion, type AnimationPlaybackCon
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { decideSwipe, PAGE_ORDER } from '../lib/swipe';
+import { isSubpage, pageIndexOf, decideSwipe, PAGE_ORDER } from '../lib/swipe';
 
 interface Gesture {
   startX: number;
@@ -21,7 +21,8 @@ export function PageSwipe({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const reduced = useReducedMotion();
-  const index = PAGE_ORDER.indexOf(pathname as (typeof PAGE_ORDER)[number]);
+  const index = pageIndexOf(pathname);
+  const subpage = isSubpage(pathname);
   const dragX = useMotionValue(0);
   const hostRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -48,7 +49,8 @@ export function PageSwipe({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || reduced || index < 0) return;
+    // 二级页不做左右翻页
+    if (!host || reduced || index < 0 || subpage) return;
 
     function onStart(e: TouchEvent) {
       const touch = e.touches[0];
@@ -115,7 +117,7 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       host.removeEventListener('touchend', onEnd);
       host.removeEventListener('touchcancel', onEnd);
     };
-  }, [index, navigate, reduced, dragX]);
+  }, [index, subpage, navigate, reduced, dragX]);
 
   return (
     <m.div ref={hostRef} className="page-swipe" style={{ x: dragX }}>
