@@ -191,7 +191,7 @@ describe('weeklyVolume：按周一起算的自然周', () => {
       '2026-10-12',
       '2026-10-19',
     ]);
-    expect(out.weeks.every((w) => w.total_volume_kg === 0 && w.working_sets === 0)).toBe(true);
+    expect(out.weeks.every((w) => w.total_volume_kg === 0 && w.working_sets === 0 && w.hard_sets === 0)).toBe(true);
     expect(out.this_week_kg).toBe(0);
     expect(out.last_week_kg).toBe(0);
     expect(out.delta_pct).toBeNull();
@@ -212,6 +212,7 @@ describe('weeklyVolume：按周一起算的自然周', () => {
     const out = await weeklyVolume({ user_id: WEEK_USER, weeks: 4, now });
     expect(out.weeks.map((w) => w.total_volume_kg)).toEqual([1500, 2000, 3000, 2500]);
     expect(out.weeks.map((w) => w.working_sets)).toEqual([3, 4, 6, 5]);
+    expect(out.weeks.map((w) => w.hard_sets)).toEqual([3, 4, 6, 5]);
     expect(out.this_week_kg).toBe(2500);
     expect(out.last_week_kg).toBe(3000);
     expect(out.delta_pct).toBe(-16.67);
@@ -293,7 +294,20 @@ describe('statsRange：任意日期范围聚合', () => {
     expect(out.days).toEqual([]);
     expect(out.total_volume_kg).toBe(0);
     expect(out.working_sets).toBe(0);
+    expect(out.hard_sets).toBe(0);
     expect(out.training_days).toBe(0);
+    expect(out.muscle_groups).toHaveLength(9);
+    expect(out.muscle_groups.every((g) => g.hard_sets === 0)).toBe(true);
+    expect(out.by_group_sets).toEqual(Object.fromEntries(out.muscle_groups.map((g) => [g.id, 0])));
+    expect(out.unclassified).toMatchObject({ hard_sets: 0, by_region: {}, unrecognized_hard_sets: 0 });
+    // 上一区间 = 紧邻 from 之前、等长的一段：03-01 往前 31 天 → 01-29..02-28
+    expect(out.previous).toEqual({
+      from: '2026-01-29',
+      to: '2026-02-28',
+      hard_sets: 0,
+      delta: 0,
+      delta_pct: null,
+    });
     expect(out.weight_points).toEqual([]);
     expect(out.weight_latest).toBeNull();
     expect(out.weight_delta_kg).toBeNull();
@@ -320,16 +334,37 @@ describe('statsRange：任意日期范围聚合', () => {
 
     const out = await statsRange({ user_id: STATS_USER, from: '2026-03-31', to: '2026-04-02' });
     expect(out.days).toEqual([
-      { date: '2026-03-31', total_volume_kg: 1000, working_sets: 2 },
-      { date: '2026-04-02', total_volume_kg: 2000, working_sets: 4 },
+      { date: '2026-03-31', total_volume_kg: 1000, working_sets: 2, hard_sets: 2 },
+      { date: '2026-04-02', total_volume_kg: 2000, working_sets: 4, hard_sets: 4 },
     ]);
     expect(out.total_volume_kg).toBe(3000);
     expect(out.working_sets).toBe(6);
+    expect(out.hard_sets).toBe(6);
     expect(out.training_days).toBe(2);
     // 卧推：胸 1.0，前三角 / 三头各 0.5
     expect(out.by_muscle.chest).toBe(3000);
     expect(out.by_muscle.delt_ant).toBe(1500);
     expect(out.by_muscle.triceps).toBe(1500);
+    expect(out.by_muscle_sets.chest).toBe(6);
+    expect(out.by_muscle_sets.delt_ant).toBe(3);
+    expect(out.by_muscle_sets.triceps).toBe(3);
+    expect(out.by_group_sets.chest).toBe(6);
+    expect(out.by_group_sets.shoulders).toBe(3);
+    expect(out.by_group_sets.arms).toBe(3);
+    const chest = out.muscle_groups.find((g) => g.id === 'chest');
+    expect(chest).toMatchObject({ name_zh: '胸', weekly_low: 10, weekly_high: 20, hard_sets: 6 });
+    expect(chest?.muscles[0]?.sources[0]).toMatchObject({ exercise_id: 'bench_press', hard_sets: 6, weighted_sets: 6 });
+    expect(out.unclassified).toMatchObject({ hard_sets: 0, unrecognized_hard_sets: 0 });
+    expect(out.inferred_hard_sets).toBe(0);
+    expect(out.warmup_sets).toBe(0);
+    // 上期 03-28..03-30 无记录
+    expect(out.previous).toEqual({
+      from: '2026-03-28',
+      to: '2026-03-30',
+      hard_sets: 0,
+      delta: 6,
+      delta_pct: null,
+    });
     expect(out.weight_points.map((p) => p.date)).toEqual(['2026-03-31', '2026-04-02']);
     expect(out.weight_latest).toEqual({ date: '2026-04-02', weight_kg: 79 });
     expect(out.weight_delta_kg).toBe(-1);
@@ -341,5 +376,45 @@ describe('statsRange：任意日期范围聚合', () => {
     expect(out.training_days).toBe(1);
     expect(out.weight_points).toHaveLength(1);
     expect(out.weight_delta_kg).toBeNull();
+  });
+});
+
+/** 上期比较 —— 独立用户，避免与上面的范围聚合互相干扰 */
+const PREV_USER = '00000000-0000-4000-8000-0000000000e5';
+
+describe('statsRange：上一区间与环比', () => {
+  beforeAll(async () => {
+    await getDb().insert(user).values({ id: PREV_USER, email: `${PREV_USER}@test.local`, passwordHash: 'scrypt$locked$locked', nickname: '测试' }).onConflictDoNothing();
+    // 上期 05-04（周一）3 组；当前 05-11（周一）2 组
+    for (const r of [
+      { date: '2026-05-04', volume: 1500, sets: 3 },
+      { date: '2026-05-11', volume: 1000, sets: 2 },
+    ]) {
+      await persistWorkout({ ...workout({ split: `${BASE}上期`, ...r }), user_id: PREV_USER });
+    }
+  });
+
+  afterAll(async () => {
+    await getPool().query('DELETE FROM "user" WHERE id = $1', [PREV_USER]);
+  });
+
+  it('上期与当前区间等长且紧邻；delta / delta_pct 按上期算', async () => {
+    const out = await statsRange({ user_id: PREV_USER, from: '2026-05-11', to: '2026-05-17' });
+    expect(out.hard_sets).toBe(2);
+    expect(out.previous).toEqual({
+      from: '2026-05-04',
+      to: '2026-05-10',
+      hard_sets: 3,
+      delta: -1,
+      delta_pct: -33.33,
+    });
+  });
+
+  it('本周这样只过了几天的区间，比较的是上周同期而不是完整上周', async () => {
+    // 只到周三：05-11..05-13，上期同为 3 天 → 05-08..05-10（不含 05-04 的 3 组）
+    const out = await statsRange({ user_id: PREV_USER, from: '2026-05-11', to: '2026-05-13' });
+    expect(out.previous).toMatchObject({ from: '2026-05-08', to: '2026-05-10', hard_sets: 0 });
+    expect(out.previous.delta).toBe(2);
+    expect(out.previous.delta_pct).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 {
-  "$schema_version": "1.0",
+  "$schema_version": "1.1",
   "$source": "docs/06-mvp-and-tech/动作-肌群映射表.md v1.5 —— §1.2 分区表 / §3.1 表A / §3.2 表B / §3.3 表C",
   "$generated": "2026-10-09",
   "$counts": {
@@ -8,7 +8,8 @@
     "region_fallbacks": 5
   },
   "$notes": [
-    "肌群权重不在本文件内 —— 按 ADR-014，主动肌 1.0 / 协同肌 0.5 是确定性代码里的配置项，不写进数据。",
+    "肌群权重不在本文件内 —— 按 ADR-014 / ADR-071，主动肌 1.0 / 协同肌 0.5 / 第三档 0.25 是确定性代码里的配置项，不写进数据。",
+    "tertiary_muscles 是第三档协同肌的角色声明（权重 0.25），可选；当前没有动作填写，字段先具备能力。",
     "coarse 字段是 free-exercise-db 的 17 区粗档，供 ADR-013 的『退档不重做』路径使用（退 17 区只需改读这一列）。",
     "primary_muscles / secondary_muscles 已统一到本表 20 区 id（映射表里写成『traps（中下）』这类口语的，已归到 back_mid）。",
     "exercise_id 为 null 的情形（用户只说了部位、说不出动作）走 region_fallbacks —— 数据层不归并，展示层才补偿。",

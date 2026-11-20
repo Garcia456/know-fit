@@ -25,6 +25,7 @@ function fakeSeed(): Seed {
         mechanic: '推',
         primary_muscles: ['chest'],
         secondary_muscles: ['delt_ant'],
+        tertiary_muscles: [],
         coarse: ['chest'],
       },
     ],

@@ -12,6 +12,11 @@ import type { HookInput } from '../graph/deps.js';
 import { loadSeed, type Seed } from '../seed/load.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 import { allocateMuscleVolume, type AllocExercise } from '../metrics/regions.js';
+import { countWorkingSets, summarizeHardSets } from '../metrics/hardSets.js';
+import {
+  MUSCLE_GROUPS,
+  REGION_FALLBACK_LABELS,
+} from '../metrics/muscleGroups.js';
 import { computeVolume, type VolumeSet } from '../metrics/volume.js';
 import { getDb } from './pool.js';
 
@@ -200,6 +205,20 @@ function weekStartOf(dateKey: string): string {
   return toLocalDate(mondayOf(new Date(`${dateKey}T00:00:00`)));
 }
 
+/** 日期键平移 —— 交给 Date 处理跨月 / 跨年与夏令时 */
+function shiftDateKey(dateKey: string, days: number): string {
+  const d = new Date(`${dateKey}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return toLocalDate(d);
+}
+
+/** 闭区间天数，含首尾 */
+function spanDays(from: string, to: string): number {
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  return Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+}
+
 function clampWeeks(n: number): number {
   return Math.min(Math.max(Math.trunc(n), 1), 26);
 }
@@ -248,11 +267,13 @@ export async function weeklyVolume(input: {
 
   const points = Array.from({ length: weeks }, (_, i) => {
     const weekStart = toLocalDate(addDays(firstMonday, i * 7));
-    const summary = computeVolume(byWeek.get(weekStart) ?? []);
+    const sets = byWeek.get(weekStart) ?? [];
+    const summary = computeVolume(sets);
     return {
       week_start: weekStart,
       total_volume_kg: summary.total_kg,
       working_sets: summary.working_sets,
+      hard_sets: countWorkingSets(sets),
     };
   });
 
@@ -301,18 +322,20 @@ export async function statsRange(input: {
 }): Promise<StatsRange> {
   const db = getDb();
   const { user_id, from, to } = input;
-  const inRange = and(
-    eq(workoutSession.userId, user_id),
-    gte(workoutSession.date, from),
-    lte(workoutSession.date, to),
-  );
 
+  // 上一区间：紧邻 from 之前、与当前区间等长的一段（ADR-071）
+  const span = spanDays(from, to);
+  const prevTo = shiftDateKey(from, -1);
+  const prevFrom = shiftDateKey(prevTo, -(span - 1));
+
+  // 两段并进同一条查询，按日期分桶；不增加往返次数
   const rows = await db
     .select({
       sessionDate: workoutSession.date,
       entryId: exerciseEntry.id,
       exerciseId: exerciseEntry.exerciseId,
       regionFallback: exerciseEntry.regionFallback,
+      rawName: exerciseEntry.rawName,
       weightKg: setEntry.weightKg,
       reps: setEntry.reps,
       setType: setEntry.setType,
@@ -324,14 +347,28 @@ export async function statsRange(input: {
     .from(setEntry)
     .innerJoin(exerciseEntry, eq(setEntry.exerciseEntryId, exerciseEntry.id))
     .innerJoin(workoutSession, eq(exerciseEntry.sessionId, workoutSession.id))
-    .where(inRange);
+    .where(
+      and(
+        eq(workoutSession.userId, user_id),
+        gte(workoutSession.date, prevFrom),
+        lte(workoutSession.date, to),
+      ),
+    );
 
-  const entries = new Map<string, AllocExercise & { date: string }>();
+  type StatsEntry = AllocExercise & { date: string; raw_name: string };
+  const entries = new Map<string, StatsEntry>();
+  let previousHardSets = 0;
+
   for (const r of rows) {
+    if (r.sessionDate < from) {
+      if (r.setType !== 'warmup') previousHardSets += 1;
+      continue;
+    }
     const entry = entries.get(r.entryId) ?? {
       date: r.sessionDate,
       exercise_id: r.exerciseId,
       region_fallback: r.regionFallback,
+      raw_name: r.rawName,
       sets: [],
     };
     entry.sets.push({
@@ -346,12 +383,13 @@ export async function statsRange(input: {
     entries.set(r.entryId, entry);
   }
 
-  const byDate = new Map<string, { total: number; sets: number }>();
+  const byDate = new Map<string, { total: number; sets: number; hard: number }>();
   for (const entry of entries.values()) {
     const summary = computeVolume(entry.sets);
-    const bucket = byDate.get(entry.date) ?? { total: 0, sets: 0 };
+    const bucket = byDate.get(entry.date) ?? { total: 0, sets: 0, hard: 0 };
     bucket.total += summary.total_kg;
     bucket.sets += summary.working_sets;
+    bucket.hard += countWorkingSets(entry.sets);
     byDate.set(entry.date, bucket);
   }
 
@@ -361,9 +399,27 @@ export async function statsRange(input: {
       date,
       total_volume_kg: round2(v.total),
       working_sets: v.sets,
+      hard_sets: v.hard,
     }));
 
-  const muscle = allocateMuscleVolume(Array.from(entries.values()), seed());
+  const muscles = Array.from(entries.values());
+  const muscle = allocateMuscleVolume(muscles, seed());
+  const hard = summarizeHardSets(muscles, seed());
+  const regionNames = new Map(seed().muscle_regions.map((r) => [r.id, r.name_zh]));
+
+  const muscleGroups = MUSCLE_GROUPS.map((group) => ({
+    id: group.id,
+    name_zh: group.name_zh,
+    weekly_low: group.weekly_low,
+    weekly_high: group.weekly_high,
+    hard_sets: hard.by_group[group.id] ?? 0,
+    muscles: group.members.map((id) => ({
+      id,
+      name_zh: regionNames.get(id) ?? id,
+      hard_sets: hard.by_muscle[id] ?? 0,
+      sources: hard.by_muscle_sources[id] ?? [],
+    })),
+  }));
 
   const weightRows = await db
     .select({ date: bodyMetric.date, weightKg: bodyMetric.weightKg })
@@ -380,12 +436,31 @@ export async function statsRange(input: {
   const weightLatest = weightPoints.at(-1) ?? null;
   const weightFirst = weightPoints[0];
 
+  const delta = hard.total - previousHardSets;
+
   return {
     from,
     to,
     days,
     total_volume_kg: round2(days.reduce((sum, d) => sum + d.total_volume_kg, 0)),
     working_sets: days.reduce((sum, d) => sum + d.working_sets, 0),
+    hard_sets: hard.total,
+    by_muscle_sets: hard.by_muscle,
+    by_group_sets: hard.by_group,
+    muscle_groups: muscleGroups,
+    unclassified: {
+      ...hard.unclassified,
+      region_labels: REGION_FALLBACK_LABELS,
+    },
+    previous: {
+      from: prevFrom,
+      to: prevTo,
+      hard_sets: previousHardSets,
+      delta,
+      delta_pct: previousHardSets === 0 ? null : round2((delta / previousHardSets) * 100),
+    },
+    inferred_hard_sets: hard.inferred_hard_sets,
+    warmup_sets: hard.warmup_sets,
     training_days: days.length,
     by_muscle: muscle.by_muscle,
     weight_points: weightPoints,

@@ -1,4 +1,4 @@
-import { MUSCLE_WEIGHTS } from './config.js';
+import { MUSCLE_WEIGHTS, muscleWeightsOf } from './config.js';
 import { computeVolume, type VolumeSet } from './volume.js';
 import type { Seed } from '../seed/load.js';
 
@@ -38,8 +38,9 @@ export function allocateMuscleVolume(exercises: AllocExercise[], seed: Seed): Mu
 
     const known = ex.exercise_id ? musclesById.get(ex.exercise_id) : undefined;
     if (known) {
-      for (const m of known.primary_muscles) byMuscle[m] = (byMuscle[m] ?? 0) + volume * MUSCLE_WEIGHTS.primary;
-      for (const m of known.secondary_muscles) byMuscle[m] = (byMuscle[m] ?? 0) + volume * MUSCLE_WEIGHTS.secondary;
+      for (const { muscle, weight } of muscleWeightsOf(known)) {
+        byMuscle[muscle] = (byMuscle[muscle] ?? 0) + volume * weight;
+      }
       continue;
     }
 
