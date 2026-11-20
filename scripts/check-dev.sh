@@ -162,6 +162,7 @@ if command -v curl >/dev/null 2>&1; then
 
   wait_for_http "$WEB_URL"            "web 聊天页 GET /" 40
   wait_for_http "${WEB_URL}stats"     "web 统计页 GET /stats" 10
+  wait_for_http "${WEB_URL}stats/hard-sets" "web 有效组二级页 GET /stats/hard-sets" 10
   wait_for_http "${WEB_URL}data"      "web 历史页 GET /data" 10
   wait_for_http "${WEB_URL}profile"   "web 档案页 GET /profile" 10
   wait_for_http "$HEALTH_URL"         "api 健康检查 GET /api/health" 20

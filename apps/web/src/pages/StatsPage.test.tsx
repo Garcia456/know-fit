@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { StatsRange } from '../api/types';
 import { startOfMonth, startOfWeekKey } from '../lib/calendar';
@@ -26,11 +27,25 @@ const stats: StatsRange = {
   from: prevKey,
   to: todayKey,
   days: [
-    { date: prevKey, total_volume_kg: 800, working_sets: 3 },
-    { date: todayKey, total_volume_kg: 1200, working_sets: 2 },
+    { date: prevKey, total_volume_kg: 800, working_sets: 3, hard_sets: 3 },
+    { date: todayKey, total_volume_kg: 1200, working_sets: 2, hard_sets: 2 },
   ],
   total_volume_kg: 2000,
   working_sets: 5,
+  hard_sets: 5,
+  by_muscle_sets: { chest: 5 },
+  by_group_sets: { chest: 5 },
+  muscle_groups: [],
+  unclassified: {
+    hard_sets: 0,
+    by_region: {},
+    region_labels: {},
+    unrecognized_hard_sets: 0,
+    exercises: [],
+  },
+  previous: { from: '2026-01-01', to: '2026-01-02', hard_sets: 4, delta: 1, delta_pct: 25 },
+  inferred_hard_sets: 0,
+  warmup_sets: 1,
   training_days: 2,
   by_muscle: { chest: 1200, triceps: 600 },
   weight_points: [
@@ -53,8 +68,18 @@ function stubStats(body: StatsRange = stats) {
   return urls;
 }
 
-function renderPage() {
-  return render(<StatsPage />);
+function renderPage(entry = '/stats') {
+  return render(
+    <MemoryRouter initialEntries={[entry]}>
+      <StatsPage />
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+}
+
+function LocationProbe() {
+  const loc = useLocation();
+  return <p data-testid="location">{`${loc.pathname}${loc.search}`}</p>;
 }
 
 afterEach(() => {
@@ -63,7 +88,7 @@ afterEach(() => {
 });
 
 describe('统计页', () => {
-  it('默认本周：按周一到今天请求，只画有训练的天', async () => {
+  it('默认本周：按周一到今天请求，卡片只显示总有效组数', async () => {
     const urls = stubStats();
     renderPage();
 
@@ -71,10 +96,30 @@ describe('统计页', () => {
     expect(screen.getByRole('button', { name: '本周' }).getAttribute('aria-pressed')).toBe('true');
     expect(urls[0]).toBe(`/api/stats?from=${startOfWeekKey(today)}&to=${todayKey}`);
 
-    expect(screen.getByText('2,000')).toBeDefined();
-    expect(screen.getByText('正式组 5 组 · 训练 2 天')).toBeDefined();
-    const bars = screen.getByRole('img', { name: /每日训练容量/ });
-    expect(bars.children).toHaveLength(2);
+    // 主卡片只有一个数：不再显示吨位
+    expect(screen.getByRole('link', { name: /总有效组数 5 组/ })).toBeDefined();
+    expect(screen.queryByText('2,000')).toBeNull();
+    expect(screen.getByText('2 天有训练 · 5 组有效')).toBeDefined();
+    expect(screen.queryByRole('img', { name: /每日训练容量/ })).toBeNull();
+  });
+
+  it('点卡片进二级页，区间带在 URL 上', async () => {
+    stubStats();
+    renderPage();
+    await screen.findByText('训练容量');
+
+    const link = screen.getByRole('link', { name: /查看肌群分布/ });
+    expect(link.getAttribute('href')).toBe(`/stats/hard-sets?from=${prevKey}&to=${todayKey}`);
+  });
+
+  it('从 URL 恢复区间：刷新 / 二级页返回不丢范围', async () => {
+    const urls = stubStats();
+    renderPage('/stats?from=2026-01-05&to=2026-01-31');
+
+    await screen.findByText('训练容量');
+    expect(screen.getByRole('button', { name: '自定义' }).getAttribute('aria-pressed')).toBe('true');
+    expect(urls[0]).toBe('/api/stats?from=2026-01-05&to=2026-01-31');
+    expect(screen.getByTestId('location').textContent).toBe('/stats?from=2026-01-05&to=2026-01-31');
   });
 
   it('今天 / 本月切换后按新范围请求', async () => {
@@ -124,6 +169,9 @@ describe('统计页', () => {
       days: [],
       total_volume_kg: 0,
       working_sets: 0,
+      hard_sets: 0,
+      by_muscle_sets: {},
+      by_group_sets: {},
       training_days: 0,
       by_muscle: {},
       weight_points: [],

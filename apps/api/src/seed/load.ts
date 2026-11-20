@@ -26,6 +26,8 @@ const ExerciseSchema = z.object({
   mechanic: z.string().nullable(),
   primary_muscles: z.array(z.string()),
   secondary_muscles: z.array(z.string()),
+  // 第三档协同肌（权重 0.25）。默认空数组，现有动作不需要改。
+  tertiary_muscles: z.array(z.string()).default([]),
   coarse: z.array(z.string()),
 });
 
@@ -69,14 +71,31 @@ export type Exercise = z.infer<typeof ExerciseSchema>;
  */
 export function loadSeed(path: string = SEED_PATH): Seed {
   const raw: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  return parseSeed(raw);
+}
+
+/** 校验一个已解析的 seed 对象 —— 结构 + 引用完整性；供测试注入合成数据 */
+export function parseSeed(raw: unknown): Seed {
   const seed = SeedSchema.parse(raw);
 
   const known = new Set(seed.muscle_regions.map((m) => m.id));
   const unknown: string[] = [];
+  const duplicated: string[] = [];
 
   for (const ex of seed.exercises) {
-    for (const m of [...ex.primary_muscles, ...ex.secondary_muscles]) {
+    const declared = [
+      ...ex.primary_muscles,
+      ...ex.secondary_muscles,
+      ...ex.tertiary_muscles,
+    ];
+    for (const m of declared) {
       if (!known.has(m)) unknown.push(`exercise ${ex.id} → ${m}`);
+    }
+    // 同一动作里同一肌群不能跨角色重复声明：否则会被重复计权
+    const seen = new Set<string>();
+    for (const m of declared) {
+      if (seen.has(m)) duplicated.push(`exercise ${ex.id} → ${m}`);
+      seen.add(m);
     }
   }
   for (const fb of seed.region_fallbacks) {
@@ -87,6 +106,9 @@ export function loadSeed(path: string = SEED_PATH): Seed {
 
   if (unknown.length) {
     throw new Error(`seed 数据引用了未知 muscle id：\n  ${unknown.join('\n  ')}`);
+  }
+  if (duplicated.length) {
+    throw new Error(`seed 数据在同一动作里重复声明了肌群：\n  ${duplicated.join('\n  ')}`);
   }
   return seed;
 }

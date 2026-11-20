@@ -16,8 +16,14 @@ export function WeightChart({ points }: { points: WeightPoint[] }) {
   const first = points[0];
   const lastPoint = points[points.length - 1];
   const last = coords[coords.length - 1];
-  const mid = points[Math.floor(points.length / 2)] ?? first;
-  if (!first || !lastPoint || !last || !mid) return null;
+  if (!first || !lastPoint || !last) return null;
+
+  // 只有两个点时，中点就是右端点 —— 中间刻度留空，免得出现两个一样的日期
+  const axisDates = (
+    points.length >= 3
+      ? [first.date, points[Math.floor(points.length / 2)]?.date, lastPoint.date]
+      : [first.date, lastPoint.date]
+  ).filter((date): date is string => Boolean(date));
 
   return (
     <div className="spark-line">
@@ -45,9 +51,9 @@ export function WeightChart({ points }: { points: WeightPoint[] }) {
         <circle cx={last.x} cy={last.y} r="4.5" fill="#FFFFFF" stroke="#11140D" strokeWidth="2" />
       </svg>
       <div className="axis">
-        <span>{formatMd(first.date)}</span>
-        <span>{formatMd(mid.date)}</span>
-        <span>{formatMd(lastPoint.date)}</span>
+        {axisDates.map((date, i) => (
+          <span key={`${date}-${i}`}>{formatMd(date)}</span>
+        ))}
       </div>
     </div>
   );

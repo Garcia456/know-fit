@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { getStats } from '../api/client';
 import type { StatsRange } from '../api/types';
 import { BodyHeatMap } from '../components/BodyHeatMap';
 import { DateField } from '../components/DateField';
+import { ChevronRightIcon } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
 import { WeightChart } from '../components/WeightChart';
 import { startOfMonth, startOfWeekKey, toDateKey } from '../lib/calendar';
-import { formatMd, formatMonthDay, formatNumber, formatSignedKg } from '../lib/format';
+import { formatMonthDay, formatNumber, formatSignedKg } from '../lib/format';
 
 type RangeKey = 'day' | 'week' | 'month' | 'custom';
 
@@ -31,13 +33,38 @@ function spanDays(from: string, to: string): number {
   );
 }
 
+function isDateKey(value: string | null): value is string {
+  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/** URL 里的区间能对上预设时，芯片仍显示「今天 / 本周 / 本月」，否则是自定义 */
+function rangeKeyFor(from: string, to: string, today: Date, todayKey: string): RangeKey {
+  if (from === todayKey && to === todayKey) return 'day';
+  if (from === startOfWeekKey(today) && to === todayKey) return 'week';
+  if (from === toDateKey(startOfMonth(today)) && to === todayKey) return 'month';
+  return 'custom';
+}
+
 /** 统计页：选定范围内的容量 / 体重 / 肌群。 */
 export function StatsPage() {
   const today = useMemo(() => new Date(), []);
   const todayKey = toDateKey(today);
-  const [rangeKey, setRangeKey] = useState<RangeKey>('week');
-  const [customFrom, setCustomFrom] = useState(() => toDateKey(addDays(new Date(), -29)));
-  const [customTo, setCustomTo] = useState(todayKey);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // 只读一次：进页时可从 URL 恢复区间（二级页返回、刷新都不丢）
+  const initialRange = useMemo(() => {
+    const qFrom = searchParams.get('from');
+    const qTo = searchParams.get('to');
+    if (!isDateKey(qFrom) || !isDateKey(qTo)) return null;
+    if (qFrom > qTo || spanDays(qFrom, qTo) > MAX_SPAN_DAYS) return null;
+    return { from: qFrom, to: qTo, key: rangeKeyFor(qFrom, qTo, today, todayKey) };
+  }, [searchParams, today, todayKey]);
+
+  const [rangeKey, setRangeKey] = useState<RangeKey>(() => initialRange?.key ?? 'week');
+  const [customFrom, setCustomFrom] = useState(
+    () => initialRange?.from ?? toDateKey(addDays(new Date(), -29)),
+  );
+  const [customTo, setCustomTo] = useState(() => initialRange?.to ?? todayKey);
   const [stats, setStats] = useState<StatsRange | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +83,16 @@ export function StatsPage() {
     if (spanDays(range.from, range.to) > MAX_SPAN_DAYS) return '范围最长 366 天';
     return null;
   }, [range]);
+
+  // 区间写回 URL，供二级页与刷新复用；replace 不堆历史
+  useEffect(() => {
+    if (rangeProblem) return;
+    if (searchParams.get('from') === range.from && searchParams.get('to') === range.to) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('from', range.from);
+    next.set('to', range.to);
+    setSearchParams(next, { replace: true });
+  }, [range.from, range.to, rangeProblem, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (rangeProblem) return;
@@ -115,7 +152,7 @@ export function StatsPage() {
               {rangeProblem
                 ? '范围需要调整'
                 : stats
-                  ? `${stats.training_days} 天有训练 · ${formatNumber(stats.total_volume_kg)} kg`
+                  ? `${stats.training_days} 天有训练 · ${stats.hard_sets} 组有效`
                   : '正在读取区间…'}
             </span>
           </p>
@@ -153,7 +190,7 @@ export function StatsPage() {
         ) : null
       ) : (
         <>
-          <VolumeSection stats={stats} />
+          <HardSetsCard stats={stats} />
           <WeightSection stats={stats} />
           {stats.total_volume_kg > 0 ? (
             <section className="sec stats-heat" aria-label="肌肉热力图">
@@ -187,43 +224,35 @@ function FailedSection({ label }: { label: string }) {
   );
 }
 
-function VolumeSection({ stats }: { stats: StatsRange }) {
-  const max = Math.max(...stats.days.map((d) => d.total_volume_kg), 1);
+/** 主卡片只给一个数：总有效组数。肌群分布与明细进二级页。 */
+function HardSetsCard({ stats }: { stats: StatsRange }) {
+  const href = `/stats/hard-sets?from=${stats.from}&to=${stats.to}`;
 
   return (
     <section className="sec" aria-label="训练容量">
       <div className="sec-hd">
         <h2>训练容量</h2>
-        <span className="hint">正式组 Σ 重量 × 次数</span>
+        <span className="hint">正式组 · 热身不计</span>
       </div>
-      <div className="chart-card">
+      <Link
+        className="chart-card hard-sets-card"
+        to={href}
+        aria-label={`总有效组数 ${stats.hard_sets} 组，查看肌群分布`}
+      >
         <div className="metric">
-          <b>{formatNumber(stats.total_volume_kg)}</b>
-          <span>kg · 本范围</span>
+          <b>{stats.hard_sets}</b>
+          <span>有效组 · 本范围</span>
+          <span className="hard-sets-card__more">
+            查看肌群分布
+            <ChevronRightIcon />
+          </span>
         </div>
         <p className="page-hint">
-          正式组 {stats.working_sets} 组 · 训练 {stats.training_days} 天
+          {stats.days.length === 0
+            ? '这个范围还没有训练记录。'
+            : `训练 ${stats.training_days} 天 · 热身 ${stats.warmup_sets} 组不计`}
         </p>
-
-        {stats.days.length === 0 ? (
-          <p className="page-hint">这个范围还没有训练记录。</p>
-        ) : (
-          <div
-            className={`bars${stats.days.length > 7 ? ' bars--scroll' : ''}`}
-            role="img"
-            aria-label={`每日训练容量：${stats.days
-              .map((d) => `${formatMd(d.date)} ${formatNumber(d.total_volume_kg)} 千克`)
-              .join('、')}`}
-          >
-            {stats.days.map((day) => (
-              <div key={day.date}>
-                <i style={{ height: `${Math.round((day.total_volume_kg / max) * 60)}px` }} />
-                <small>{formatMd(day.date)}</small>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      </Link>
     </section>
   );
 }

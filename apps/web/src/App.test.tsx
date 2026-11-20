@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HistoryItem, TurnResponse } from './api/types';
 import { AppShell } from './App';
+import { startOfWeekKey } from './lib/calendar';
 
 /**
  * React 组件测试。
@@ -126,8 +127,22 @@ function stubApi(sessions: unknown[] = []) {
         days: [],
         total_volume_kg: 0,
         working_sets: 0,
+        hard_sets: 0,
         training_days: 0,
         by_muscle: {},
+        by_muscle_sets: {},
+        by_group_sets: {},
+        muscle_groups: [],
+        unclassified: {
+          hard_sets: 0,
+          by_region: {},
+          region_labels: {},
+          unrecognized_hard_sets: 0,
+          exercises: [],
+        },
+        previous: { from: todayKey, to: todayKey, hard_sets: 0, delta: 0, delta_pct: null },
+        inferred_hard_sets: 0,
+        warmup_sets: 0,
         weight_points: [],
         weight_latest: null,
         weight_delta_kg: null,
@@ -204,8 +219,34 @@ describe('顶部导航', () => {
     expect(screen.getByRole('button', { name: '对话历史' })).toBeDefined();
   });
 
-  it('四页左右滑切换；纵向滑不切页', async () => {
-    renderShell('/');
+  it('左右两个会话按钮只在会话页显示', async () => {
+    renderShell('/stats');
+    await screen.findByText('训练容量');
+
+    expect(screen.queryByRole('button', { name: '对话历史' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '创建新会话' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('link', { name: '会话' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '对话历史' })).toBeDefined(),
+    );
+    expect(screen.getByRole('button', { name: '创建新会话' })).toBeDefined();
+  });
+
+  it('二级页不显示顶部导航，左上角返回钮与设置页一致', async () => {
+    renderShell('/stats/hard-sets');
+
+    expect(await screen.findByRole('heading', { name: '有效组数' })).toBeDefined();
+    expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull();
+
+    const back = screen.getByRole('link', { name: '返回统计' });
+    expect(back.className).toContain('icon-btn');
+    expect(back.getAttribute('href')).toBe(
+      `/stats?from=${startOfWeekKey(today)}&to=${todayKey}`,
+    );
+  });
+
+  it('四页左右滑切换；纵向滑不切页', async () => {    renderShell('/');
     const host = document.querySelector('.page-swipe');
     expect(host).not.toBeNull();
 

@@ -260,6 +260,7 @@ export interface WeeklyVolumePoint {
   week_start: string;
   total_volume_kg: number;
   working_sets: number;
+  hard_sets: number;
 }
 
 export interface WeeklyVolume {
@@ -284,6 +285,48 @@ export interface StatsDay {
   date: string;
   total_volume_kg: number;
   working_sets: number;
+  hard_sets: number;
+}
+
+/** 单个动作在某个肌群上的有效组贡献 */
+export interface ExerciseHardSet {
+  exercise_id: string | null;
+  name: string;
+  hard_sets: number;
+  weighted_sets: number;
+}
+
+export interface MuscleHardSet {
+  id: string;
+  name_zh: string;
+  hard_sets: number;
+  sources: ExerciseHardSet[];
+}
+
+/** 展示组：参考区间由服务端下发，前端不再复制肌群配置 */
+export interface MuscleGroupHardSet {
+  id: string;
+  name_zh: string;
+  weekly_low: number;
+  weekly_high: number;
+  hard_sets: number;
+  muscles: MuscleHardSet[];
+}
+
+export interface UnclassifiedHardSets {
+  hard_sets: number;
+  by_region: Record<string, number>;
+  region_labels: Record<string, string>;
+  unrecognized_hard_sets: number;
+  exercises: { name: string; hard_sets: number; region_fallback: string | null }[];
+}
+
+export interface PreviousStats {
+  from: string;
+  to: string;
+  hard_sets: number;
+  delta: number;
+  delta_pct: number | null;
 }
 
 export interface StatsRange {
@@ -292,6 +335,16 @@ export interface StatsRange {
   days: StatsDay[];
   total_volume_kg: number;
   working_sets: number;
+  /** 原始正式组数，每组只算一次 */
+  hard_sets: number;
+  /** 20 区加权组数（主 1.0 / 次 0.5 / 第三档 0.25） */
+  by_muscle_sets: Record<string, number>;
+  by_group_sets: Record<string, number>;
+  muscle_groups: MuscleGroupHardSet[];
+  unclassified: UnclassifiedHardSets;
+  previous: PreviousStats;
+  inferred_hard_sets: number;
+  warmup_sets: number;
   training_days: number;
   by_muscle: Record<string, number>;
   weight_points: WeightPoint[];

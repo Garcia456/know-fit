@@ -34,7 +34,7 @@ describe('parseProfileForm', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errors.height).toContain('100');
-      expect(result.errors.weight).toContain('300');
+      expect(result.errors.weight).toBe('体重需在 30–300kg 之间');
     }
   });
 

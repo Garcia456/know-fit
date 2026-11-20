@@ -19,6 +19,14 @@ pnpm dev                     # web :5173，api :3000
 `.env` 里 `LLM_PROVIDER=fake` 时对话走替身，返回固定话术，只验证管道通不通。
 要看真实回复，改成 `openai` 并填 `OPENAI_BASE_URL` / `OPENAI_API_KEY` / `OPENAI_MODEL`。
 
+**收工前停掉自己起过的进程。** 功能点开发完、两道闸门都过、判断本轮不再需要改动时，在结束会话前把 `pnpm dev` / `bash scripts/check-dev.sh` 起的前后端进程停干净。维护者随后要做真实模型联调和人工验收，残留的 fake 进程会被误当成本机服务，请求实际仍走替身；而且进程不重启，注册 / 对话限流桶不会清零，会表现为莫名其妙的 429。
+
+```bash
+netstat -ano | grep -E ':3000|:5173'   # 收工时应没有 LISTENING
+```
+
+Windows 上 `check-dev.sh` 的收尾偶尔漏杀子进程。若端口仍被占、且 PID 的命令行来自本仓库的 `src/server.ts` 或 vite，用 `taskkill //PID <pid> //F //T` 结束它。
+
 ---
 
 ## 二、两道闸门

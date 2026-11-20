@@ -5,10 +5,12 @@ import { AuthGate } from './auth/AuthGate';
 import { AuthProvider } from './auth/AuthContext';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { writeConversationId } from './lib/conversation';
+import { isSubpage } from './lib/swipe';
 import { PageSwipe } from './components/PageSwipe';
 import { TopNav } from './components/TopNav';
 import { ChatPage } from './pages/ChatPage';
 import { DataPage } from './pages/DataPage';
+import { HardSetsPage } from './pages/HardSetsPage';
 import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -20,6 +22,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/stats" element={<StatsPage />} />
+      <Route path="/stats/hard-sets" element={<HardSetsPage />} />
       <Route path="/data" element={<DataPage />} />
       <Route path="/profile" element={<ProfilePage />} />
     </Routes>
@@ -38,6 +41,8 @@ export function AppShell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const chatActive = pathname === '/';
+  // 二级页自带返回头，不再显示顶部导航
+  const subpage = isSubpage(pathname);
 
   const onConversationChange = useCallback((id: string | null) => {
     setActiveConversationId(id);
@@ -69,10 +74,12 @@ export function AppShell() {
   return (
     <LazyMotion features={domAnimation} strict>
       <div className="app-shell">
-        <TopNav
-          onOpenHistory={() => setDrawerOpen(true)}
-          onNewConversation={newConversation}
-        />
+        {subpage ? null : (
+          <TopNav
+            onOpenHistory={() => setDrawerOpen(true)}
+            onNewConversation={newConversation}
+          />
+        )}
         <PageSwipe>
           {/* 会话页常驻：切 tab 不卸载，未回复的消息与「思考中」不会丢 */}
           <div className="page-slot" hidden={!chatActive}>
