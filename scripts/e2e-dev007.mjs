@@ -185,6 +185,7 @@ try {
     weekly.status === 200 &&
     weekly.body.weeks.length === 4 &&
     lastWeek.total_volume_kg >= 1120 &&
+    lastWeek.hard_sets >= 2 &&
     typeof weekly.body.this_week_kg === 'number'
   ) {
     ok('GET /api/metrics/weekly 返回 4 周，本周含测试训练');
@@ -230,9 +231,17 @@ try {
     stats.body.to === today &&
     statsToday?.total_volume_kg >= 1120 &&
     statsToday?.working_sets >= 2 &&
+    statsToday?.hard_sets >= 2 &&
     stats.body.training_days >= 1 &&
     stats.body.total_volume_kg >= 1120 &&
+    stats.body.hard_sets >= 2 &&
     stats.body.by_muscle?.chest >= 1120 &&
+    stats.body.by_muscle_sets?.chest >= 2 &&
+    stats.body.by_muscle_sets?.delt_ant >= 1 &&
+    stats.body.by_muscle_sets?.triceps >= 1 &&
+    stats.body.by_muscle_sets.chest > stats.body.by_muscle_sets.delt_ant &&
+    stats.body.muscle_groups?.length === 9 &&
+    typeof stats.body.previous?.hard_sets === 'number' &&
     statsWeightLast?.weight_kg === 80 &&
     statsDelta !== null &&
     Math.abs(stats.body.weight_delta_kg - statsDelta) < 0.011
