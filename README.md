@@ -131,7 +131,8 @@ know-fit：
 - 四个主页面：会话 / 统计 / 历史 / 我的；会话页常驻，切 tab 不丢未回复的消息和「思考中」状态。
 - 历史抽屉支持置顶、重命名、多选删除；训练记录支持编辑、删除、拖动排序。
 - 统计页支持今天 / 本周 / 本月 / 自定义区间；有效组数可下钻到肌群分布与动作明细，区间写回 URL，刷新不丢。
-- 会话 Cookie 鉴权、按路由的固定窗口限流、可选邀请码注册、API 安全响应头；知识库按平台做可见性授权。
+- 会话 Cookie 鉴权、按路由的固定窗口限流、开放注册、API 安全响应头；知识库按平台做可见性授权。
+- 账号分层：注册须先通过邮箱验证码；服务端模型对话按免费次数计，用尽后可自带 DeepSeek Key（加密保存，端点与模型白名单锁死）继续；用邀请码解锁知识库的账号不计次。
 
 ---
 
@@ -151,6 +152,8 @@ pnpm dev                      # web :5173，api :3000
 ```
 
 打开 <http://localhost:5173>，注册一个账号即可。
+
+默认 `MAIL_PROVIDER=fake`：注册验证码写进 `.mail-outbox/outbox.jsonl`，不联网也能完成注册。注册必须先过邮箱验证码，没有验证不能建号。
 
 默认的 `fake` 模式是**刻意设计**的：LLM、embedding、rerank、ASR、采集全部走确定性替身，离线、不联网、不需要密钥。它验证的是管道是否打通，也是 CI 跑的路径。
 
@@ -392,11 +395,27 @@ Demo 是共享的只读实例：限流 30 次 / 10 秒，不写请求日志与�
 
 | 变量 | 默认 | 作用 |
 |---|---|---|
-| `REGISTRATION_INVITE_CODE` | 空 | 设置后注册必须带邀请码 |
+| `KNOWLEDGE_INVITE_CODE` | 空 | 设置后用户可在设置页填它解锁知识库；空 = 知识库暂未开放 |
 | `RATE_LIMIT_LOGIN_PER_15MIN` | `20` | 登录限流 |
 | `RATE_LIMIT_REGISTER_PER_HOUR` | `5` | 注册限流 |
+| `RATE_LIMIT_REGISTER_CODE_PER_HOUR` | `10` | 注册邮箱验证码发送限流 |
+| `RATE_LIMIT_INVITE_UNLOCK_PER_HOUR` | `5` | 邀请码解锁尝试限流 |
 | `TURN_QUOTA_PER_HOUR` | `120` | 每用户对话配额 |
 | `ASSESSMENT_QUOTA_PER_HOUR` | `60` | 每用户评估配额 |
+
+### 账号、额度与邮件
+
+| 变量 | 默认 | 作用 |
+|---|---|---|
+| `FREE_TURNS_LIMIT` | `20` | 服务端模型对话的免费次数上限（按账号计；邀请码账号不计次） |
+| `KEY_ENCRYPTION_SECRET` | 空 | 自带 Key 的 AES-256-GCM KEK（32 字节 base64）；空 = 保存 Key 返回 503 |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | 自带 Key 唯一允许的端点 |
+| `DEEPSEEK_MODELS` | `deepseek-flash,deepseek-v4-pro` | 自带 Key 的模型白名单（逗号分隔） |
+| `MAIL_PROVIDER` | `fake` | `fake` 写 outbox 文件 / `smtp` 真实投递 |
+| `MAIL_OUTBOX_DIR` | `.mail-outbox` | fake 模式的 outbox 目录（注册验证码在这里） |
+| `PUBLIC_APP_URL` | `http://localhost:5173` | 历史未验证账号的验证链接 / 邮件里的前端基址 |
+| `RATE_LIMIT_VERIFY_RESEND_PER_HOUR` | `3` | 重发验证邮件限流 |
+| `RATE_LIMIT_LLM_KEY_PER_HOUR` | `10` | 保存自带 Key 限流（每次保存都会探测上游） |
 
 ---
 
@@ -443,7 +462,7 @@ bash scripts/restore.sh <dump>       # 恢复
 
 ```bash
 cp deploy/.env.production.example deploy/.env.production
-# 填 POSTGRES_PASSWORD、OPENAI_*、APP_SITE_ADDR、邀请码等
+# 填 POSTGRES_PASSWORD、OPENAI_*、APP_SITE_ADDR 等
 
 docker compose --env-file deploy/.env.production -f compose.prod.yml build
 docker compose --env-file deploy/.env.production -f compose.prod.yml run --rm migrate
@@ -487,7 +506,7 @@ docker compose --env-file deploy/.env.production -f compose.prod.yml up -d
 - **响应泄漏断言**：运行期把知识片全文切成 60 字窗口建哈希，递归扫描 API 返回的 JSON；命中即 500。契约层另有字段名约束，路由层禁止直接 import schema。
 - **评测脚手架**：`apps/api/evals/` 下有 claim-type、RAG、检索、turn-cost 四组 promptfoo / 脚本评测；用你自己的数据即可复现。
 - **成本可观测**：每轮记录 LLM、embedding、rerank 的用量；`turn-cost` 评测按轮汇总，便于对比模型与检索参数。
-- **安全默认值**：会话 Cookie、按路由限流、邀请码注册、API 安全响应头、知识平台授权；敏感密钥只从环境变量注入，不进镜像。
+- **安全默认值**：会话 Cookie、按路由限流、开放注册、API 安全响应头、知识平台授权；敏感密钥只从环境变量注入，不进镜像。
 
 ---
 
