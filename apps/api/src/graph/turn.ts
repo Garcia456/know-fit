@@ -10,6 +10,7 @@ import {
 import type { WorkoutCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
 import { resolveDate } from '../extraction/dates.js';
 import { normalizeExerciseName } from '../extraction/normalize.js';
+import { rethrowIfLlmConfig } from '../llm/errors.js';
 import { computeVolume } from '../metrics/volume.js';
 import { isBodyweightExercise } from '../metrics/bodyweight.js';
 import { computeStatus } from '../extraction/status.js';
@@ -346,8 +347,10 @@ export function buildTurnGraph(deps: TurnDeps) {
             assessment_lookup: { status: out.lookup_status, missing: out.missing },
             notices: [...state.notices, ...out.notices],
           };
-        } catch {
+        } catch (e) {
           // 🔴 录入可用性 > 评估可用性：评估挂了也要把卡片还回去
+          //    —— 但 Key 本身有问题要让人去改设置，不能伪装成「评估没生成」
+          rethrowIfLlmConfig(e);
           return {
             assessment: null,
             assessment_lookup: null,
@@ -380,7 +383,8 @@ export function buildTurnGraph(deps: TurnDeps) {
             history: state.history,
           });
           return { card };
-        } catch {
+        } catch (e) {
+          rethrowIfLlmConfig(e);
           return {
             card: {
               kind: 'chat' as const,
@@ -404,7 +408,8 @@ export function buildTurnGraph(deps: TurnDeps) {
             band: state.training_years_band,
           });
           return { card };
-        } catch {
+        } catch (e) {
+          rethrowIfLlmConfig(e);
           return { card: { kind: 'chat' as const, reply: '这次计划没排出来，再说一次试试。' } };
         }
       })

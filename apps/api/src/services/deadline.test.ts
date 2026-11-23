@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withDeadline } from './assessment.js';
+import { DeadlineExceededError, withDeadline } from './assessment.js';
 
 describe('withDeadline', () => {
   it('到点中断，spawn 出去的调用不会无限拖', async () => {
@@ -12,7 +12,7 @@ describe('withDeadline', () => {
         }),
     );
 
-    await expect(pending).rejects.toThrow('aborted');
+    await expect(pending).rejects.toBeInstanceOf(DeadlineExceededError);
     expect(Date.now() - started).toBeLessThan(1000);
   });
 

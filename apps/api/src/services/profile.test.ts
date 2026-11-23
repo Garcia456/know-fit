@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { register } from './auth.js';
 import { toLocalDate } from '../extraction/dates.js';
 import { getProfile, saveProfile, saveWeight, weightOn } from './profile.js';
 import { getPool, closeDb } from './pool.js';
+import { registerForTest } from './register-for-test.js';
 
 /** 档案读写 —— 连真库；体重历史同一天覆盖，训练年限按月折算。 */
 
@@ -12,7 +12,7 @@ let userId = '';
 
 beforeAll(async () => {
   // 不复用演示用户 —— 测试会改写档案，不能用 SINGLE_USER_ID
-  const result = await register({
+  const result = await registerForTest({
     email: `${PREFIX}${randomUUID()}@knowfit.local`,
     password: 'knowfit-test-123',
     nickname: '档案测试',
@@ -21,6 +21,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await getPool().query('DELETE FROM registration_verification WHERE email LIKE $1', [`${PREFIX}%`]);
   await getPool().query('DELETE FROM "user" WHERE email LIKE $1', [`${PREFIX}%`]);
   await closeDb();
 });

@@ -113,6 +113,41 @@
       "when": 1793700000000,
       "tag": "0015_training_frequency",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795350000000,
+      "tag": "0016_knowledge_invite",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795440000000,
+      "tag": "0017_email_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795526400000,
+      "tag": "0018_free_turns",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795612800000,
+      "tag": "0019_user_llm_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795700000000,
+      "tag": "0020_registration_verification",
+      "breakpoints": true
     }
   ]
 }

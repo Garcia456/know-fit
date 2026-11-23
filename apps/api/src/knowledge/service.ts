@@ -5,6 +5,7 @@ import { ragConfig } from '../assessment/types.js';
 import { verifyClaims } from '../assessment/verify.js';
 import type { RetrieveResult } from '../assessment/repo.js';
 import { bindSignal, type LlmClient } from '../llm/client.js';
+import { rethrowIfLlmConfig } from '../llm/errors.js';
 import { createLlmClient } from '../llm/index.js';
 import type { UsageRecorder } from '../llm/usage.js';
 import { createEmbeddingClient } from '../kb/embedding.js';
@@ -24,6 +25,9 @@ import { KNOWLEDGE_NO_SOURCE_SYSTEM, knowledgeNoSourceInput } from './prompts.js
 
 export const KNOWLEDGE_NO_SOURCE_NOTICE = '这条没有找到可靠的博主依据';
 export const KNOWLEDGE_RETRIEVAL_FAILURE_NOTICE = '这次没连上知识库，先给你一条通用回答';
+export const KNOWLEDGE_DISABLED_NOTICE = '知识库未开启';
+export const KNOWLEDGE_DISABLED_ANSWER =
+  '知识库还没开启 —— 到「我的 → 知识库」填入邀请码后，就能按博主原片回答。';
 
 const FALLBACK_ANSWER = '先按通用原则：动作做标准、重量循序渐进，感觉不对就减重。';
 const SOURCE_HINT = /博主|up主|UP主|视频里说|视频里讲/;
@@ -33,6 +37,8 @@ export interface KnowledgeInput {
   query: string;
   /** 用量打点；不传就不打点（线上链路开销为零） */
   usage?: UsageRecorder;
+  /** 本次请求用的模型客户端；不传就按服务端配置新建一个 */
+  llm?: LlmClient;
 }
 
 /**
@@ -47,7 +53,7 @@ function retrieveWithUsage(input: KnowledgeInput): Promise<RetrieveResult> {
   }).retrieve({ user_id: input.user_id, query: input.query });
 }
 
-function noSourceCard(answer: string, notice: string): KnowledgeCard {
+function noSourceCard(answer: string, notice: string, knowledgeDisabled = false): KnowledgeCard {
   return {
     kind: 'knowledge',
     answer,
@@ -55,6 +61,7 @@ function noSourceCard(answer: string, notice: string): KnowledgeCard {
     citations: [],
     has_source: false,
     no_source_notice: notice,
+    knowledge_disabled: knowledgeDisabled,
   };
 }
 
@@ -66,7 +73,8 @@ async function generalAnswer(llm: LlmClient, query: string): Promise<string> {
     })).trim();
     if (text.length === 0 || SOURCE_HINT.test(text)) return FALLBACK_ANSWER;
     return text;
-  } catch {
+  } catch (e) {
+    rethrowIfLlmConfig(e);
     return FALLBACK_ANSWER;
   }
 }
@@ -87,9 +95,10 @@ function assemble(
 export async function answerKnowledge(input: KnowledgeInput): Promise<KnowledgeCard> {
   try {
     return await withDeadline(ASSESSMENT_DEADLINE_MS, (signal) =>
-      run(input, bindSignal(createLlmClient(undefined, { usage: input.usage }), signal)),
+      run(input, bindSignal(input.llm ?? createLlmClient(undefined, { usage: input.usage }), signal)),
     );
-  } catch {
+  } catch (e) {
+    rethrowIfLlmConfig(e);
     return noSourceCard(FALLBACK_ANSWER, KNOWLEDGE_RETRIEVAL_FAILURE_NOTICE);
   }
 }
@@ -103,6 +112,10 @@ async function run(input: KnowledgeInput, llm: LlmClient): Promise<KnowledgeCard
   }
   if (retrieved.status === 'error') {
     return noSourceCard(await generalAnswer(llm, input.query), KNOWLEDGE_RETRIEVAL_FAILURE_NOTICE);
+  }
+  // 没有授权平台 ≠ 库是空的：直接说清楚怎么开启，不消耗模型调用
+  if (retrieved.meta.knowledge_disabled) {
+    return noSourceCard(KNOWLEDGE_DISABLED_ANSWER, KNOWLEDGE_DISABLED_NOTICE, true);
   }
 
   const candidates = retrieved.candidates;
@@ -147,5 +160,6 @@ async function run(input: KnowledgeInput, llm: LlmClient): Promise<KnowledgeCard
     citations: assembled.citations,
     has_source: true,
     no_source_notice: null,
+    knowledge_disabled: false,
   };
 }

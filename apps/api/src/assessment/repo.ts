@@ -27,6 +27,8 @@ export interface RetrieveMeta {
   backfilled?: number;
   /** 降级原因（rerank 报错原文，截断 200 字） */
   rerank_error?: string;
+  /** 该用户没有知识库授权：检索被闸门挡下，不是「没找到」 */
+  knowledge_disabled?: boolean;
 }
 
 export type RetrieveResult =

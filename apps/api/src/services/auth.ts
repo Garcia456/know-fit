@@ -4,6 +4,8 @@ import { and, eq, gt, lt } from 'drizzle-orm';
 import type { AccountInput, LoginInput, RegisterInput, User } from '../contracts/auth.js';
 import { authSession, user } from '../db/schema.js';
 import { getDb } from './pool.js';
+import { FREE_TURNS_LIMIT } from './quota.js';
+import { consumeRegistrationCode } from './registration-code.js';
 
 /**
  * 注册 / 登录 / 会话 / 账号资料。
@@ -21,7 +23,12 @@ const SCRYPT = { N: 16384, r: 8, p: 1 };
 const KEY_LEN = 64;
 const SESSION_DAYS = 30;
 
-export type AuthErrorCode = 'email_taken' | 'bad_credentials' | 'not_found';
+export type AuthErrorCode =
+  | 'email_taken'
+  | 'bad_credentials'
+  | 'not_found'
+  | 'code_invalid'
+  | 'code_attempts';
 
 export class AuthError extends Error {
   constructor(readonly code: AuthErrorCode) {
@@ -79,11 +86,33 @@ export async function deleteSession(token: string): Promise<void> {
   await getDb().delete(authSession).where(eq(authSession.tokenHash, tokenHash(token)));
 }
 
+export async function emailTaken(email: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * 注册前必须先完成邮箱验证：验证码由 `/auth/register/code` 发到邮箱，
+ * 这里兑换成功才创建账号，并直接标记 email_verified_at ——
+ * 新账号不存在「注册了但没验证」的中间态。
+ */
 export async function register(
   input: RegisterInput,
+  now: Date = new Date(),
 ): Promise<{ user: typeof user.$inferSelect; token: string }> {
   const db = getDb();
+  // 先挡重复邮箱，免得白白消耗一个验证码（并发下仍由唯一索引兜底）
+  if (await emailTaken(input.email)) throw new AuthError('email_taken');
+
   const passwordHash = await hashPassword(input.password);
+  const verdict = await consumeRegistrationCode(input.email, input.code, now);
+  if (verdict === 'attempts_exceeded') throw new AuthError('code_attempts');
+  if (verdict !== 'ok') throw new AuthError('code_invalid');
+
   let row: typeof user.$inferSelect | undefined;
   try {
     [row] = await db
@@ -92,6 +121,7 @@ export async function register(
         email: input.email,
         passwordHash,
         nickname: input.nickname,
+        emailVerifiedAt: now,
       })
       .returning();
   } catch (e) {
@@ -171,6 +201,10 @@ export function publicUser(row: typeof user.$inferSelect, now: Date = new Date()
     bio: row.bio,
     avatar: row.avatar,
     age: ageFromBirthday(row.birthday, now),
+    invite_unlocked: row.inviteUnlockedAt !== null,
+    email_verified: row.emailVerifiedAt !== null,
+    free_turns_used: row.freeTurnsUsed,
+    free_turns_limit: FREE_TURNS_LIMIT,
     created_at: row.createdAt.toISOString(),
   };
 }

@@ -14,6 +14,12 @@ export interface OpenAiClientOptions {
   enableThinking?: boolean;
   /** 用量打点；不传就不打点（线上链路开销为零） */
   usage?: UsageRecorder;
+  /** 用户自带的 Key —— 显式传给 SDK，不回落到进程环境变量 */
+  apiKey?: string;
+  /** 固定端点（BYO DeepSeek）；不传则走 OPENAI_BASE_URL */
+  baseUrl?: string;
+  /** 只有百炼协议认 enable_thinking；DeepSeek 不下发 */
+  profile?: 'bailian' | 'deepseek';
 }
 
 /**
@@ -39,17 +45,23 @@ function requiredModel(): string {
 /**
  * 真实实现 —— 只走通用 OpenAI 协议。
  *
- * 🔴 `apiKey` / `baseURL` 都不显式传：SDK 默认读 `OPENAI_API_KEY` / `OPENAI_BASE_URL`，
- *    于是换端点只改 .env，不改这里。
+ * 服务端默认：`apiKey` / `baseURL` 都不显式传，SDK 读 `OPENAI_API_KEY` / `OPENAI_BASE_URL`，
+ * 于是换端点只改 .env，不改这里。
+ * 用户自带 Key：显式传 `apiKey` 与固定 `baseUrl`，绝不回落到服务端凭据。
  */
 export function createOpenAiClient(options: OpenAiClientOptions = {}): LlmClient {
   const modelName = options.model ?? requiredModel();
   const method = options.method ?? 'jsonMode';
   const usage = options.usage;
+  const profile = options.profile ?? 'bailian';
   const model = new ChatOpenAI({
     model: modelName,
     temperature: options.temperature ?? 0,
-    modelKwargs: { enable_thinking: options.enableThinking ?? thinkingEnabled() },
+    ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+    ...(options.baseUrl ? { configuration: { baseURL: options.baseUrl } } : {}),
+    ...(profile === 'bailian'
+      ? { modelKwargs: { enable_thinking: options.enableThinking ?? thinkingEnabled() } }
+      : {}),
   });
 
   return {

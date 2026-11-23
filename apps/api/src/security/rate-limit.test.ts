@@ -41,8 +41,12 @@ describe('路由限流配置', () => {
     expect(limits.map((l) => [l.path, l.dimension])).toEqual([
       ['/auth/login', 'ip'],
       ['/auth/register', 'ip'],
+      ['/auth/register/code', 'ip'],
       ['/turns', 'user'],
       ['/assessments', 'user'],
+      ['/account/knowledge-access', 'user'],
+      ['/account/ai/key', 'user'],
+      ['/auth/verify-email/resend', 'user'],
     ]);
     expect(limits[0]?.limiter.take('x').allowed).toBe(true);
   });

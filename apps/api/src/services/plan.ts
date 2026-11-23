@@ -3,6 +3,7 @@ import type { TrainingFrequency } from '../contracts/sessions.js';
 import type { KnowledgeCard, PlanCard, PlanExercise, TurnCard } from '../contracts/turn.js';
 import { createLlmClient } from '../llm/index.js';
 import type { LlmClient } from '../llm/client.js';
+import { rethrowIfLlmConfig } from '../llm/errors.js';
 import { PLAN_DRAFT_SYSTEM } from '../llm/prompts.js';
 import { answerKnowledge } from '../knowledge/service.js';
 import {
@@ -131,7 +132,8 @@ export async function answerPlan(input: PlanInput, deps: PlanDeps = {}): Promise
       schema: PlanDraftSchema,
       name: 'plan',
     });
-  } catch {
+  } catch (e) {
+    rethrowIfLlmConfig(e);
     return chat('这次计划没排出来，再说一次「帮我出个训练计划」试试。');
   }
 
@@ -174,9 +176,11 @@ export async function answerPlan(input: PlanInput, deps: PlanDeps = {}): Promise
     knowledge = await (deps.knowledge ?? answerKnowledge)({
       user_id: input.user_id,
       query: `${frequency}训练计划 动作安排`,
+      llm,
     });
-  } catch {
-    // 检索失败按无源处理，计划照出
+  } catch (e) {
+    // 检索失败按无源处理，计划照出；Key 配置错误要往上抛
+    rethrowIfLlmConfig(e);
   }
 
   const hasSource = knowledge?.has_source === true;

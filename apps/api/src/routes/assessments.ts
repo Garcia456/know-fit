@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { AssessmentRequestSchema, type AssessmentResponse } from '../contracts/assessment.js';
+import { LlmConfigError, llmConfigErrorResponse } from '../llm/errors.js';
 import { assessRecord } from '../services/assessment.js';
+import { resolveLlmForUser } from '../services/llm-config.js';
+import { entitlementFor } from '../services/quota.js';
 
 /**
  * `POST /assessments` —— 评估的两个入口（显式 / 钩子）。
@@ -26,22 +29,55 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
       return undefined;
     }
 
-    const result = await assessRecord({
-      user_id: request.userId,
-      related_record_id: relatedRecordId,
-      trigger,
-    });
+    try {
+      const { llm, byo } = await resolveLlmForUser(request.userId);
 
-    if (result.lookup_status === 'not_found') {
-      await reply.code(404).send({ error: '没有这条训练记录' });
-      return undefined;
+      // 评估跟随一轮对话，不再扣额度；但没资格的人也不该白拿模型调用。
+      if (!byo) {
+        const quota = await entitlementFor(request.userId);
+        if (quota === 'email_unverified') {
+          await reply.code(403).send({
+            error: '邮箱还没验证 —— 验证后才能使用评估',
+            code: 'email_unverified',
+          });
+          return undefined;
+        }
+        if (quota === 'quota_exhausted') {
+          await reply.code(402).send({
+            error: '免费对话次数用完了 —— 在设置页填入自己的 API Key 后可继续',
+            code: 'free_quota_exhausted',
+          });
+          return undefined;
+        }
+      }
+
+      const result = await assessRecord(
+        {
+          user_id: request.userId,
+          related_record_id: relatedRecordId,
+          trigger,
+        },
+        { llm },
+      );
+
+      if (result.lookup_status === 'not_found') {
+        await reply.code(404).send({ error: '没有这条训练记录' });
+        return undefined;
+      }
+
+      return {
+        card: result.card,
+        notices: result.notices,
+        lookup_status: result.lookup_status,
+        missing: result.missing,
+      };
+    } catch (e) {
+      if (e instanceof LlmConfigError) {
+        const mapped = llmConfigErrorResponse(e);
+        await reply.code(mapped.status).send(mapped.body);
+        return undefined;
+      }
+      throw e;
     }
-
-    return {
-      card: result.card,
-      notices: result.notices,
-      lookup_status: result.lookup_status,
-      missing: result.missing,
-    };
   });
 }

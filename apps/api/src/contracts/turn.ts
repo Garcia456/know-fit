@@ -90,6 +90,8 @@ export const KnowledgeCardSchema = z.object({
   citations: z.array(CitationSchema),
   has_source: z.boolean(),
   no_source_notice: z.string().nullable(),
+  /** 用户还没用邀请码解锁知识库 —— 与「检索了但没找到」是两件事 */
+  knowledge_disabled: z.boolean(),
 });
 
 /** 计划里的一个动作 —— 组次是 AI 给的，来源引用另挂 */

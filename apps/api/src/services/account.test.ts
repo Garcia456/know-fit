@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { deleteAccount, register } from './auth.js';
+import { deleteAccount } from './auth.js';
 import { clearTrainingRecords } from './account.js';
 import { closeDb, getPool } from './pool.js';
+import { registerForTest } from './register-for-test.js';
 
 /**
  * 清空训练记录 / 注销 —— 连真库。
@@ -14,7 +15,7 @@ let userId = '';
 let sessionId = '';
 
 beforeAll(async () => {
-  const result = await register({
+  const result = await registerForTest({
     email: `${PREFIX}${randomUUID()}@knowfit.local`,
     password: 'knowfit-test-123',
     nickname: '清空测试',
@@ -58,6 +59,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await getPool().query('DELETE FROM registration_verification WHERE email LIKE $1', [`${PREFIX}%`]);
   await getPool().query('DELETE FROM "user" WHERE email LIKE $1', [`${PREFIX}%`]);
   await closeDb();
 });

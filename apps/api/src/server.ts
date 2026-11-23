@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { pathToFileURL } from 'node:url';
 import { databaseUrl } from './db/client.js';
 import { responseGuard } from './guardrails/rc.js';
+import { scrubSecrets } from './guardrails/secrets.js';
 import { authOnRequest } from './plugins/auth.js';
 import { accountRoutes } from './routes/account.js';
 import { assessmentRoutes } from './routes/assessments.js';
@@ -67,9 +68,18 @@ export async function buildServer() {
     await reply.code(429).send({ error: rule.message });
   });
 
-  app.addHook('onSend', async (_request, reply, payload) => {
+  app.addHook('onSend', async (request, reply, payload) => {
     applySecurityHeaders(reply);
-    return payload;
+
+    // 密钥兜底：JSON 响应里不该出现明文 Key；命中也只记次数
+    const contentType = reply.getHeader('content-type');
+    if (typeof contentType !== 'string' || !contentType.includes('application/json')) return payload;
+    if (typeof payload !== 'string') return payload;
+    const scrubbed = scrubSecrets(payload);
+    if (scrubbed.redacted > 0) {
+      app.log.error({ route: request.url, redacted: scrubbed.redacted }, '响应里出现明文 Key，已脱敏');
+    }
+    return scrubbed.payload;
   });
 
   // 🔴 R-C：钩子必须在注册路由之前挂 —— onSend 只作用于之后注册的路由
@@ -119,6 +129,13 @@ async function main(): Promise<void> {
   if (resolveProvider() === 'fake') {
     app.log.warn(
       'LLM_PROVIDER=fake —— 聊天回复来自替身 fixture，不是真实模型；本地真实对话请把 .env 改成 openai 后重启',
+    );
+  }
+
+  // 生产还用 fake 邮件 = 验证链接只落在本机文件里，用户永远收不到
+  if (process.env.NODE_ENV === 'production' && process.env.MAIL_PROVIDER !== 'smtp') {
+    app.log.warn(
+      'MAIL_PROVIDER 不是 smtp —— 验证邮件只会写进 MAIL_OUTBOX_DIR，生产用户收不到；请配置 SMTP_HOST / MAIL_FROM',
     );
   }
 

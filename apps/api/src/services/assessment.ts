@@ -20,7 +20,8 @@ import { visiblePlatformsFor } from './knowledge-access.js';
 import { createRerankClient, type RerankClient } from '../kb/rerank.js';
 import { assessment, citation, knowledgeChunk, knowledgeSource, userProfile, workoutSession } from '../db/schema.js';
 import { createLlmClient } from '../llm/index.js';
-import { bindSignal } from '../llm/client.js';
+import { rethrowIfLlmConfig } from '../llm/errors.js';
+import { bindSignal, type LlmClient } from '../llm/client.js';
 import { buildVolumeHook } from '../metrics/hook.js';
 import { topBodyParts } from '../assessment/bodyParts.js';
 import { selectWithSourceQuota } from '../assessment/select.js';
@@ -136,7 +137,11 @@ export function createAssessmentRepo({ embedder, reranker }: AssessmentRepoOptio
       }
       // 没有授权平台 = 知识库对该用户关闭：不 embedding、不查库
       if (platforms.length === 0) {
-        return { status: 'ok', candidates: [], meta: { ...meta, distinct_sources: 0 } };
+        return {
+          status: 'ok',
+          candidates: [],
+          meta: { ...meta, distinct_sources: 0, knowledge_disabled: true },
+        };
       }
 
       let vector: number[] | undefined;
@@ -407,6 +412,11 @@ export interface AssessRecordInput {
   trigger: 'explicit' | 'hook';
 }
 
+export interface AssessDeps {
+  /** 本次请求用的模型客户端；不传就按服务端配置新建一个 */
+  llm?: LlmClient;
+}
+
 export interface AssessActionResult {
   card: AssessmentCard | null;
   notices: string[];
@@ -417,6 +427,14 @@ export interface AssessActionResult {
 /** 全链路上限：到点掐断在途调用，按生成失败返回 */
 export const ASSESSMENT_DEADLINE_MS = Number(process.env.ASSESS_DEADLINE_MS) || 30_000;
 
+/** 到点被 `withDeadline` 掐断 —— 路由据此回 504，而不是当一个内部错误 */
+export class DeadlineExceededError extends Error {
+  constructor(ms: number) {
+    super(`超过 ${ms}ms 未完成，已中止`);
+    this.name = 'DeadlineExceededError';
+  }
+}
+
 /**
  * 跑一轮评估并限时。signal 经 `bindSignal` 进到每次模型调用，
  * 到点是真掐断，不是只把 Promise 丢掉（否则模型还在后台跑、可能照样落库）。
@@ -426,12 +444,18 @@ export async function withDeadline<T>(ms: number, run: (signal: AbortSignal) => 
   const timer = setTimeout(() => controller.abort(), ms);
   try {
     return await run(controller.signal);
+  } catch (e) {
+    if (controller.signal.aborted) throw new DeadlineExceededError(ms);
+    throw e;
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function assessRecord(input: AssessRecordInput): Promise<AssessActionResult> {
+export async function assessRecord(
+  input: AssessRecordInput,
+  deps: AssessDeps = {},
+): Promise<AssessActionResult> {
   if (input.trigger === 'hook' && input.related_record_id) {
     const cached = await findRecentHookAssessment({
       user_id: input.user_id,
@@ -444,7 +468,7 @@ export async function assessRecord(input: AssessRecordInput): Promise<AssessActi
     const final = await withDeadline(ASSESSMENT_DEADLINE_MS, (signal) =>
       buildAssessmentGraph({
         // 图按请求建：signal 不同，不能缓存
-        llm: bindSignal(createLlmClient(), signal),
+        llm: bindSignal(deps.llm ?? createLlmClient(), signal),
         repo: createAssessmentRepo({ embedder: createEmbeddingClient(), reranker: createRerankClient() }),
         now: () => new Date(),
       }).invoke({
@@ -460,7 +484,8 @@ export async function assessRecord(input: AssessRecordInput): Promise<AssessActi
       lookup_status: state.lookup_status,
       missing: state.missing,
     };
-  } catch {
+  } catch (e) {
+    rethrowIfLlmConfig(e);
     return { card: null, notices: [GENERATION_FAILURE_NOTICE], lookup_status: 'ok', missing: [] };
   }
 }

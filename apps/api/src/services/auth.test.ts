@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
+import type { MailMessage } from '../mail/index.js';
 import {
   ageFromBirthday,
   createSession,
@@ -14,6 +15,7 @@ import {
   verifyPassword,
 } from './auth.js';
 import { closeDb, getPool } from './pool.js';
+import { sendRegistrationCode } from './registration-code.js';
 
 /** 认证与账号资料 —— 连真库；邮箱用随机前缀，收尾统一清掉测试账号。 */
 
@@ -21,8 +23,30 @@ const PREFIX = 'test-auth-';
 const email = `${PREFIX}${randomUUID()}@knowfit.local`;
 const password = 'knowfit-test-123';
 
+/** 走真实发码路径，从内存邮箱里取码 —— 注册不允许绕过邮箱验证。 */
+async function registerWithCode(input: {
+  email: string;
+  password: string;
+  nickname: string;
+}) {
+  const messages: MailMessage[] = [];
+  await sendRegistrationCode(input.email, {
+    mail: {
+      async send(message) {
+        messages.push(message);
+      },
+    },
+  });
+  const code = /验证码：(\d{6})/.exec(messages.at(-1)?.text ?? '')?.[1];
+  if (!code) throw new Error('验证码没有发出来');
+  return register({ ...input, code });
+}
+
 afterAll(async () => {
   await getPool().query('DELETE FROM "user" WHERE email LIKE $1', [`${PREFIX}%`]);
+  await getPool().query('DELETE FROM registration_verification WHERE email LIKE $1', [
+    `${PREFIX}%`,
+  ]);
   await closeDb();
 });
 
@@ -42,9 +66,14 @@ describe('密码哈希', () => {
 
 describe('注册 / 登录 / 会话', () => {
   it('注册后能登录，会话能换回用户；退出后会话失效', async () => {
-    const { user, token } = await register({ email, password, nickname: '测试用户' });
+    const { user, token } = await registerWithCode({
+      email,
+      password,
+      nickname: '测试用户',
+    });
     expect(user.email).toBe(email);
     expect(user.passwordHash).not.toBe(password);
+    expect(user.emailVerifiedAt).not.toBeNull();
 
     const fromSession = await sessionUser(token);
     expect(fromSession?.id).toBe(user.id);
@@ -55,12 +84,24 @@ describe('注册 / 登录 / 会话', () => {
     await expect(login({ email, password: 'wrong-password' })).rejects.toMatchObject({
       code: 'bad_credentials',
     });
-    await expect(register({ email, password, nickname: '重复' })).rejects.toMatchObject({
+    await expect(
+      register({ email, password, nickname: '重复', code: '000000' }),
+    ).rejects.toMatchObject({
       code: 'email_taken',
     });
 
     await deleteSession(token);
     expect(await sessionUser(token)).toBeNull();
+  });
+
+  it('没有邮箱验证码 / 验证码不对 → 不创建账号', async () => {
+    const fresh = `${PREFIX}${randomUUID()}@knowfit.local`;
+    await expect(
+      register({ email: fresh, password, nickname: '未验证', code: '123456' }),
+    ).rejects.toMatchObject({ code: 'code_invalid' });
+
+    const rows = await getPool().query('SELECT 1 FROM "user" WHERE email = $1', [fresh]);
+    expect(rows.rowCount).toBe(0);
   });
 
   it('会话过期后查不到用户', async () => {

@@ -62,7 +62,7 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 }
 
 export interface RouteLimit {
-  method: 'POST';
+  method: 'POST' | 'PUT';
   path: string;
   dimension: 'ip' | 'user';
   message: string;
@@ -72,8 +72,12 @@ export interface RouteLimit {
 export const RATE_LIMIT_DEFAULTS = {
   loginPer15Min: 20,
   registerPerHour: 5,
+  registerCodePerHour: 10,
   turnPerHour: 120,
   assessmentPerHour: 60,
+  inviteUnlockPerHour: 5,
+  verifyResendPerHour: 3,
+  llmKeyPerHour: 10,
 } as const;
 
 export function buildRouteLimits(
@@ -111,6 +115,20 @@ export function buildRouteLimits(
     },
     {
       method: 'POST',
+      path: '/auth/register/code',
+      dimension: 'ip',
+      message: '验证码发得太频繁了，请稍后再试',
+      limiter: createRateLimiter({
+        limit: positiveInt(
+          env.RATE_LIMIT_REGISTER_CODE_PER_HOUR,
+          RATE_LIMIT_DEFAULTS.registerCodePerHour,
+        ),
+        windowMs: hour,
+        now,
+      }),
+    },
+    {
+      method: 'POST',
       path: '/turns',
       dimension: 'user',
       message: '对话太频繁了，请稍后再试',
@@ -129,6 +147,45 @@ export function buildRouteLimits(
         limit: positiveInt(
           env.ASSESSMENT_QUOTA_PER_HOUR,
           RATE_LIMIT_DEFAULTS.assessmentPerHour,
+        ),
+        windowMs: hour,
+        now,
+      }),
+    },
+    {
+      method: 'POST',
+      path: '/account/knowledge-access',
+      dimension: 'user',
+      message: '邀请码尝试过于频繁，请稍后再试',
+      limiter: createRateLimiter({
+        limit: positiveInt(
+          env.RATE_LIMIT_INVITE_UNLOCK_PER_HOUR,
+          RATE_LIMIT_DEFAULTS.inviteUnlockPerHour,
+        ),
+        windowMs: hour,
+        now,
+      }),
+    },
+    {
+      method: 'PUT',
+      path: '/account/ai/key',
+      dimension: 'user',
+      message: '保存 Key 太频繁了，请稍后再试',
+      limiter: createRateLimiter({
+        limit: positiveInt(env.RATE_LIMIT_LLM_KEY_PER_HOUR, RATE_LIMIT_DEFAULTS.llmKeyPerHour),
+        windowMs: hour,
+        now,
+      }),
+    },
+    {
+      method: 'POST',
+      path: '/auth/verify-email/resend',
+      dimension: 'user',
+      message: '验证邮件发得太频繁了，请稍后再试',
+      limiter: createRateLimiter({
+        limit: positiveInt(
+          env.RATE_LIMIT_VERIFY_RESEND_PER_HOUR,
+          RATE_LIMIT_DEFAULTS.verifyResendPerHour,
         ),
         windowMs: hour,
         now,

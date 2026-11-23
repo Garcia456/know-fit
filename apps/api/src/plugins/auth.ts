@@ -16,8 +16,11 @@ const PUBLIC_PATHS = new Set([
   '/health',
   '/ready',
   '/auth/register',
+  '/auth/register/code',
   '/auth/login',
   '/auth/logout',
+  // 邮箱验证链接可能在新设备上打开，此时还没有会话
+  '/auth/verify-email',
 ]);
 
 /** 生产默认 Secure；无域名的临时 HTTP 部署可用 COOKIE_SECURE=0 关掉 */

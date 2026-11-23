@@ -20,6 +20,12 @@ export const user = pgTable(
     bio: text('bio'),
     /** 头像：压缩后的 data URL，只存一份；null = 用昵称首字 */
     avatar: text('avatar'),
+    /** 邀请码解锁知识库的时间；null = 未解锁（注册默认） */
+    inviteUnlockedAt: timestamp('invite_unlocked_at', { withTimezone: true }),
+    /** 邮箱验证通过的时间；null = 未验证（注册默认） */
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    /** 已验证账号已消耗的免费对话次数；受邀账号不扣（见 services/quota.ts） */
+    freeTurnsUsed: integer('free_turns_used').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -45,6 +51,63 @@ export const authSession = pgTable(
     index('auth_session_expiry_index').on(t.expiresAt),
   ],
 );
+
+/** 邮箱验证令牌。只存 token 的 SHA-256 哈希；单次使用，重发作废旧行。 */
+export const emailVerification = pgTable(
+  'email_verification',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('email_verification_token_hash_unique').on(t.tokenHash),
+    index('email_verification_user_index').on(t.userId),
+    index('email_verification_expiry_index').on(t.expiresAt),
+  ],
+);
+
+/**
+ * 注册验证码。账号还不存在时就要验证邮箱，所以按邮箱而不是 user_id 落库。
+ * 只存「邮箱 + 验证码」的 SHA-256；10 分钟有效、单次使用，输错 5 次作废。
+ */
+export const registrationVerification = pgTable(
+  'registration_verification',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(),
+    codeHash: text('code_hash').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('registration_verification_email_index').on(t.email, t.createdAt),
+    index('registration_verification_expiry_index').on(t.expiresAt),
+  ],
+);
+
+/**
+ * 用户自带的模型配置。Key 只存密文（AES-256-GCM，见 security/secret-box.ts），
+ * key_hint 是末 4 位，仅用于界面回显。
+ */
+export const userLlmConfig = pgTable('user_llm_config', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull().default('deepseek'),
+  model: text('model').notNull(),
+  keyCiphertext: text('key_ciphertext').notNull(),
+  keyHint: text('key_hint').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** 知识授权表：一行 = 某用户可检索某受限平台。无行 = 不可见。 */
 export const knowledgeAccess = pgTable(

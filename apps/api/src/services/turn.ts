@@ -2,9 +2,9 @@ import { TurnResponseSchema, type TurnResponse } from '../contracts/turn.js';
 import { buildTurnGraph } from '../graph/turn.js';
 import { TurnState } from '../graph/state.js';
 import { createLlmClient } from '../llm/index.js';
-import type { LlmClient } from '../llm/client.js';
+import { bindSignal, type LlmClient } from '../llm/client.js';
 import { answerKnowledge } from '../knowledge/service.js';
-import { assessRecord } from './assessment.js';
+import { assessRecord, withDeadline } from './assessment.js';
 import {
   assistantSummary,
   deleteConversation,
@@ -26,27 +26,39 @@ import { volumeHookFor } from './metrics.js';
 
 export interface TurnInput {
   message: string;
-user_id: string;
+  user_id: string;
   conversation_id?: string | null;
 }
 
-let cached: ReturnType<typeof buildTurnGraph> | null = null;
+export interface TurnDeps {
+  /** 本次请求用的模型客户端；不传就按服务端配置新建一个（绝不在进程内共享） */
+  llm?: LlmClient;
+  /** 全链路上限；测试里可调小 */
+  deadlineMs?: number;
+}
 
+/** 一轮对话的全链路上限（意图 / 抽取 / 知识 / 计划 / 评估都算在内） */
+export const TURN_DEADLINE_MS = Number(process.env.TURN_DEADLINE_MS) || 120_000;
+
+/**
+ * 按请求组装图 —— 🔴 不能进程级缓存：客户端可能带用户自己的 Key，
+ * 缓存一次就会把第一个用户的客户端冻结给所有人。
+ */
 function turnGraph(llm: LlmClient) {
-  cached ??= buildTurnGraph({
+  return buildTurnGraph({
     llm,
     persistWorkout,
     computeHook: volumeHookFor,
-    assess: assessRecord,
-    answerKnowledge: (input) => answerKnowledge({ user_id: input.user_id, query: input.query }),
-    answerPlan: (input) => answerPlan(input),
+    assess: (input) => assessRecord(input, { llm }),
+    answerKnowledge: (input) =>
+      answerKnowledge({ user_id: input.user_id, query: input.query, llm }),
+    answerPlan: (input) => answerPlan(input, { llm }),
     bodyweightFor: (input) => bodyweightOn(input.user_id, input.date),
     recordWeight: (input) => saveWeight(input),
     applyEdit: (input) => applyEdit(input),
     answerQuery: (input) => answerQuery(input),
     now: () => new Date(),
   });
-  return cached;
 }
 
 /** 写助手轮 + 会话时间，再返回响应 */
@@ -68,7 +80,13 @@ async function finish(input: {
   return input.response;
 }
 
-export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
+export async function handleTurn(input: TurnInput, deps: TurnDeps = {}): Promise<TurnResponse> {
+  return withDeadline(deps.deadlineMs ?? TURN_DEADLINE_MS, (signal) =>
+    runTurn(input, bindSignal(deps.llm ?? createLlmClient(), signal)),
+  );
+}
+
+async function runTurn(input: TurnInput, llm: LlmClient): Promise<TurnResponse> {
   const user_id = input.user_id;
 
   // 已有会话先校验归属；新会话等这一轮真成功了再建 —— 失败不留空会话
@@ -119,7 +137,7 @@ export async function handleTurn(input: TurnInput): Promise<TurnResponse> {
     const training_years_band = await loadTrainingBand(user_id);
     const profile = await getProfile(user_id);
 
-    const final = await turnGraph(createLlmClient()).invoke({
+    const final = await turnGraph(llm).invoke({
       message: input.message,
       user_id,
       history,

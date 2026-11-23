@@ -28,6 +28,7 @@ function knowledge(hasSource: boolean): typeof answerKnowledge {
     citations: hasSource ? [CITATION] : [],
     has_source: hasSource,
     no_source_notice: hasSource ? null : '这次没找到能直接引用的原片。',
+    knowledge_disabled: false,
   });
 }
 
