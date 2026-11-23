@@ -81,10 +81,13 @@ try {
     const passwordHash = await hashPassword(password);
 
     const upsert = await client.query(
-      `INSERT INTO "user" (email, password_hash, nickname)
-       VALUES ($1, $2, $3)
+      `INSERT INTO "user" (email, password_hash, nickname, invite_unlocked_at, email_verified_at)
+       VALUES ($1, $2, $3, now(), now())
        ON CONFLICT (email)
-       DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = now()
+       DO UPDATE SET password_hash = EXCLUDED.password_hash,
+                     updated_at = now(),
+                     invite_unlocked_at = COALESCE("user".invite_unlocked_at, now()),
+                     email_verified_at = COALESCE("user".email_verified_at, now())
        RETURNING id`,
       [account.email, passwordHash, account.nickname],
     );
