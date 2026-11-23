@@ -2,10 +2,20 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import { Link, useNavigate } from 'react-router';
 import {
   clearTrainingRecords,
+  deleteAccountAiKey,
   deleteAccount as deleteAccountRequest,
+  getAccountAi,
   patchAccount,
+  postKnowledgeAccess,
+  putAccountAiKey,
 } from '../api/client';
-import type { Account, AccountInput, ClearTrainingResult, Gender } from '../api/types';
+import type {
+  Account,
+  AccountAi,
+  AccountInput,
+  ClearTrainingResult,
+  Gender,
+} from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { AvatarCropDialog } from '../components/AvatarCropDialog';
 import { DateField } from '../components/DateField';
@@ -69,6 +79,19 @@ function SettingsForm({ user }: { user: Account }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const [ai, setAi] = useState<AccountAi | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState('');
+  const [keyModel, setKeyModel] = useState('');
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [keyDeleting, setKeyDeleting] = useState(false);
+
   function update<K extends keyof AccountInput>(key: K, value: AccountInput[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
@@ -89,6 +112,23 @@ function SettingsForm({ user }: { user: Account }) {
       document.body.style.overflow = previous;
     };
   }, [avatarPreview]);
+
+  // AI 状态单独取：账号信息里没有 Key 状态，且授权可能刚在别处变过
+  useEffect(() => {
+    let cancelled = false;
+    getAccountAi()
+      .then((view) => {
+        if (cancelled) return;
+        setAi(view);
+        setKeyModel(view.key?.model ?? view.models?.[0] ?? '');
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setAiError(e instanceof Error ? e.message : 'AI 设置读不出来');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleAvatarFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -190,6 +230,88 @@ function SettingsForm({ user }: { user: Account }) {
     await signOut();
     navigate('/login', { replace: true });
   }
+
+  async function handleUnlockKnowledge(event: FormEvent) {
+    event.preventDefault();
+    const code = inviteCode.trim();
+    if (inviteBusy || code.length === 0) return;
+    setInviteBusy(true);
+    setInviteError(null);
+    try {
+      await postKnowledgeAccess(code);
+      setUser({ ...user, invite_unlocked: true });
+      setInviteCode('');
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : '邀请码验证失败，请重试');
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  async function handleSaveKey(event: FormEvent) {
+    event.preventDefault();
+    const key = apiKey.trim();
+    if (keyBusy || key.length < 8 || !keyModel) return;
+    setKeyBusy(true);
+    setKeyError(null);
+    setKeySaved(false);
+    try {
+      const res = await putAccountAiKey(key, keyModel);
+      setAi((prev) => (prev ? { ...prev, key: res.key } : prev));
+      // 明文只进请求：保存后立刻清空输入框，不回填
+      setApiKey('');
+      setKeySaved(true);
+    } catch (e) {
+      setKeyError(e instanceof Error ? e.message : 'Key 没保存成功，请重试');
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
+  async function handleDeleteKey() {
+    if (keyDeleting) return;
+    setKeyDeleting(true);
+    setKeyError(null);
+    try {
+      await deleteAccountAiKey();
+      setAi((prev) => (prev ? { ...prev, key: null } : prev));
+      setKeySaved(false);
+    } catch (e) {
+      setKeyError(e instanceof Error ? e.message : '删除失败，请重试');
+    } finally {
+      setKeyDeleting(false);
+    }
+  }
+
+  const freeRemaining = Math.max(user.free_turns_limit - user.free_turns_used, 0);
+  const quotaText = user.invite_unlocked
+    ? '不限次'
+    : !user.email_verified
+      ? `验证邮箱后领取 ${user.free_turns_limit} 次`
+      : freeRemaining > 0
+        ? `剩余 ${freeRemaining} / ${user.free_turns_limit} 次`
+        : '已用完';
+  const quotaNote = user.invite_unlocked
+    ? '用邀请码解锁的账号不限免费次数。'
+    : !user.email_verified
+      ? '验证邮箱后领取免费对话次数；会话页顶部可以重新发送验证邮件。'
+      : freeRemaining > 0
+        ? '每轮对话扣 1 次；用完后需要在设置里填入自己的 API Key。'
+        : '免费次数已用完 —— 在设置里填入自己的 API Key 后可以继续。';
+
+  const keyModels = ai?.models ?? [];
+  const hasKey = ai?.key != null;
+  const aiMode = !ai
+    ? '读取中…'
+    : hasKey
+      ? '自带 Key（不扣免费额度）'
+      : ai.invite_unlocked
+        ? '不限次（服务端 Key）'
+        : !ai.email_verified
+          ? '邮箱未验证'
+          : (ai.quota?.remaining ?? 0) > 0
+            ? `免费额度 · 剩余 ${ai.quota.remaining} 次`
+            : '免费额度已用完';
 
   return (
     <div className="settings-page">
@@ -308,6 +430,189 @@ function SettingsForm({ user }: { user: Account }) {
             {saved ? <p className="saved-note">已保存</p> : null}
           </div>
         </form>
+
+        <section className="sec" aria-label="知识库" style={{ marginTop: 20 }}>
+          <p className="group-label">知识库</p>
+          {user.invite_unlocked ? (
+            <div className="list-card">
+              <div className="set-row">
+                <span className="lbl">知识库</span>
+                <span className="val">已开启</span>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleUnlockKnowledge} noValidate>
+              <div className="list-card">
+                <label className="set-row">
+                  <span className="lbl">邀请码</span>
+                  <input
+                    className="set-input"
+                    style={{ width: 168 }}
+                    aria-label="知识库邀请码"
+                    placeholder="填入邀请码"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={inviteCode}
+                    onChange={(e) => {
+                      setInviteCode(e.target.value);
+                      setInviteError(null);
+                    }}
+                  />
+                </label>
+              </div>
+              {inviteError ? (
+                <p className="error-text" role="alert">
+                  {inviteError}
+                </p>
+              ) : null}
+              <div className="save-row">
+                <button
+                  type="submit"
+                  className="btn btn--block"
+                  disabled={inviteBusy || inviteCode.trim().length === 0}
+                >
+                  {inviteBusy ? '正在验证…' : '开启知识库'}
+                </button>
+              </div>
+            </form>
+          )}
+          <div className="note-inline">
+            <InfoIcon />
+            <p>
+              {user.invite_unlocked
+                ? '训练建议会引用知识库里的博主原片，并附视频与起始时间戳。'
+                : '没开启时，记录、统计与计划照常可用；知识类问题会提示先开启。'}
+            </p>
+          </div>
+        </section>
+
+        <section className="sec" aria-label="对话额度" style={{ marginTop: 20 }}>
+          <p className="group-label">对话额度</p>
+          <div className="list-card">
+            <div className="set-row">
+              <span className="lbl">免费对话</span>
+              <span className="val">{quotaText}</span>
+            </div>
+            <div className="set-row">
+              <span className="lbl">邮箱</span>
+              <span className="val">{user.email_verified ? '已验证' : '未验证'}</span>
+            </div>
+          </div>
+          <div className="note-inline">
+            <InfoIcon />
+            <p>{quotaNote}</p>
+          </div>
+        </section>
+
+        <section className="sec" aria-label="AI 模型" style={{ marginTop: 20 }}>
+          <p className="group-label">AI 模型</p>
+          {aiError ? (
+            <p className="error-text" role="alert">
+              {aiError}
+            </p>
+          ) : null}
+          <div className="list-card">
+            <div className="set-row">
+              <span className="lbl">当前模式</span>
+              <span className="val">{aiMode}</span>
+            </div>
+            <div className="set-row">
+              <span className="lbl">模型</span>
+              <span className="val">{ai?.key ? ai.key.model : '服务端默认'}</span>
+            </div>
+            {ai?.key ? (
+              <div className="set-row">
+                <span className="lbl">已保存 Key</span>
+                <span className="val">末 4 位 {ai.key.hint}</span>
+              </div>
+            ) : null}
+          </div>
+
+          <form onSubmit={handleSaveKey} noValidate style={{ marginTop: 12 }}>
+            <div className="list-card">
+              <label className="set-row">
+                <span className="lbl">API Key</span>
+                <input
+                  className="set-input"
+                  style={{ width: 200 }}
+                  type="password"
+                  aria-label="DeepSeek API Key"
+                  placeholder={hasKey ? '填入新 Key 可替换' : 'sk-...'}
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  value={apiKey}
+                  onChange={(e) => {
+                    setApiKey(e.target.value);
+                    setKeyError(null);
+                    setKeySaved(false);
+                  }}
+                />
+              </label>
+              <label className="set-row">
+                <span className="lbl">模型</span>
+                <span className="val">
+                  <select
+                    className="set-input"
+                    aria-label="DeepSeek 模型"
+                    value={keyModel}
+                    disabled={keyModels.length === 0}
+                    onChange={(e) => {
+                      setKeyModel(e.target.value);
+                      setKeyError(null);
+                      setKeySaved(false);
+                    }}
+                  >
+                    {keyModels.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              </label>
+            </div>
+            {keyError ? (
+              <p className="error-text" role="alert">
+                {keyError}
+              </p>
+            ) : null}
+            <div className="save-row">
+              <button
+                type="submit"
+                className="btn btn--block"
+                disabled={keyBusy || apiKey.trim().length < 8 || !keyModel}
+              >
+                {keyBusy ? '正在验证 Key…' : hasKey ? '替换 Key' : '保存 Key'}
+              </button>
+              {keySaved ? (
+                <p className="saved-note" role="status">
+                  已保存
+                </p>
+              ) : null}
+            </div>
+          </form>
+
+          {hasKey ? (
+            <div className="save-row">
+              <button
+                type="button"
+                className="btn btn--ghost btn--block"
+                onClick={handleDeleteKey}
+                disabled={keyDeleting}
+              >
+                {keyDeleting ? '正在删除…' : '删除 Key'}
+              </button>
+            </div>
+          ) : null}
+
+          <div className="note-inline">
+            <InfoIcon />
+            <p>
+              Key 只用于你自己的对话，服务端加密保存、只显示末 4 位；Embedding
+              与重排仍走服务端。端点固定为 DeepSeek，不接受其他地址。
+            </p>
+          </div>
+        </section>
 
         <section className="sec" aria-label="训练记录" style={{ marginTop: 20 }}>
           <p className="group-label">训练记录</p>

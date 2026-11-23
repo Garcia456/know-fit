@@ -30,6 +30,10 @@ export function KnowledgeCardView({ card }: { card: KnowledgeCard }) {
         <p className="foot-note is-note">
           {card.no_source_notice ?? '回答基于检索到的博主内容，可点回原片自己判断。'}
         </p>
+      ) : card.knowledge_disabled ? (
+        <p className="foot-note is-note is-disclaimer">
+          {card.no_source_notice ?? '知识库未开启'} —— 到「我的 → 知识库」填入邀请码即可开启。
+        </p>
       ) : (
         <p className="foot-note is-note is-disclaimer">
           本回答由 AI 生成，内容仅供参考，请仔细甄别。

@@ -20,7 +20,7 @@ interface AuthValue {
     email: string;
     password: string;
     nickname: string;
-    invite_code?: string;
+    code: string;
   }) => Promise<Account>;
   signOut: () => Promise<void>;
   setUser: (user: Account) => void;
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string;
       password: string;
       nickname: string;
-      invite_code?: string;
+      code: string;
     }) => {
       const { user: me } = await postRegister(input);
       setUserState(me);

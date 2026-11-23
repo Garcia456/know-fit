@@ -15,6 +15,10 @@ const me: Account = {
   avatar: null,
   age: 26,
   created_at: '2026-10-01T00:00:00.000Z',
+  invite_unlocked: false,
+  email_verified: true,
+  free_turns_used: 0,
+  free_turns_limit: 20,
 };
 
 function res(status: number, body: unknown) {

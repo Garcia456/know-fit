@@ -130,6 +130,8 @@ export interface KnowledgeCard {
   citations: Citation[];
   has_source: boolean;
   no_source_notice: string | null;
+  /** 还没用邀请码解锁知识库 —— 与「检索了但没找到」是两件事 */
+  knowledge_disabled: boolean;
 }
 
 export interface PlanExercise {
@@ -394,6 +396,14 @@ export interface Account {
   avatar: string | null;
   age: number | null;
   created_at: string;
+  /** 是否已用邀请码解锁知识库（RAG） */
+  invite_unlocked: boolean;
+  /** 邮箱是否验证通过 —— 免费额度只在验证后发放 */
+  email_verified: boolean;
+  /** 已用掉的免费对话次数 */
+  free_turns_used: number;
+  /** 服务端配置的免费次数上限 */
+  free_turns_limit: number;
 }
 
 export interface AccountInput {
@@ -402,6 +412,23 @@ export interface AccountInput {
   gender: Gender | null;
   bio: string | null;
   avatar?: string | null;
+}
+
+/** 已保存 Key 的展示信息 —— 服务端只给末 4 位，不回显明文 */
+export interface AiKeySummary {
+  configured: boolean;
+  model: string;
+  hint: string;
+  updated_at: string;
+}
+
+/** 设置页「AI 模型」：资格 + 额度 + Key 状态 + 可选模型 */
+export interface AccountAi {
+  email_verified: boolean;
+  invite_unlocked: boolean;
+  quota: { used: number; limit: number; remaining: number };
+  key: AiKeySummary | null;
+  models: string[];
 }
 
 export interface ClearTrainingResult {

@@ -149,6 +149,30 @@ describe('聊天页', () => {
     expect(screen.getByRole('button', { name: '重试' })).toBeDefined();
   });
 
+  it('额度挡住时不提供重试，改给去设置入口', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 402,
+        json: async () => ({
+          error: '免费对话次数用完了 —— 在设置页填入自己的 API Key 后可继续',
+          code: 'free_quota_exhausted',
+        }),
+      }),
+    );
+    renderChat();
+
+    const input = screen.getByLabelText('训练、饮食或提问') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '今天推日' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
+    expect(screen.getByRole('alert').textContent).toContain('免费对话次数用完了');
+    expect(screen.getByRole('link', { name: '去设置' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull();
+  });
+
   it('重进页面会恢复未发送的草稿', () => {
     localStorage.setItem('know-fit:chat-draft', '卧推 60kg 5×5');
     renderChat();

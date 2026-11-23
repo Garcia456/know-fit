@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, Link } from 'react-router';
 import {
   ApiError,
   getConversation,
@@ -21,6 +21,7 @@ import { Composer } from '../components/Composer';
 import { CompletionPanel } from '../components/CompletionPanel';
 import { LowDataCard } from '../components/LowDataCard';
 import { ThinkingIndicator } from '../components/ThinkingIndicator';
+import { VerifyEmailBanner } from '../components/VerifyEmailBanner';
 import { ChevronRightIcon } from '../components/Icons';
 
 const DRAFT_KEY = 'know-fit:chat-draft';
@@ -114,6 +115,8 @@ export function ChatPage({
   const [pending, setPending] = useState<{ id: string; text: string } | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
+  /** 额度 / 邮箱未验证挡住 —— 重试没用，给一个去设置页的入口 */
+  const [quotaBlocked, setQuotaBlocked] = useState(false);
   const [assessingSessionId, setAssessingSessionId] = useState<string | null>(null);
   const [nudge, setNudge] = useState<Nudge | null>(null);
   const [nudgeDone, setNudgeDone] = useState(false);
@@ -158,6 +161,7 @@ export function ChatPage({
     onConversationChange?.(null);
     setSendError(null);
     setFailedMessage(null);
+    setQuotaBlocked(false);
     setParams({});
   }, [resetToken, setParams, onConversationChange]);
 
@@ -173,6 +177,7 @@ export function ChatPage({
         setEntries(entriesFromMessages(detail.messages));
         setSendError(null);
         setFailedMessage(null);
+        setQuotaBlocked(false);
       })
       .catch((error) => {
         if (!alive) return;
@@ -227,6 +232,7 @@ export function ChatPage({
     setSending(true);
     setSendError(null);
     setFailedMessage(null);
+    setQuotaBlocked(false);
     setPending({ id: entryId, text: trimmed });
     updateDraft('');
 
@@ -264,6 +270,7 @@ export function ChatPage({
       if (!draftRef.current.trim()) updateDraft(trimmed);
       setFailedMessage(trimmed);
       setSendError(error instanceof Error ? error.message : '发送失败，请重试');
+      setQuotaBlocked(error instanceof ApiError && (error.status === 402 || error.status === 403));
     } finally {
       setSending(false);
     }
@@ -311,6 +318,7 @@ export function ChatPage({
   return (
     <>
       <div className="body page-body chat-page" ref={bodyRef}>
+        <VerifyEmailBanner />
         {nudge && !nudgeDone ? (
           <div className="strip" role="status">
             <p>{nudge.message}</p>
@@ -435,7 +443,7 @@ export function ChatPage({
         {sendError ? (
           <div className="error-bar" role="alert">
             <span>{sendError}</span>
-            {failedMessage ? (
+            {failedMessage && !quotaBlocked ? (
               <button
                 type="button"
                 className="btn btn--ghost btn--sm"
@@ -444,6 +452,11 @@ export function ChatPage({
               >
                 重试
               </button>
+            ) : null}
+            {quotaBlocked ? (
+              <Link to="/settings" className="btn btn--ghost btn--sm">
+                去设置
+              </Link>
             ) : null}
           </div>
         ) : null}

@@ -150,6 +150,7 @@ describe('训练 / 饮食 / 闲聊 / 拒答卡片', () => {
           citations: [],
           has_source: false,
           no_source_notice: '知识库里没有找到可直接支撑的博主原话。',
+          knowledge_disabled: false,
         }}
       />,
     );
@@ -157,6 +158,23 @@ describe('训练 / 饮食 / 闲聊 / 拒答卡片', () => {
     expect(screen.queryByText('无来源')).toBeNull();
     const note = screen.getByText('本回答由 AI 生成，内容仅供参考，请仔细甄别。');
     expect(note.className).toContain('is-disclaimer');
+  });
+
+  it('knowledge：知识库未开启时给出开启提示', () => {
+    render(
+      <CardView
+        card={{
+          kind: 'knowledge',
+          answer: '知识库还没开启 —— 到「我的 → 知识库」填入邀请码后，就能按博主原片回答。',
+          claims: [],
+          citations: [],
+          has_source: false,
+          no_source_notice: '知识库未开启',
+          knowledge_disabled: true,
+        }}
+      />,
+    );
+    expect(screen.getByText(/知识库未开启 —— 到「我的 → 知识库」填入邀请码/)).toBeDefined();
   });
 
   it('plan：训练日表格、动作组次与来源', () => {

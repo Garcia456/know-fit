@@ -15,15 +15,41 @@ const me: Account = {
   avatar: null,
   age: 26,
   created_at: '2026-10-01T00:00:00.000Z',
+  invite_unlocked: false,
+  email_verified: true,
+  free_turns_used: 0,
+  free_turns_limit: 20,
 };
 
 function res(status: number, body: unknown) {
   return Promise.resolve({ ok: status < 400, status, json: async () => body });
 }
 
+const aiView = {
+  email_verified: true,
+  invite_unlocked: false,
+  quota: { used: 3, limit: 20, remaining: 17 },
+  key: null,
+  models: ['deepseek-flash', 'deepseek-v4-pro'],
+};
+
 function stubApi() {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url === '/api/auth/me') return res(200, { user: me });
+    if (url === '/api/account/ai') return res(200, aiView);
+    if (url === '/api/account/ai/key' && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as { model: string };
+      return res(200, {
+        ok: true,
+        key: {
+          configured: true,
+          model: body.model,
+          hint: 'wxyz',
+          updated_at: '2026-11-22T00:00:00.000Z',
+        },
+      });
+    }
+    if (url === '/api/account/ai/key' && init?.method === 'DELETE') return res(200, { ok: true });
     if (url === '/api/account' && init?.method === 'PATCH') {
       return res(200, { user: { ...me, ...JSON.parse(String(init.body)) } });
     }
@@ -134,6 +160,161 @@ describe('设置页', () => {
         }),
       }),
     );
+  });
+
+  it('未解锁时填邀请码开启知识库', async () => {
+    const fetchMock = stubApi();
+    renderSettings();
+
+    const input = (await screen.findByLabelText('知识库邀请码')) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '  dev-knowledge-invite  ' } });
+    fireEvent.click(screen.getByRole('button', { name: '开启知识库' }));
+
+    expect(await screen.findByText('已开启')).toBeDefined();
+    expect(screen.queryByLabelText('知识库邀请码')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/account/knowledge-access',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ invite_code: 'dev-knowledge-invite' }),
+      }),
+    );
+  });
+
+  it('邀请码不对时直接显示后端文案', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/auth/me') return res(200, { user: me });
+        if (url === '/api/account/knowledge-access') return res(403, { error: '邀请码不对' });
+        return res(200, {});
+      }),
+    );
+    renderSettings();
+
+    fireEvent.change(await screen.findByLabelText('知识库邀请码'), {
+      target: { value: 'nope' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '开启知识库' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('邀请码不对');
+    expect(screen.queryByText('已开启')).toBeNull();
+  });
+
+  it('显示免费对话剩余次数与邮箱验证状态', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/auth/me') return res(200, { user: { ...me, free_turns_used: 3 } });
+        return res(200, {});
+      }),
+    );
+    renderSettings();
+
+    expect(await screen.findByText('剩余 17 / 20 次')).toBeDefined();
+    expect(screen.getByText('已验证')).toBeDefined();
+  });
+
+  it('未验证邮箱时额度显示为待领取', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/auth/me') {
+          return res(200, { user: { ...me, email_verified: false } });
+        }
+        return res(200, {});
+      }),
+    );
+    renderSettings();
+
+    expect(await screen.findByText('验证邮箱后领取 20 次')).toBeDefined();
+    expect(screen.getByText('未验证')).toBeDefined();
+  });
+
+  it('保存自带 Key：密码框不回显，成功后只显示末 4 位', async () => {
+    const fetchMock = stubApi();
+    renderSettings();
+
+    const input = (await screen.findByLabelText('DeepSeek API Key')) as HTMLInputElement;
+    // 等 AI 状态回来，模型下拉才有默认值、按钮才可点
+    await screen.findByText('免费额度 · 剩余 17 次');
+    expect(input.type).toBe('password');
+    expect(input.value).toBe('');
+
+    fireEvent.change(input, { target: { value: 'sk-test-user-key-0000wxyz' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存 Key' }));
+
+    expect(await screen.findByText('末 4 位 wxyz')).toBeDefined();
+    expect((screen.getByLabelText('DeepSeek API Key') as HTMLInputElement).value).toBe('');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/account/ai/key',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          api_key: 'sk-test-user-key-0000wxyz',
+          model: 'deepseek-flash',
+        }),
+      }),
+    );
+  });
+
+  it('已保存 Key 时显示末 4 位，可删除', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/me') return res(200, { user: me });
+      if (url === '/api/account/ai') {
+        return res(200, {
+          ...aiView,
+          key: {
+            configured: true,
+            model: 'deepseek-v4-pro',
+            hint: 'abcd',
+            updated_at: '2026-11-01T00:00:00.000Z',
+          },
+        });
+      }
+      if (url === '/api/account/ai/key' && init?.method === 'DELETE') return res(200, { ok: true });
+      return res(200, {});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderSettings();
+
+    expect(await screen.findByText('末 4 位 abcd')).toBeDefined();
+    expect(screen.getByRole('button', { name: '替换 Key' })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: '删除 Key' }));
+
+    expect(await screen.findByRole('button', { name: '保存 Key' })).toBeDefined();
+    expect(screen.queryByText('末 4 位 abcd')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/account/ai/key',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('Key 无效时显示后端文案，不显示已保存', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/auth/me') return res(200, { user: me });
+        if (url === '/api/account/ai') return res(200, aiView);
+        if (url === '/api/account/ai/key' && init?.method === 'PUT') {
+          return res(400, { error: 'API Key 无效或已过期 —— 请在设置里重新填写' });
+        }
+        return res(200, {});
+      }),
+    );
+    renderSettings();
+
+    await screen.findByText('免费额度 · 剩余 17 次');
+    fireEvent.change(await screen.findByLabelText('DeepSeek API Key'), {
+      target: { value: 'sk-bad-key-00000000000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存 Key' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('API Key 无效');
+    expect(screen.queryByText(/^末 4 位 /)).toBeNull();
   });
 
   it('清空训练记录要二次确认，成功后报出清掉的条数', async () => {

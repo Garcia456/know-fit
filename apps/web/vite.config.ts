@@ -28,5 +28,8 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test-setup.ts'],
+    // 闸门里 web 与 api 测试并行跑，jsdom 用例在 CPU 吃紧时会被默认 5s 误杀；
+    // 用例内的 waitFor 最长等到 8s，这里留出余量。
+    testTimeout: 15000,
   },
 });

@@ -32,10 +32,19 @@ afterEach(() => {
 
 describe('个人信息页', () => {
   it('改完自动保存，并以回读值为准', async () => {
-    const fetchMock = stubFetch({
-      ok: true,
-      body: { ...emptyProfile, height_cm: 180, weight_kg: 75, goal: '增肌' },
+    // 回读按提交内容回显：并行负载下防抖可能先于最后一次选择触发；
+    // 若固定回包带上未提交的字段，回读会把 savedKey 填成「已保存」，后续改动不再发请求。
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ ...emptyProfile, ...JSON.parse(String(init.body)) }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => emptyProfile });
     });
+    vi.stubGlobal('fetch', fetchMock);
     render(<ProfilePage />);
 
     const height = (await screen.findByLabelText('身高（cm）')) as HTMLInputElement;

@@ -1,6 +1,8 @@
 import type {
   Account,
+  AccountAi,
   AccountInput,
+  AiKeySummary,
   AssessmentResponse,
   ClearTrainingResult,
   ConversationDetail,
@@ -72,11 +74,20 @@ export function postLogin(email: string, password: string): Promise<{ user: Acco
   });
 }
 
+export function postRegisterCode(
+  email: string,
+): Promise<{ ok: true; sent: true; expires_in: number }> {
+  return request('/api/auth/register/code', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
 export function postRegister(input: {
   email: string;
   password: string;
   nickname: string;
-  invite_code?: string;
+  code: string;
 }): Promise<{ user: Account }> {
   return request('/api/auth/register', {
     method: 'POST',
@@ -98,6 +109,51 @@ export function clearTrainingRecords(): Promise<{ ok: true; cleared: ClearTraini
 
 export function deleteAccount(): Promise<{ ok: true }> {
   return request('/api/account', { method: 'DELETE' });
+}
+
+/** 用邀请码解锁知识库（RAG）；失败文案由后端给出 */
+export function postKnowledgeAccess(inviteCode: string): Promise<{ ok: true; invite_unlocked: true }> {
+  return request('/api/account/knowledge-access', {
+    method: 'POST',
+    body: JSON.stringify({ invite_code: inviteCode }),
+  });
+}
+
+/** 设置页「AI 模型」：额度 / Key 状态 / 可选模型一次取全 */
+export function getAccountAi(): Promise<AccountAi> {
+  return request('/api/account/ai', { method: 'GET' });
+}
+
+/** 保存自带 DeepSeek Key —— 后端先探测，探测失败不落库 */
+export function putAccountAiKey(
+  apiKey: string,
+  model: string,
+): Promise<{ ok: true; key: AiKeySummary }> {
+  return request('/api/account/ai/key', {
+    method: 'PUT',
+    body: JSON.stringify({ api_key: apiKey, model }),
+  });
+}
+
+export function deleteAccountAiKey(): Promise<{ ok: true }> {
+  return request('/api/account/ai/key', { method: 'DELETE' });
+}
+
+/** 兑换邮件里的一次性验证令牌 */
+export function postVerifyEmail(token: string): Promise<{ ok: true; email_verified: true }> {
+  return request('/api/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** 重新发送验证邮件（登录态） */
+export function postResendVerification(): Promise<{
+  ok: true;
+  email_verified: boolean;
+  sent: boolean;
+}> {
+  return request('/api/auth/verify-email/resend', { method: 'POST' });
 }
 
 export function postTurn(message: string, conversationId?: string | null): Promise<TurnResponse> {

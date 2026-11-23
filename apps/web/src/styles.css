@@ -2063,6 +2063,33 @@ body.sheet-open .page-body {
   line-height: 1.4;
 }
 
+/* 注册页：验证码输入 + 获取按钮同一行 */
+.auth-field__row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.auth-field__row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.auth-field__send {
+  flex: none;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--glass-line);
+  font-size: 12.5px;
+}
+
+.auth-field__hint {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
 /* 密码框：右侧显示 / 隐藏 */
 .auth-field__control {
   position: relative;

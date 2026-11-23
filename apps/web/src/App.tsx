@@ -16,6 +16,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StatsPage } from './pages/StatsPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 
 /** 非会话三页路由；会话页常驻在 AppShell 里，不随 tab 切换卸载。 */
 export function AppRoutes() {
@@ -112,6 +113,7 @@ export function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route
             path="/settings"
             element={
