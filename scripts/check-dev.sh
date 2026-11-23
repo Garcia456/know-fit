@@ -156,8 +156,25 @@ if command -v curl >/dev/null 2>&1; then
 
   # 🔴 三个 provider 显式写死 fake：闸门绝不联网、绝不需要 key。
   #    （dev server 不读 .env，默认也是 fake —— 这里显式设是为了防外部环境变量把它翻过去。）
-  #    REGISTRATION_INVITE_CODE= 显式清空：作者 .env 里配了邀请码时，e2e 仍要能注册。
-  LLM_PROVIDER=fake EMBEDDING_PROVIDER=fake RERANK_PROVIDER=fake REGISTRATION_INVITE_CODE= pnpm dev >/tmp/knowfit-dev.log 2>&1 &
+  #
+  # 新链路的本机默认：注册验证码写 outbox（e2e 从那里读码完成注册）、额度 20 次、
+  # 邀请码固定值、KEK 用测试常量。
+  # 🔴 DEEPSEEK_BASE_URL 故意指向本机关闭端口：自带 Key 的 e2e 只验
+  #    「探测失败不落库」，全程不联网、不需要真 Key。
+  export MAIL_PROVIDER=fake
+  export MAIL_OUTBOX_DIR="$ROOT/.mail-outbox"
+  export PUBLIC_APP_URL="http://localhost:5173"
+  export KNOWLEDGE_INVITE_CODE=dev-knowledge-invite
+  export FREE_TURNS_LIMIT=20
+  export KEY_ENCRYPTION_SECRET=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  export DEEPSEEK_BASE_URL=http://127.0.0.1:9
+  # 多个 e2e 脚本都要注册账号；注册 / 发码桶放大，避免脚本间互相挤爆。
+  # 429 本身仍由 e2e-dev013 的独立 3101 进程用小额度验证。
+  export RATE_LIMIT_REGISTER_PER_HOUR=20
+  export RATE_LIMIT_REGISTER_CODE_PER_HOUR=50
+  rm -f "$MAIL_OUTBOX_DIR/outbox.jsonl"
+
+  LLM_PROVIDER=fake EMBEDDING_PROVIDER=fake RERANK_PROVIDER=fake pnpm dev >/tmp/knowfit-dev.log 2>&1 &
   DEV_PID=$!
 
   wait_for_http "$WEB_URL"            "web 聊天页 GET /" 40
@@ -185,7 +202,7 @@ fi
 #   F. 读聚合 / 范围统计 / 历史 / 评估缺失 / 窄修正 —— 与前端四页消费同一批接口。
 #   G. 用户系统 —— 注册 / 隔离 / 改资料 / 清空训练 / 注销，全部走会话 cookie。
 #   H. 身份 / 知识问答 / 空抽取 / 会话记录 —— 会话创建、恢复、改名、删除。
-bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引 + 检索引用 + 档案提示 + 读聚合修正 + 用户系统 + 会话记录）"
+bold "4/4  端到端往返（POST /api/turns + 采集转写 + 切片索引 + 检索引用 + 档案提示 + 读聚合修正 + 用户系统 + 会话记录 + 账号额度）"
 if [ "$FAILED" -eq 0 ]; then
   if node scripts/e2e-turn.mjs; then
     ok "端到端往返通过"
@@ -242,11 +259,20 @@ if [ "$FAILED" -eq 0 ]; then
     hint "dev server 起了吗？"
   fi
 
-  # 邀请码 / 限流 / 安全头 —— 自己起一个生产模式 API（3101），不依赖 3000。
-  if node scripts/e2e-dev013.mjs; then
-    ok "邀请码 / 限流 / 安全头通过"
+  # 邮箱验证 / 免费额度 / 邀请码 / 自带 Key —— 从 outbox 读验证邮件；
+  # Key 探测指向本机关闭端口，只证「失败不落库 + 响应不带明文」。
+  if node scripts/e2e-auth-quota.mjs; then
+    ok "邮箱验证 / 额度 / 邀请码 / 自带 Key 通过"
   else
-    bad "邀请码 / 限流 / 安全头失败"
+    bad "邮箱验证 / 额度 / 邀请码 / 自带 Key 失败"
+    hint "0017–0020 迁移跑了吗？MAIL_OUTBOX_DIR 与 dev server 用的是同一个吗？"
+  fi
+
+  # 开放注册 / 限流 / 安全头 —— 自己起一个生产模式 API（3101），不依赖 3000。
+  if node scripts/e2e-dev013.mjs; then
+    ok "开放注册 / 限流 / 安全头通过"
+  else
+    bad "开放注册 / 限流 / 安全头失败"
     hint "0014 迁移跑了吗？.demo-accounts.json 与库里密码一致吗？"
   fi
 

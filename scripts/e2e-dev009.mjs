@@ -16,6 +16,8 @@
  * 用法：node scripts/e2e-dev009.mjs      退出码 0 = 通过
  */
 import pg from 'pg';
+import { sessionCookieFrom } from './lib/login.mjs';
+import { registerWithCode } from './lib/register.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const url = process.env.DATABASE_URL ?? 'postgres://knowfit:knowfit@localhost:5432/knowfit';
@@ -206,16 +208,13 @@ try {
   // ── 5.5 跨用户隔离 ────────────────────────────────────────────────
   console.log('\n— E2. 跨用户隔离 —');
   const otherEmail = `e2e-dev009-other-${Date.now()}@knowfit.local`;
-  const reg = await fetch(`${BASE}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: otherEmail, password: 'knowfit-other', nickname: '别的号' }),
+  const reg = await registerWithCode(`${BASE}/api`, {
+    email: otherEmail,
+    password: 'knowfit-other',
+    nickname: '别的号',
   });
-  if (reg.ok) {
-    const otherCookie = (reg.headers.getSetCookie?.() ?? [])
-      .map((line) => line.split(';')[0])
-      .filter(Boolean)
-      .join('; ');
+  if (reg.status === 200) {
+    const otherCookie = sessionCookieFrom(reg);
     const otherApi = async (method, path) => {
       const res = await fetch(`${BASE}${path}`, { method, headers: { cookie: otherCookie } });
       return { status: res.status };
@@ -303,6 +302,9 @@ try {
   }
   // 隔离测试账号没删干净就兜底
   await client.query('DELETE FROM "user" WHERE email LIKE $1', ['e2e-dev009-other-%']).catch(() => {});
+  await client
+    .query('DELETE FROM registration_verification WHERE email LIKE $1', ['e2e-dev009-other-%'])
+    .catch(() => {});
   await client.end();
 }
 

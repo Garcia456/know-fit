@@ -2,7 +2,7 @@
 /**
  * know-fit 数据库可达性断言
  *
- * 断言五件事：
+ * 断言以下几件事：
  *   1. `vector` 扩展已安装（查 pg_extension 的 extversion 有值）
  *   2. 能建 `vector(1024)` 列 + HNSW（cosine）索引 —— 建完即回滚
  *   3. 录入链路的 6 张记录表都建出来了（迁移跑没跑）
@@ -10,6 +10,9 @@
  *   5. 知识库两张表建出来了（采集落 knowledge_source，切片落 knowledge_chunk）
  *   6. 评估两张表与引用偏移列建出来了（assessment / citation）
  *   7. knowledge_chunk 上真有 HNSW（cosine）索引 —— 检索侧就靠它
+ *   8. 档案 / 体重历史 / 恢复提示的表与列（0007）
+ *   9. 邮箱验证 / 免费额度 / 自带 Key 的列与表，且 Key 没有明文（0017–0019）
+ *  10. 注册验证码表（0020）—— 没有它注册接口发不出码，账号也建不出来
  *
  * 为什么第 2 条不能省：第 1 条只证明「扩展装上了」，
  * 而项目真正依赖的是 HNSW 索引能不能建 ——
@@ -180,6 +183,57 @@ try {
     bad(`档案 / 体重 / 提示的表或列缺：${missingDev006.join('、')} —— 0007 迁移没跑：pnpm db:migrate`);
   } else {
     ok('user_profile.height_cm / training_started_on、body_metric、recovery_nudge 都在');
+  }
+
+  // 9. 邮箱验证 / 免费额度 / 自带 Key —— 0017 / 0018 / 0019 的落点
+  const accountCols = await client.query(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'user'
+        AND column_name IN ('email_verified_at', 'invite_unlocked_at', 'free_turns_used')`,
+  );
+  const haveAccountCols = new Set(accountCols.rows.map((r) => r.column_name));
+  const needAccountCols = ['email_verified_at', 'invite_unlocked_at', 'free_turns_used'];
+  const missingAccountCols = needAccountCols.filter((c) => !haveAccountCols.has(c));
+  if (missingAccountCols.length > 0) {
+    bad(`user 缺列：${missingAccountCols.join('、')} —— 0017 / 0018 迁移没跑：pnpm db:migrate`);
+  } else {
+    ok('user.email_verified_at / invite_unlocked_at / free_turns_used 都在');
+  }
+
+  const authTables = await client.query(
+    "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = ANY($1)",
+    [['email_verification', 'user_llm_config']],
+  );
+  const haveAuthTables = new Set(authTables.rows.map((r) => r.tablename));
+  const missingAuthTables = ['email_verification', 'user_llm_config'].filter(
+    (t) => !haveAuthTables.has(t),
+  );
+  if (missingAuthTables.length > 0) {
+    bad(`缺表：${missingAuthTables.join('、')} —— 0017 / 0019 迁移没跑：pnpm db:migrate`);
+  } else {
+    ok('email_verification / user_llm_config 两张表都在');
+    // 自带 Key 只允许密文：出现 sk- 前缀就是明文泄漏
+    const plaintext = await client.query(
+      "SELECT count(*)::int AS n FROM user_llm_config WHERE key_ciphertext LIKE 'sk-%'",
+    );
+    if (plaintext.rows[0].n === 0) ok('user_llm_config 里没有明文 Key（无 sk- 前缀密文）');
+    else bad(`user_llm_config 里有 ${plaintext.rows[0].n} 行疑似明文 Key —— 立刻停服排查`);
+  }
+
+  // 10. 注册验证码 —— 注册必须先验证邮箱，验证码落在这张表
+  const regColumns = await client.query(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'registration_verification'`,
+  );
+  const haveRegColumns = new Set(regColumns.rows.map((r) => r.column_name));
+  const needRegColumns = ['email', 'code_hash', 'attempts', 'expires_at', 'consumed_at'];
+  const missingRegColumns = needRegColumns.filter((c) => !haveRegColumns.has(c));
+  if (missingRegColumns.length > 0) {
+    bad(
+      `registration_verification 缺表或列：${missingRegColumns.join('、')} —— 0020 迁移没跑：pnpm db:migrate`,
+    );
+  } else {
+    ok('registration_verification 表与注册验证码列都在');
   }
 } finally {
   await client.end();

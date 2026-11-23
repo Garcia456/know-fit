@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dev-013 端到端：邀请码闸门 / 限流 / 安全响应头。
+ * dev-013 端到端：开放注册 / 限流 / 安全响应头。
  *
  * 单独起一个 NODE_ENV=production 的 API（端口 3101），用小额度把 429 逼出来；
  * 不碰 check-dev 起的 3000 进程，也不依赖它。
@@ -10,13 +10,20 @@
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import pg from 'pg';
+import { registerWithCode } from './lib/register.mjs';
 
 const PORT = 3101;
 const BASE = `http://127.0.0.1:${PORT}`;
-const INVITE = 'dev013-invite-code';
-const EMAIL = `dev013-${Date.now()}@example.com`;
+const OUTBOX_DIR = resolve(process.env.MAIL_OUTBOX_DIR ?? '.mail-outbox');
+const STAMP = Date.now();
+const EMAILS = [
+  `dev013-a-${STAMP}@example.com`,
+  `dev013-b-${STAMP}@example.com`,
+  `dev013-c-${STAMP}@example.com`,
+];
 const PASSWORD = 'dev013-pass-123';
 
 let failed = 0;
@@ -72,10 +79,14 @@ const child = spawn(
       PORT: String(PORT),
       NODE_ENV: 'production',
       COOKIE_SECURE: '0',
-      REGISTRATION_INVITE_CODE: INVITE,
       // 小额度：几发就能撞到 429
       RATE_LIMIT_LOGIN_PER_15MIN: '3',
       RATE_LIMIT_REGISTER_PER_HOUR: '4',
+      // 三次注册各要一次验证码；给足发码桶，别让 429 来自错误的路径
+      RATE_LIMIT_REGISTER_CODE_PER_HOUR: '10',
+      // 验证码从 outbox 读：生产模式下也强制 fake 投递，保证脚本自洽
+      MAIL_PROVIDER: 'fake',
+      MAIL_OUTBOX_DIR: OUTBOX_DIR,
       TURN_QUOTA_PER_HOUR: '1',
       ASSESSMENT_QUOTA_PER_HOUR: '1',
       LLM_PROVIDER: 'fake',
@@ -89,7 +100,7 @@ const child = spawn(
 
 let db;
 try {
-  console.log('\n=== dev-013 邀请码 / 限流 / 安全头 ===\n');
+  console.log('\n=== dev-013 开放注册 / 限流 / 安全头 ===\n');
 
   if (!(await waitForApi())) {
     bad(`API 没起来（端口 ${PORT} 被占用？）`);
@@ -108,36 +119,59 @@ try {
       else bad(`安全头 ${name} 缺失或不对（拿到「${value}」）`);
     }
 
-    // 2. 邀请码闸门
-    const noCode = await post('/auth/register', { email: EMAIL, password: PASSWORD, nickname: 'dev013' });
-    if (noCode.status === 403) ok('不带邀请码 → 403');
-    else bad(`不带邀请码应 403，实际 ${noCode.status}`);
+    // 2. 开放注册：不带邀请码，但要先完成邮箱验证码
+    const [first, second, third] = EMAILS;
+    const created = await registerWithCode(
+      BASE,
+      { email: first, password: PASSWORD, nickname: 'dev013' },
+      { outboxDir: OUTBOX_DIR },
+    );
+    if (created.status === 200) ok('邮箱验证码 + 不带邀请码 → 注册成功');
+    else {
+      bad(
+        `注册应 200，实际 ${created.status}（${created.stage}）：${JSON.stringify(created.body)}`,
+      );
+    }
 
-    const wrong = await post('/auth/register', {
-      email: EMAIL,
+    const duplicate = await post('/auth/register', {
+      email: first,
       password: PASSWORD,
       nickname: 'dev013',
-      invite_code: 'wrong',
+      code: '000000',
     });
-    if (wrong.status === 403) ok('邀请码不对 → 403');
-    else bad(`邀请码不对应 403，实际 ${wrong.status}`);
+    if (duplicate.status === 409) ok('重复邮箱 → 409');
+    else bad(`重复邮箱应 409，实际 ${duplicate.status}`);
 
-    const right = await post('/auth/register', {
-      email: EMAIL,
-      password: PASSWORD,
-      nickname: 'dev013',
-      invite_code: INVITE,
-    });
-    if (right.status === 200) ok('邀请码正确 → 注册成功');
-    else bad(`邀请码正确应 200，实际 ${right.status}：${await right.text()}`);
+    // 3. 注册限流（已用 2 次；补 2 次后第 5 次该拦）
+    const secondRes = await registerWithCode(
+      BASE,
+      { email: second, password: PASSWORD, nickname: 'dev013' },
+      { outboxDir: OUTBOX_DIR },
+    );
+    if (secondRes.status === 200) ok('第二个账号 → 注册成功');
+    else {
+      bad(
+        `第二个账号应 200，实际 ${secondRes.status}（${secondRes.stage}）：${JSON.stringify(secondRes.body)}`,
+      );
+    }
 
-    // 3. 注册限流（4 次已用：缺码 / 错码 / 对码 = 3，再补 1 次后第 5 次该拦）
-    await post('/auth/register', { email: EMAIL, password: PASSWORD, nickname: 'dev013', invite_code: 'wrong' });
+    const thirdRes = await registerWithCode(
+      BASE,
+      { email: third, password: PASSWORD, nickname: 'dev013' },
+      { outboxDir: OUTBOX_DIR },
+    );
+    if (thirdRes.status === 200) ok('第三个账号 → 注册成功');
+    else {
+      bad(
+        `第三个账号应 200，实际 ${thirdRes.status}（${thirdRes.stage}）：${JSON.stringify(thirdRes.body)}`,
+      );
+    }
+
     const registerLimited = await post('/auth/register', {
-      email: EMAIL,
+      email: `dev013-d-${STAMP}@example.com`,
       password: PASSWORD,
       nickname: 'dev013',
-      invite_code: 'wrong',
+      code: '000000',
     });
     if (registerLimited.status === 429 && registerLimited.headers.get('retry-after')) {
       ok(`注册超限 → 429 + Retry-After ${registerLimited.headers.get('retry-after')}s`);
@@ -147,10 +181,10 @@ try {
 
     // 4. 登录限流（3 次错密码后第 4 次该拦）
     for (let i = 0; i < 3; i += 1) {
-      const res = await post('/auth/login', { email: EMAIL, password: 'wrong-password' });
+      const res = await post('/auth/login', { email: first, password: 'wrong-password' });
       if (res.status !== 401) bad(`第 ${i + 1} 次错密码应 401，实际 ${res.status}`);
     }
-    const loginLimited = await post('/auth/login', { email: EMAIL, password: 'wrong-password' });
+    const loginLimited = await post('/auth/login', { email: first, password: 'wrong-password' });
     if (loginLimited.status === 429 && loginLimited.headers.get('retry-after')) {
       ok(`登录超限 → 429 + Retry-After ${loginLimited.headers.get('retry-after')}s`);
     } else {
@@ -167,15 +201,15 @@ try {
     const setCookie = login.headers.getSetCookie?.() ?? [];
     const cookie = (setCookie[0] ?? login.headers.get('set-cookie') ?? '').split(';')[0];
     if (login.status === 200 && cookie) {
-      const first = await post('/turns', {}, cookie);
-      if (first.status === 400) ok('第一次 /turns 通过限流（路由自己回 400）');
-      else bad(`第一次 /turns 应 400，实际 ${first.status}`);
+      const firstTurn = await post('/turns', {}, cookie);
+      if (firstTurn.status === 400) ok('第一次 /turns 通过限流（路由自己回 400）');
+      else bad(`第一次 /turns 应 400，实际 ${firstTurn.status}`);
 
-      const second = await post('/turns', {}, cookie);
-      if (second.status === 429 && second.headers.get('retry-after')) {
-        ok(`/turns 用户配额 → 429 + Retry-After ${second.headers.get('retry-after')}s`);
+      const secondTurn = await post('/turns', {}, cookie);
+      if (secondTurn.status === 429 && secondTurn.headers.get('retry-after')) {
+        ok(`/turns 用户配额 → 429 + Retry-After ${secondTurn.headers.get('retry-after')}s`);
       } else {
-        bad(`/turns 第二次应 429，实际 ${second.status}`);
+        bad(`/turns 第二次应 429，实际 ${secondTurn.status}`);
       }
     } else {
       bad(`demo 登录失败（${login.status}）—— .demo-accounts.json 与库里的密码对不上？`);
@@ -190,10 +224,13 @@ try {
     db = new pg.Client({ connectionString: url, connectionTimeoutMillis: 3000 });
     try {
       await db.connect();
-      await db.query('DELETE FROM "user" WHERE email = $1', [EMAIL]);
+      await db.query(`DELETE FROM "user" WHERE email = ANY($1)`, [EMAILS]);
+      await db.query('DELETE FROM registration_verification WHERE email LIKE $1', [
+        `dev013-%${STAMP}@example.com`,
+      ]);
     } catch {
       // 清理失败不影响结论，只提示
-      console.error(`  ⚠️ 测试账号 ${EMAIL} 没清掉，可手动删除`);
+      console.error(`  ⚠️ 测试账号 ${EMAILS.join(', ')} 没清掉，可手动删除`);
     } finally {
       await db?.end().catch(() => {});
     }

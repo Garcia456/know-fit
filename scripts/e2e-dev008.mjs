@@ -18,6 +18,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { sessionCookieFrom } from './lib/login.mjs';
+import { registerWithCode } from './lib/register.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const API = `${BASE}/api`;
@@ -62,15 +63,18 @@ try {
   if (anon.status === 401) ok('未登录 GET /api/history → 401');
   else bad(`未登录访问应 401，实为 ${anon.status}`);
 
-  // B. 注册即登录
-  const reg = await call('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD, nickname: 'E2E新人' }),
+  // B. 邮箱验证码 + 注册即登录
+  const reg = await registerWithCode(API, {
+    email: EMAIL,
+    password: PASSWORD,
+    nickname: 'E2E新人',
   });
   if (reg.status === 200 && reg.body?.user?.email === EMAIL) {
-    ok(`注册成功：${EMAIL}`);
+    ok(`注册成功（已验证邮箱）：${EMAIL}`);
   } else {
-    bad(`注册失败：HTTP ${reg.status} ${JSON.stringify(reg.body)}`);
+    bad(
+      `注册失败（${reg.stage}）：HTTP ${reg.status} ${JSON.stringify(reg.body)}`,
+    );
     throw new Error('注册没通过，后面的步骤没有意义');
   }
   userId = reg.body.user.id;
@@ -91,7 +95,12 @@ try {
   // C. 重复邮箱 / 错密码
   const dup = await call('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD, nickname: '重复' }),
+    body: JSON.stringify({
+      email: EMAIL,
+      password: PASSWORD,
+      nickname: '重复',
+      code: '000000',
+    }),
   });
   if (dup.status === 409) ok('重复邮箱注册 → 409');
   else bad(`重复邮箱应 409，实为 ${dup.status}`);
@@ -209,6 +218,9 @@ try {
   // 删除没走完的测试账号（级联带走所有数据）
   try {
     await client.query('DELETE FROM "user" WHERE email LIKE $1', ['e2e-dev008-%']);
+    await client.query('DELETE FROM registration_verification WHERE email LIKE $1', [
+      'e2e-dev008-%',
+    ]);
   } catch {
     // 连接已坏就交给下次；本脚本不因此加错
   }

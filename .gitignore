@@ -15,6 +15,9 @@ backups/
 .demo-accounts.json
 deploy/demo-accounts/
 
+# 替身邮件 outbox（含验证链接 token）
+.mail-outbox/
+
 # 构建产物
 dist/
 build/

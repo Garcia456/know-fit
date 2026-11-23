@@ -14,6 +14,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { sessionCookieFrom } from './lib/login.mjs';
+import { registerWithCode } from './lib/register.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const API = `${BASE}/api`;
@@ -86,22 +87,22 @@ let userId;
 try {
   // ── A. 空账号问上周容量 ──────────────────────────────────────────
   console.log('— A. 空账号问「上周容量怎么样」 —');
-  const reg = await call('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({
-      email: EMAIL,
-      password: PASSWORD,
-      nickname: 'E2E容量',
-      ...(process.env.E2E_INVITE_CODE ? { invite_code: process.env.E2E_INVITE_CODE } : {}),
-    }),
+  const reg = await registerWithCode(API, {
+    email: EMAIL,
+    password: PASSWORD,
+    nickname: 'E2E容量',
   });
   if (reg.status !== 200) {
-    bad(`注册失败：HTTP ${reg.status} ${JSON.stringify(reg.body)}`);
+    bad(`注册失败（${reg.stage}）：HTTP ${reg.status} ${JSON.stringify(reg.body)}`);
     throw new Error('注册没通过，后面的步骤没有意义');
   }
   userId = reg.body.user.id;
   cookie = sessionCookieFrom(reg);
-  ok(`注册空账号：${EMAIL}`);
+  if (reg.body.user.email_verified === true) {
+    ok(`注册即完成邮箱验证：${EMAIL}`);
+  } else {
+    bad(`新账号应为已验证，实为 ${JSON.stringify(reg.body.user.email_verified)}`);
+  }
 
   const empty = await turn('上周容量怎么样', cookie);
   if (empty) {
@@ -149,12 +150,49 @@ try {
   );
   if (rows.rows[0]?.sessions === 1) ok('workout_session 里 1 条记录');
   else bad(`库里记录数不对：${JSON.stringify(rows.rows[0])}`);
+
+  // ── F. 免费额度：用满后下一次 → 402 ───────────────────────────────
+  console.log('\n— F. 免费额度用满后拒绝 —');
+  let blocked = null;
+  for (let i = 0; i < 25 && !blocked; i += 1) {
+    const res = await call(
+      '/turns',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          message: '本周容量',
+          ...(conversationId ? { conversation_id: conversationId } : {}),
+        }),
+      },
+      cookie,
+    );
+    if (res.status === 402) blocked = res.body;
+    else if (res.status !== 200) {
+      bad(`额度内追加对话 → HTTP ${res.status} ${JSON.stringify(res.body)}`);
+      break;
+    }
+  }
+  if (blocked?.code === 'free_quota_exhausted') {
+    ok('额度用满后 → 402 free_quota_exhausted');
+  } else {
+    bad(`额度用满后应 402，实为 ${JSON.stringify(blocked)}`);
+  }
+
+  const quota = await client.query(
+    'SELECT free_turns_used FROM "user" WHERE id = $1',
+    [userId],
+  );
+  if (quota.rows[0]?.free_turns_used === 20) ok('库里免费次数记满 20');
+  else bad(`free_turns_used 应为 20，实为 ${JSON.stringify(quota.rows[0])}`);
 } catch (e) {
   bad(e instanceof Error ? e.message : String(e));
 } finally {
   try {
     if (cookie) await call('/account', { method: 'DELETE' }, cookie);
     await client.query('DELETE FROM "user" WHERE email LIKE $1', ['e2e-dev018-%']);
+    await client.query('DELETE FROM registration_verification WHERE email LIKE $1', [
+      'e2e-dev018-%',
+    ]);
   } catch {
     // 连接已坏就交给下次；本脚本不因此加错
   }
