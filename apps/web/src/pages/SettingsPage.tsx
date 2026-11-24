@@ -86,11 +86,10 @@ function SettingsForm({ user }: { user: Account }) {
   const [ai, setAi] = useState<AccountAi | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
-  const [keyModel, setKeyModel] = useState('');
+  const [modelChoice, setModelChoice] = useState<'system' | 'deepseek-flash'>('system');
   const [keyBusy, setKeyBusy] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
-  const [keyDeleting, setKeyDeleting] = useState(false);
 
   function update<K extends keyof AccountInput>(key: K, value: AccountInput[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -120,7 +119,8 @@ function SettingsForm({ user }: { user: Account }) {
       .then((view) => {
         if (cancelled) return;
         setAi(view);
-        setKeyModel(view.key?.model ?? view.models?.[0] ?? '');
+        // 下拉只暴露「系统」与 deepseek-flash；已有 Key 就落到 deepseek 档
+        setModelChoice(view.key ? 'deepseek-flash' : 'system');
       })
       .catch((e: unknown) => {
         if (!cancelled) setAiError(e instanceof Error ? e.message : 'AI 设置读不出来');
@@ -248,15 +248,23 @@ function SettingsForm({ user }: { user: Account }) {
     }
   }
 
-  async function handleSaveKey(event: FormEvent) {
+  async function handleSaveAi(event: FormEvent) {
     event.preventDefault();
+    if (keyBusy || !ai) return;
     const key = apiKey.trim();
-    if (keyBusy || key.length < 8 || !keyModel) return;
+    if (modelChoice === 'deepseek-flash' && key.length < 8) return;
     setKeyBusy(true);
     setKeyError(null);
     setKeySaved(false);
     try {
-      const res = await putAccountAiKey(key, keyModel);
+      if (modelChoice === 'system') {
+        if (ai.key) await deleteAccountAiKey();
+        setAi((prev) => (prev ? { ...prev, key: null } : prev));
+        setApiKey('');
+        setKeySaved(true);
+        return;
+      }
+      const res = await putAccountAiKey(key, 'deepseek-flash');
       setAi((prev) => (prev ? { ...prev, key: res.key } : prev));
       // 明文只进请求：保存后立刻清空输入框，不回填
       setApiKey('');
@@ -268,50 +276,14 @@ function SettingsForm({ user }: { user: Account }) {
     }
   }
 
-  async function handleDeleteKey() {
-    if (keyDeleting) return;
-    setKeyDeleting(true);
+  function handleModelChange(value: string) {
+    setModelChoice(value === 'system' ? 'system' : 'deepseek-flash');
     setKeyError(null);
-    try {
-      await deleteAccountAiKey();
-      setAi((prev) => (prev ? { ...prev, key: null } : prev));
-      setKeySaved(false);
-    } catch (e) {
-      setKeyError(e instanceof Error ? e.message : '删除失败，请重试');
-    } finally {
-      setKeyDeleting(false);
-    }
+    setKeySaved(false);
+    if (value === 'system') setApiKey('');
   }
 
-  const freeRemaining = Math.max(user.free_turns_limit - user.free_turns_used, 0);
-  const quotaText = user.invite_unlocked
-    ? '不限次'
-    : !user.email_verified
-      ? `验证邮箱后领取 ${user.free_turns_limit} 次`
-      : freeRemaining > 0
-        ? `剩余 ${freeRemaining} / ${user.free_turns_limit} 次`
-        : '已用完';
-  const quotaNote = user.invite_unlocked
-    ? '用邀请码解锁的账号不限免费次数。'
-    : !user.email_verified
-      ? '验证邮箱后领取免费对话次数；会话页顶部可以重新发送验证邮件。'
-      : freeRemaining > 0
-        ? '每轮对话扣 1 次；用完后需要在设置里填入自己的 API Key。'
-        : '免费次数已用完 —— 在设置里填入自己的 API Key 后可以继续。';
-
-  const keyModels = ai?.models ?? [];
   const hasKey = ai?.key != null;
-  const aiMode = !ai
-    ? '读取中…'
-    : hasKey
-      ? '自带 Key（不扣免费额度）'
-      : ai.invite_unlocked
-        ? '不限次（服务端 Key）'
-        : !ai.email_verified
-          ? '邮箱未验证'
-          : (ai.quota?.remaining ?? 0) > 0
-            ? `免费额度 · 剩余 ${ai.quota.remaining} 次`
-            : '免费额度已用完';
 
   return (
     <div className="settings-page">
@@ -486,24 +458,6 @@ function SettingsForm({ user }: { user: Account }) {
           </div>
         </section>
 
-        <section className="sec" aria-label="对话额度" style={{ marginTop: 20 }}>
-          <p className="group-label">对话额度</p>
-          <div className="list-card">
-            <div className="set-row">
-              <span className="lbl">免费对话</span>
-              <span className="val">{quotaText}</span>
-            </div>
-            <div className="set-row">
-              <span className="lbl">邮箱</span>
-              <span className="val">{user.email_verified ? '已验证' : '未验证'}</span>
-            </div>
-          </div>
-          <div className="note-inline">
-            <InfoIcon />
-            <p>{quotaNote}</p>
-          </div>
-        </section>
-
         <section className="sec" aria-label="AI 模型" style={{ marginTop: 20 }}>
           <p className="group-label">AI 模型</p>
           {aiError ? (
@@ -511,66 +465,48 @@ function SettingsForm({ user }: { user: Account }) {
               {aiError}
             </p>
           ) : null}
-          <div className="list-card">
-            <div className="set-row">
-              <span className="lbl">当前模式</span>
-              <span className="val">{aiMode}</span>
-            </div>
-            <div className="set-row">
-              <span className="lbl">模型</span>
-              <span className="val">{ai?.key ? ai.key.model : '服务端默认'}</span>
-            </div>
-            {ai?.key ? (
-              <div className="set-row">
-                <span className="lbl">已保存 Key</span>
-                <span className="val">末 4 位 {ai.key.hint}</span>
-              </div>
-            ) : null}
-          </div>
 
-          <form onSubmit={handleSaveKey} noValidate style={{ marginTop: 12 }}>
+          <form onSubmit={handleSaveAi} noValidate>
             <div className="list-card">
               <label className="set-row">
-                <span className="lbl">API Key</span>
-                <input
-                  className="set-input"
-                  style={{ width: 200 }}
-                  type="password"
-                  aria-label="DeepSeek API Key"
-                  placeholder={hasKey ? '填入新 Key 可替换' : 'sk-...'}
-                  autoComplete="new-password"
-                  spellCheck={false}
-                  value={apiKey}
-                  onChange={(e) => {
-                    setApiKey(e.target.value);
-                    setKeyError(null);
-                    setKeySaved(false);
-                  }}
-                />
-              </label>
-              <label className="set-row">
                 <span className="lbl">模型</span>
-                <span className="val">
-                  <select
+                <select
+                  className="set-select"
+                  aria-label="模型"
+                  value={modelChoice}
+                  disabled={!ai}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                >
+                  <option value="system">系统</option>
+                  <option value="deepseek-flash">deepseek-flash</option>
+                </select>
+              </label>
+              {modelChoice === 'deepseek-flash' ? (
+                <label className="set-row">
+                  <span className="lbl">API Key</span>
+                  <input
                     className="set-input"
-                    aria-label="DeepSeek 模型"
-                    value={keyModel}
-                    disabled={keyModels.length === 0}
+                    style={{ width: 200 }}
+                    type="password"
+                    aria-label="DeepSeek API Key"
+                    placeholder={
+                      hasKey
+                        ? `已保存（末 4 位 ${ai?.key?.hint ?? ''}），填入新 Key 可替换`
+                        : 'sk-...'
+                    }
+                    autoComplete="new-password"
+                    spellCheck={false}
+                    value={apiKey}
                     onChange={(e) => {
-                      setKeyModel(e.target.value);
+                      setApiKey(e.target.value);
                       setKeyError(null);
                       setKeySaved(false);
                     }}
-                  >
-                    {keyModels.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </span>
-              </label>
+                  />
+                </label>
+              ) : null}
             </div>
+
             {keyError ? (
               <p className="error-text" role="alert">
                 {keyError}
@@ -580,9 +516,17 @@ function SettingsForm({ user }: { user: Account }) {
               <button
                 type="submit"
                 className="btn btn--block"
-                disabled={keyBusy || apiKey.trim().length < 8 || !keyModel}
+                disabled={
+                  keyBusy ||
+                  !ai ||
+                  (modelChoice === 'deepseek-flash' && apiKey.trim().length < 8)
+                }
               >
-                {keyBusy ? '正在验证 Key…' : hasKey ? '替换 Key' : '保存 Key'}
+                {keyBusy
+                  ? '正在保存…'
+                  : modelChoice === 'deepseek-flash'
+                    ? '保存 Key'
+                    : '保存'}
               </button>
               {keySaved ? (
                 <p className="saved-note" role="status">
@@ -591,19 +535,6 @@ function SettingsForm({ user }: { user: Account }) {
               ) : null}
             </div>
           </form>
-
-          {hasKey ? (
-            <div className="save-row">
-              <button
-                type="button"
-                className="btn btn--ghost btn--block"
-                onClick={handleDeleteKey}
-                disabled={keyDeleting}
-              >
-                {keyDeleting ? '正在删除…' : '删除 Key'}
-              </button>
-            </div>
-          ) : null}
 
           <div className="note-inline">
             <InfoIcon />

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Account } from '../api/types';
@@ -202,51 +202,36 @@ describe('设置页', () => {
     expect(screen.queryByText('已开启')).toBeNull();
   });
 
-  it('显示免费对话剩余次数与邮箱验证状态', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        if (url === '/api/auth/me') return res(200, { user: { ...me, free_turns_used: 3 } });
-        return res(200, {});
-      }),
-    );
+  it('默认使用系统模型，不显示额度与 API Key 输入', async () => {
+    stubApi();
     renderSettings();
 
-    expect(await screen.findByText('剩余 17 / 20 次')).toBeDefined();
-    expect(screen.getByText('已验证')).toBeDefined();
+    const model = (await screen.findByLabelText('模型')) as HTMLSelectElement;
+    await waitFor(() => expect(model.disabled).toBe(false));
+    expect(model.value).toBe('system');
+    expect(screen.queryByLabelText('DeepSeek API Key')).toBeNull();
+    expect(screen.queryByText('对话额度')).toBeNull();
   });
 
-  it('未验证邮箱时额度显示为待领取', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        if (url === '/api/auth/me') {
-          return res(200, { user: { ...me, email_verified: false } });
-        }
-        return res(200, {});
-      }),
-    );
-    renderSettings();
-
-    expect(await screen.findByText('验证邮箱后领取 20 次')).toBeDefined();
-    expect(screen.getByText('未验证')).toBeDefined();
-  });
-
-  it('保存自带 Key：密码框不回显，成功后只显示末 4 位', async () => {
+  it('选 deepseek-flash 后出现 API Key，保存后只显示末 4 位', async () => {
     const fetchMock = stubApi();
     renderSettings();
 
+    const model = (await screen.findByLabelText('模型')) as HTMLSelectElement;
+    await waitFor(() => expect(model.disabled).toBe(false));
+    fireEvent.change(model, { target: { value: 'deepseek-flash' } });
+
     const input = (await screen.findByLabelText('DeepSeek API Key')) as HTMLInputElement;
-    // 等 AI 状态回来，模型下拉才有默认值、按钮才可点
-    await screen.findByText('免费额度 · 剩余 17 次');
     expect(input.type).toBe('password');
     expect(input.value).toBe('');
 
     fireEvent.change(input, { target: { value: 'sk-test-user-key-0000wxyz' } });
     fireEvent.click(screen.getByRole('button', { name: '保存 Key' }));
 
-    expect(await screen.findByText('末 4 位 wxyz')).toBeDefined();
-    expect((screen.getByLabelText('DeepSeek API Key') as HTMLInputElement).value).toBe('');
+    expect(await screen.findByText('已保存')).toBeDefined();
+    const after = screen.getByLabelText('DeepSeek API Key') as HTMLInputElement;
+    expect(after.value).toBe('');
+    expect(after.placeholder).toContain('末 4 位 wxyz');
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/account/ai/key',
       expect.objectContaining({
@@ -259,7 +244,7 @@ describe('设置页', () => {
     );
   });
 
-  it('已保存 Key 时显示末 4 位，可删除', async () => {
+  it('已有 Key 时默认 deepseek-flash，切回系统保存会删除 Key', async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === '/api/auth/me') return res(200, { user: me });
       if (url === '/api/account/ai') {
@@ -267,7 +252,7 @@ describe('设置页', () => {
           ...aiView,
           key: {
             configured: true,
-            model: 'deepseek-v4-pro',
+            model: 'deepseek-flash',
             hint: 'abcd',
             updated_at: '2026-11-01T00:00:00.000Z',
           },
@@ -279,13 +264,16 @@ describe('设置页', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderSettings();
 
-    expect(await screen.findByText('末 4 位 abcd')).toBeDefined();
-    expect(screen.getByRole('button', { name: '替换 Key' })).toBeDefined();
+    const model = (await screen.findByLabelText('模型')) as HTMLSelectElement;
+    await waitFor(() => expect(model.value).toBe('deepseek-flash'));
+    const input = screen.getByLabelText('DeepSeek API Key') as HTMLInputElement;
+    expect(input.placeholder).toContain('末 4 位 abcd');
 
-    fireEvent.click(screen.getByRole('button', { name: '删除 Key' }));
+    fireEvent.change(model, { target: { value: 'system' } });
+    expect(screen.queryByLabelText('DeepSeek API Key')).toBeNull();
 
-    expect(await screen.findByRole('button', { name: '保存 Key' })).toBeDefined();
-    expect(screen.queryByText('末 4 位 abcd')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(await screen.findByText('已保存')).toBeDefined();
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/account/ai/key',
       expect.objectContaining({ method: 'DELETE' }),
@@ -306,7 +294,9 @@ describe('设置页', () => {
     );
     renderSettings();
 
-    await screen.findByText('免费额度 · 剩余 17 次');
+    const model = (await screen.findByLabelText('模型')) as HTMLSelectElement;
+    await waitFor(() => expect(model.disabled).toBe(false));
+    fireEvent.change(model, { target: { value: 'deepseek-flash' } });
     fireEvent.change(await screen.findByLabelText('DeepSeek API Key'), {
       target: { value: 'sk-bad-key-00000000000' },
     });
@@ -314,7 +304,7 @@ describe('设置页', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('API Key 无效');
-    expect(screen.queryByText(/^末 4 位 /)).toBeNull();
+    expect(screen.queryByText('已保存')).toBeNull();
   });
 
   it('清空训练记录要二次确认，成功后报出清掉的条数', async () => {
