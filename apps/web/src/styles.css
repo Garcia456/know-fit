@@ -2151,6 +2151,31 @@ body.sheet-open .page-body {
   font-weight: 600;
 }
 
+/* 登录页「试一试」：次要入口，用描边 + 次级底从白卡上分离出来，并与主按钮拉开距离 */
+.auth-card .auth-demo-enter {
+  margin-top: var(--s-6);
+  padding: 13px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.auth-card .auth-demo-enter:hover {
+  background: var(--canvas-2);
+  box-shadow: none;
+  transform: none;
+}
+
+.auth-card .auth-demo-enter:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
 /* ---------- 我的 · 账号摘要 ---------- */
 
 .profile--account .avatar {

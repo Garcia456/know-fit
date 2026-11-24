@@ -6,6 +6,9 @@ import { AuthLayout } from './AuthLayout';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** 只读演示账号，用来点「试一试」一键进站 */
+const DEMO_ACCOUNT = { email: 'demo2@knowfit.local', password: 'knowfit222i' };
+
 interface FieldErrors {
   email?: string;
   password?: string;
@@ -50,6 +53,18 @@ export function LoginPage() {
     }));
   }
 
+  async function submitCredentials(emailText: string, passwordText: string) {
+    setSubmitting(true);
+    try {
+      await signIn(emailText, passwordText);
+      navigate(from, { replace: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '登录失败，请重试');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (submitting) return;
@@ -71,15 +86,16 @@ export function LoginPage() {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      await signIn(emailText, password);
-      navigate(from, { replace: true });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '登录失败，请重试');
-    } finally {
-      setSubmitting(false);
-    }
+    await submitCredentials(emailText, password);
+  }
+
+  async function handleDemoLogin() {
+    if (submitting) return;
+    setErrors({});
+    setError(null);
+    setEmail(DEMO_ACCOUNT.email);
+    setPassword(DEMO_ACCOUNT.password);
+    await submitCredentials(DEMO_ACCOUNT.email, DEMO_ACCOUNT.password);
   }
 
   if (status === 'authenticated') return <Navigate to="/" replace />;
@@ -149,6 +165,15 @@ export function LoginPage() {
 
         <button type="submit" className="btn btn--block" disabled={submitting}>
           {submitting ? '正在登录…' : '登录'}
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--block auth-demo-enter"
+          disabled={submitting}
+          onClick={handleDemoLogin}
+          aria-label="试一试（用演示账号登录）"
+        >
+          试一试
         </button>
       </form>
 

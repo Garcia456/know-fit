@@ -78,13 +78,21 @@ describe('登录页', () => {
     );
   });
 
-  it('不显示演示账号入口', async () => {
-    stubLogin(401);
+  it('点「试一试」用演示账号一键登录', async () => {
+    const fetchMock = stubLogin(200);
     renderLogin();
 
     await screen.findByLabelText('邮箱');
-    expect(screen.queryByText('演示账号')).toBeNull();
-    expect(screen.queryByRole('button', { name: /demo@/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /试一试/ }));
+
+    expect(await screen.findByText('会话首页')).toBeDefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'demo2@knowfit.local', password: 'knowfit222i' }),
+      }),
+    );
   });
 
   it('空提交不发请求，两个字段分别提示并聚焦邮箱', async () => {
