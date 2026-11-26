@@ -117,9 +117,9 @@ export function App() {
           <Route
             path="/settings"
             element={
-              <AuthGate>
-                <SettingsPage />
-              </AuthGate>
+              <LazyMotion features={domAnimation} strict>
+                <AuthGate><SettingsPage /></AuthGate>
+              </LazyMotion>
             }
           />
           <Route

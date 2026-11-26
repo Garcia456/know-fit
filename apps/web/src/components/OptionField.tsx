@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BottomSheet } from './BottomSheet';
-import { ChevronDownIcon } from './Icons';
+import { CheckIcon, ChevronDownIcon } from './Icons';
 
 interface Props {
   label: string;
@@ -44,7 +44,12 @@ export function OptionField({ label, value, options, onChange }: Props) {
                   setOpen(false);
                 }}
               >
-                {opt.label}
+                <span>{opt.label}</span>
+                {opt.value === value ? (
+                  <span className="sheet-option__check" aria-hidden="true">
+                    <CheckIcon size={15} />
+                  </span>
+                ) : null}
               </button>
             </li>
           ))}

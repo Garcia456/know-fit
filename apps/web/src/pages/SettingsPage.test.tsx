@@ -206,9 +206,9 @@ describe('设置页', () => {
     stubApi();
     renderSettings();
 
-    const model = (await screen.findByLabelText('模型')) as HTMLSelectElement;
+    const model = (await screen.findByRole('combobox', { name: '模型' })) as HTMLButtonElement;
     await waitFor(() => expect(model.disabled).toBe(false));
-    expect(model.value).toBe('system');
+    expect(model.textContent).toContain('系统');
     expect(screen.queryByLabelText('DeepSeek API Key')).toBeNull();
     expect(screen.queryByText('对话额度')).toBeNull();
   });
@@ -217,9 +217,10 @@ describe('设置页', () => {
     const fetchMock = stubApi();
     renderSettings();
 
-    const model = (await screen.findByLabelText('模型')) as HTMLSelectElement;
+    const model = (await screen.findByRole('combobox', { name: '模型' })) as HTMLButtonElement;
     await waitFor(() => expect(model.disabled).toBe(false));
-    fireEvent.change(model, { target: { value: 'deepseek-flash' } });
+    fireEvent.click(model);
+    fireEvent.click(screen.getByRole('option', { name: /deepseek-flash/ }));
 
     const input = (await screen.findByLabelText('DeepSeek API Key')) as HTMLInputElement;
     expect(input.type).toBe('password');
@@ -264,12 +265,13 @@ describe('设置页', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderSettings();
 
-    const model = (await screen.findByLabelText('模型')) as HTMLSelectElement;
-    await waitFor(() => expect(model.value).toBe('deepseek-flash'));
+    const model = (await screen.findByRole('combobox', { name: '模型' })) as HTMLButtonElement;
+    await waitFor(() => expect(model.textContent).toContain('deepseek-flash'));
     const input = screen.getByLabelText('DeepSeek API Key') as HTMLInputElement;
     expect(input.placeholder).toContain('末 4 位 abcd');
 
-    fireEvent.change(model, { target: { value: 'system' } });
+    fireEvent.click(model);
+    fireEvent.click(screen.getByRole('option', { name: /系统/ }));
     expect(screen.queryByLabelText('DeepSeek API Key')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
@@ -294,9 +296,10 @@ describe('设置页', () => {
     );
     renderSettings();
 
-    const model = (await screen.findByLabelText('模型')) as HTMLSelectElement;
+    const model = (await screen.findByRole('combobox', { name: '模型' })) as HTMLButtonElement;
     await waitFor(() => expect(model.disabled).toBe(false));
-    fireEvent.change(model, { target: { value: 'deepseek-flash' } });
+    fireEvent.click(model);
+    fireEvent.click(screen.getByRole('option', { name: /deepseek-flash/ }));
     fireEvent.change(await screen.findByLabelText('DeepSeek API Key'), {
       target: { value: 'sk-bad-key-00000000000' },
     });

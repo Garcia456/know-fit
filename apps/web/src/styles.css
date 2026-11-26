@@ -1778,22 +1778,175 @@ body::-webkit-scrollbar,
   outline-offset: 1px;
 }
 
-.field--select {
-  flex: 0 1 auto;
+.field--select,
+.select-field__trigger {
+  display: inline-flex;
   flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  padding: 2px 0;
-  border-color: transparent;
+  max-width: 100%;
+  white-space: nowrap;
+  min-height: 32px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-2);
   background: transparent;
+  color: var(--ink);
+  font: inherit;
   font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.field--select {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.field--select:hover,
+.select-field__trigger:hover {
+  background: var(--surface-2);
+}
+.field--select[aria-expanded="true"],
+.select-field__trigger[aria-expanded="true"] {
+  border-color: var(--glass-line);
+  background: var(--accent-soft);
+}
+.field--select:active,
+.select-field__trigger:active {
+  box-shadow: none;
+  background: var(--canvas-2);
+}
+.field--select .field__value,
+.select-field__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.field__chevron,
+.select-field__chevron {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.field--select[aria-expanded="true"] .field__chevron,
+.select-field__trigger[aria-expanded="true"] .select-field__chevron {
+  color: var(--ink-2);
+  transform: rotate(180deg);
+}
+/* 设置页行内下拉：触发器和 portal 菜单共用一套 8px 圆角 / 轻描边语言 */
+.select-field {
+  position: relative;
+  display: inline-flex;
+  min-width: 0; max-width: min(260px, calc(100vw - 120px));
+}
+.select-field__trigger:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.select-field__trigger:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+.select-field__trigger:disabled:hover {
+  background: transparent;
+}
+.select-field__menu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: min(320px, calc(100vh - 24px));
+  padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--glass-line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent),
+    0 18px 38px -22px color-mix(in srgb, var(--ink) 48%, transparent);
+  transform-origin: top right;
+  animation: select-menu-in 0.14s ease-out both;
+}
+.select-field__menu--above {
+  transform-origin: bottom right;
+  animation-name: select-menu-in-above;
+}
+.select-field__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border-radius: var(--r-2);
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+.select-field__option:hover,
+.select-field__option.is-active {
+  background: var(--surface-2);
+}
+.select-field__option:active {
+  background: var(--canvas-2);
+}
+.select-field__option.is-selected {
+  background: var(--accent-soft);
 }
 
-.field__chevron {
-  display: inline-flex;
+.select-field__option.is-selected.is-active {
+  background: color-mix(in srgb, var(--accent-soft) 76%, var(--canvas-2));
+}
+
+.select-field__option-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.select-field__option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+
+.select-field__option.is-selected .select-field__option-label {
+  font-weight: 600;
+}
+
+.select-field__option-description {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.select-field__check {
+  display: inline-flex;
+  flex: none;
+  color: var(--accent-strong);
+}
+
+@keyframes select-menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes select-menu-in-above { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .field__chevron,
+  .select-field__trigger,
+  .select-field__chevron {
+    transition: none;
+  }
+
+  .select-field__menu,
+  .select-field__menu--above {
+    animation: none;
+  }
 }
 
 /* 没有时间点时「看原片」靠右 */
@@ -1922,32 +2075,58 @@ body.sheet-open .page-body {
 }
 
 .sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   max-height: 50vh;
   margin: 8px 0 0;
-  padding: 0;
+  padding: 4px 0 2px;
   overflow-y: auto;
   list-style: none;
 }
 
 .sheet-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
-  padding: 12px 4px;
+  min-height: 44px;
+  padding: 11px 10px;
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-radius: var(--r-2);
   background: none;
   color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color 0.12s ease;
 }
 
-.sheet-option:last-child {
-  border-bottom: 0;
+.sheet-option:hover {
+  background: var(--surface-2);
+}
+
+.sheet-option:active {
+  box-shadow: none;
+  background: var(--canvas-2);
 }
 
 .sheet-option.is-on {
-  color: var(--brand);
+  background: var(--accent-soft);
+  color: var(--ink);
   font-weight: 600;
+}
+
+.sheet-option.is-on:hover {
+  background: color-mix(in srgb, var(--accent-soft) 76%, var(--canvas-2));
+}
+
+.sheet-option__check {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+  color: var(--accent-strong);
 }
 
 /* ---------- 登录 / 注册 ---------- */
