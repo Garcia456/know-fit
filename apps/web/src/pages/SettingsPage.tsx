@@ -20,14 +20,25 @@ import { useAuth } from '../auth/AuthContext';
 import { AvatarCropDialog } from '../components/AvatarCropDialog';
 import { DateField } from '../components/DateField';
 import { ArrowLeftIcon, InfoIcon, WarnIcon } from '../components/Icons';
-import { OptionField } from '../components/OptionField';
+import { SelectField } from '../components/SelectField';
 import { loadAvatarImage, type AvatarImage } from '../lib/avatar';
 
 const GENDER_OPTIONS = [
-  { value: '', label: '不填' },
   { value: '男', label: '男' },
   { value: '女', label: '女' },
-  { value: '其他', label: '其他' },
+];
+
+const AI_MODEL_OPTIONS = [
+  {
+    value: 'system',
+    label: '系统',
+    description: '项目统一提供，无需填写 Key',
+  },
+  {
+    value: 'deepseek-flash',
+    label: 'deepseek-flash',
+    description: '使用你自己的 DeepSeek API Key',
+  },
 ];
 
 function todayKey(): string {
@@ -349,7 +360,7 @@ function SettingsForm({ user }: { user: Account }) {
               <div className="set-row">
                 <span className="lbl">性别</span>
                 <span className="val">
-                  <OptionField
+                  <SelectField
                     label="性别"
                     value={values.gender ?? ''}
                     options={GENDER_OPTIONS}
@@ -468,19 +479,16 @@ function SettingsForm({ user }: { user: Account }) {
 
           <form onSubmit={handleSaveAi} noValidate>
             <div className="list-card">
-              <label className="set-row">
+              <div className="set-row">
                 <span className="lbl">模型</span>
-                <select
-                  className="set-select"
-                  aria-label="模型"
+                <SelectField
+                  label="模型"
                   value={modelChoice}
                   disabled={!ai}
-                  onChange={(e) => handleModelChange(e.target.value)}
-                >
-                  <option value="system">系统</option>
-                  <option value="deepseek-flash">deepseek-flash</option>
-                </select>
-              </label>
+                  options={AI_MODEL_OPTIONS}
+                  onChange={handleModelChange}
+                />
+              </div>
               {modelChoice === 'deepseek-flash' ? (
                 <label className="set-row">
                   <span className="lbl">API Key</span>
