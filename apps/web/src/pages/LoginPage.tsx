@@ -93,8 +93,9 @@ export function LoginPage() {
     if (submitting) return;
     setErrors({});
     setError(null);
-    setEmail(DEMO_ACCOUNT.email);
-    setPassword(DEMO_ACCOUNT.password);
+    // 演示凭据只发给接口，不写进密码框：只要密码框里出现过「有值的密码 + 随后跳转」，
+    // Chrome / Edge 就会当成一次普通登录，弹「保存账号密码」，把演示账号存进用户的密码管理器。
+    // 表单保持原样，浏览器没有可保存的凭据。
     await submitCredentials(DEMO_ACCOUNT.email, DEMO_ACCOUNT.password);
   }
 

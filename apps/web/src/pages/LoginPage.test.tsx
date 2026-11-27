@@ -95,6 +95,38 @@ describe('登录页', () => {
     );
   });
 
+  it('点「试一试」不把演示凭据写进密码框，避免浏览器弹保存密码', async () => {
+    const pending: { resolve?: () => void } = {};
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/me') return res(401, { error: '请先登录' });
+      if (url === '/api/auth/login' && init?.method === 'POST') {
+        return new Promise((resolve) => {
+          pending.resolve = () => resolve({ ok: true, status: 200, json: async () => ({ user: me }) });
+        });
+      }
+      return res(200, {});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderLogin();
+
+    const email = (await screen.findByLabelText('邮箱')) as HTMLInputElement;
+    const password = screen.getByLabelText('密码') as HTMLInputElement;
+    fireEvent.change(email, { target: { value: 'user@example.com' } });
+    fireEvent.change(password, { target: { value: 'pass-123456' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /试一试/ }));
+
+    // 请求已发出、尚未返回：密码框里若出现演示密码，浏览器会把它当成一次普通登录并 offer 保存
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', expect.anything()),
+    );
+    expect(email.value).toBe('user@example.com');
+    expect(password.value).toBe('pass-123456');
+
+    pending.resolve?.();
+    expect(await screen.findByText('会话首页')).toBeDefined();
+  });
+
   it('空提交不发请求，两个字段分别提示并聚焦邮箱', async () => {
     const fetchMock = stubLogin(401);
     renderLogin();
