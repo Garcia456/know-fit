@@ -1,5 +1,13 @@
-import { eq } from 'drizzle-orm';
-import { conversationTurn, exerciseEntry, setEntry, userProfile, workoutSession } from '../db/schema.js';
+import { and, eq, inArray } from 'drizzle-orm';
+import {
+  conversationTurn,
+  dayStatus,
+  exerciseEntry,
+  pendingRecord,
+  setEntry,
+  userProfile,
+  workoutSession,
+} from '../db/schema.js';
 import type { Intent } from '../contracts/extraction.js';
 import type { PersistWorkoutInput } from '../graph/deps.js';
 import type { TrainingBand } from '../graph/state.js';
@@ -111,6 +119,21 @@ export async function persistWorkout(input: PersistWorkoutInput): Promise<{ sess
         })),
       );
     }
+
+    // 训练优先：同日的休息 / 漏记标记收敛；待补槽标记 filled
+    await tx
+      .delete(dayStatus)
+      .where(and(eq(dayStatus.userId, input.user_id), eq(dayStatus.date, input.date)));
+    await tx
+      .update(pendingRecord)
+      .set({ status: 'filled', sessionId: session.id, resolvedAt: new Date() })
+      .where(
+        and(
+          eq(pendingRecord.userId, input.user_id),
+          eq(pendingRecord.targetDate, input.date),
+          inArray(pendingRecord.status, ['open', 'dismissed', 'rest']),
+        ),
+      );
 
     return { session_id: session.id };
   });

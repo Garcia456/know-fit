@@ -9,6 +9,7 @@ import {
 } from '../contracts/extraction.js';
 import type { WorkoutCard, WorkoutCardExercise, WorkoutCardSet } from '../contracts/turn.js';
 import { resolveDate } from '../extraction/dates.js';
+import { bindPendingDate } from '../extraction/pending.js';
 import { normalizeExerciseName } from '../extraction/normalize.js';
 import { rethrowIfLlmConfig } from '../llm/errors.js';
 import { computeVolume } from '../metrics/volume.js';
@@ -105,7 +106,14 @@ export function buildTurnGraph(deps: TurnDeps) {
         // 🔴 没有动作就不是训练记录 —— 不写库，走追问
         if (extracted.exercises.length === 0) return { empty_extraction: true };
 
-        const date = resolveDate(extracted.day_hint, now());
+        const bound = bindPendingDate({
+          dayHint: extracted.day_hint,
+          extractedSplit: extracted.split_label,
+          pending: state.pending_context,
+          now: now(),
+        });
+        const date = bound.date;
+        const splitLabel = bound.split_label;
 
         const normalized = extracted.exercises.map((ex) => {
           const norm = normalizeExerciseName(ex.raw_name);
@@ -178,7 +186,7 @@ export function buildTurnGraph(deps: TurnDeps) {
         const { session_id } = await deps.persistWorkout({
           user_id: state.user_id,
           date,
-          split_label: extracted.split_label,
+          split_label: splitLabel,
           status,
           missing_fields,
           notes: extracted.note,
@@ -190,6 +198,7 @@ export function buildTurnGraph(deps: TurnDeps) {
           record_status: status,
           missing_fields,
           session_date: date,
+          session_split_label: splitLabel,
           card_exercises: cards,
         };
       })
@@ -299,7 +308,7 @@ export function buildTurnGraph(deps: TurnDeps) {
         if (!ref || ref.type !== 'workout') return {};
 
         const date = state.session_date ?? resolveDate(extracted?.day_hint ?? null, now());
-        const split_label = extracted?.split_label ?? null;
+        const split_label = state.session_split_label ?? extracted?.split_label ?? null;
 
         // 数据钩子：算好的容量环比判定。措辞在展示层拼，这里只给数
         const hook = deps.computeHook

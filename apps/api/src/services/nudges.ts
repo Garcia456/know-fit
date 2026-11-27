@@ -63,6 +63,7 @@ async function claim(input: {
     id: created.id,
     type: input.type,
     session_id: input.session_id,
+    target_date: null,
     message: input.message,
   };
 }

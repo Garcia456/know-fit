@@ -8,6 +8,8 @@ import {
   type SessionDetail,
   type SessionListResponse,
 } from '../contracts/sessions.js';
+import type { DayStatesResponse } from '../contracts/day-state.js';
+import { listDayStates } from '../services/day-state.js';
 import {
   appendToSession,
   deleteSession,
@@ -37,6 +39,23 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     const limit = parsed.success ? parsed.data.limit : 20;
     const items = await listHistory({ user_id: request.userId, limit });
     return { items };
+  });
+
+  app.get('/day-states', async (request, reply): Promise<DayStatesResponse | undefined> => {
+    const parsed = SessionListQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      await reply.code(400).send({ error: '查询参数需要 from / to（YYYY-MM-DD）' });
+      return undefined;
+    }
+    const map = await listDayStates({ user_id: request.userId, ...parsed.data });
+    const days = [...map.values()]
+      .filter((row) => row.state !== 'unknown')
+      .map((row) => ({
+        date: row.date,
+        state: row.state as 'trained' | 'rest' | 'unlogged',
+        reason: row.reason,
+      }));
+    return { days };
   });
 
   app.get('/sessions/:id', async (request, reply): Promise<SessionDetail | undefined> => {

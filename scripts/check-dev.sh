@@ -259,6 +259,14 @@ if [ "$FAILED" -eq 0 ]; then
     hint "dev server 起了吗？"
   fi
 
+  # 休息日 / 待补记录 / 补昨天提示 —— 空抽取绑定、记录后提示、休息落库。
+  if node scripts/e2e-dev028.mjs; then
+    ok "休息日 / 待补记录 / 补昨天提示通过"
+  else
+    bad "休息日 / 待补记录 / 补昨天提示失败"
+    hint "0021 迁移跑了吗？pnpm db:migrate"
+  fi
+
   # 邮箱验证 / 免费额度 / 邀请码 / 自带 Key —— 从 outbox 读验证邮件；
   # Key 探测指向本机关闭端口，只证「失败不落库 + 响应不带明文」。
   if node scripts/e2e-auth-quota.mjs; then

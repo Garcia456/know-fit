@@ -11,12 +11,19 @@ import useEmblaCarousel from 'embla-carousel-react';
 import { Link, useSearchParams } from 'react-router';
 import {
   deleteSession,
+  getDayStates,
   getHistory,
   getSession,
   putSession,
   type UpdateExerciseInput,
 } from '../api/client';
-import type { HistoryItem, SessionDetail, SetTag, WorkoutCardSet } from '../api/types';
+import type {
+  DayStateItem,
+  HistoryItem,
+  SessionDetail,
+  SetTag,
+  WorkoutCardSet,
+} from '../api/types';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -33,7 +40,7 @@ import {
 import { LoadError } from '../components/LoadError';
 import { Tip } from '../components/Tip';
 import { VolumeHookView } from '../components/VolumeHookView';
-import { addMonths, monthGrid, parseDateKey, startOfMonth, toDateKey } from '../lib/calendar';
+import { addMonths, monthGrid, monthRange, parseDateKey, startOfMonth, toDateKey } from '../lib/calendar';
 import { formatKg, formatMonthDay, formatNumber } from '../lib/format';
 
 const MISSING_LABELS: Record<string, string> = {
@@ -66,6 +73,7 @@ export function DataPage() {
   );
   const [order, setOrder] = useState<Order>('desc');
   const [history, setHistory] = useState<HistoryItem[] | null>(null);
+  const [dayStates, setDayStates] = useState<Record<string, DayStateItem>>({});
   const [details, setDetails] = useState<Record<string, SessionDetail>>({});
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
@@ -87,6 +95,26 @@ export function DataPage() {
       alive = false;
     };
   }, [reloadTick]);
+
+  // 日历三页的休息 / 漏记标记；失败不挡训练历史
+  useEffect(() => {
+    let alive = true;
+    const from = monthRange(addMonths(month, -1)).from;
+    const to = monthRange(addMonths(month, 1)).to;
+    getDayStates(from, to)
+      .then((res) => {
+        if (!alive) return;
+        const map: Record<string, DayStateItem> = {};
+        for (const day of res.days) map[day.date] = day;
+        setDayStates(map);
+      })
+      .catch(() => {
+        // 标记读不到时日历仍能显示训练日
+      });
+    return () => {
+      alive = false;
+    };
+  }, [month, reloadTick]);
 
   function retry() {
     setError(null);
@@ -164,16 +192,27 @@ export function DataPage() {
     return map;
   }, [history]);
 
-  const monthDays = useMemo(() => {
-    let days = 0;
-    for (const key of byDate.keys()) {
-      const d = parseDateKey(key);
-      if (d && d.getFullYear() === month.getFullYear() && d.getMonth() === month.getMonth()) {
-        days += 1;
-      }
+  const today = toDateKey(new Date());
+
+  const calendarCounts = useMemo(() => {
+    const year = month.getFullYear();
+    const m = month.getMonth();
+    const daysInMonth = new Date(year, m + 1, 0).getDate();
+    let trained = 0;
+    let rest = 0;
+    let unlogged = 0;
+    let unknown = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = toDateKey(new Date(year, m, day));
+      const state = byDate.has(key) ? 'trained' : dayStates[key]?.state;
+      if (state === 'trained') trained += 1;
+      else if (state === 'rest') rest += 1;
+      else if (state === 'unlogged') unlogged += 1;
+      else if (key < today) unknown += 1;
     }
-    return days;
-  }, [byDate, month]);
+    return { trained, rest, unlogged, unknown };
+  }, [byDate, dayStates, month, today]);
 
   const visible = useMemo(() => {
     const rows = selected ? (byDate.get(selected) ?? []) : (history ?? []);
@@ -206,11 +245,11 @@ export function DataPage() {
     };
   }, [detailKey, details, reloadTick]);
 
-  const today = toDateKey(new Date());
   const monthTitle = `${month.getFullYear()} 年 ${month.getMonth() + 1} 月`;
   const slides = [addMonths(month, -1), month, addMonths(month, 1)];
+  const hasMarks = Object.keys(dayStates).length > 0;
 
-  if (history !== null && history.length === 0 && !error) {
+  if (history !== null && history.length === 0 && !error && !hasMarks) {
     return (
       <div className="body page-body data-page">
         <header className="page-head">
@@ -284,10 +323,21 @@ export function DataPage() {
                   </div>
 
                   <div className="calendar__grid">
-                    {monthGrid(slideMonth).map((key, cell) =>
-                      key === null ? (
-                        <span key={`blank-${cell}`} className="calendar__blank" />
-                      ) : (
+                    {monthGrid(slideMonth).map((key, cell) => {
+                      if (key === null) {
+                        return <span key={`blank-${cell}`} className="calendar__blank" />;
+                      }
+                      const mark = dayStates[key];
+                      const state = byDate.has(key) ? 'trained' : mark?.state;
+                      const stateLabel =
+                        state === 'trained'
+                          ? '，有训练'
+                          : state === 'rest'
+                            ? '，休息'
+                            : state === 'unlogged'
+                              ? '，练了没记'
+                              : '';
+                      return (
                         <button
                           key={key}
                           type="button"
@@ -295,12 +345,14 @@ export function DataPage() {
                             'calendar__day',
                             key === selected ? 'is-selected' : '',
                             key === today ? 'is-today' : '',
-                            byDate.has(key) ? 'is-marked' : '',
+                            state === 'trained' ? 'is-marked' : '',
+                            state === 'rest' ? 'is-rest' : '',
+                            state === 'unlogged' ? 'is-unlogged' : '',
                           ]
                             .filter(Boolean)
                             .join(' ')}
                           aria-pressed={key === selected}
-                          aria-label={`${key}${byDate.has(key) ? '，有训练' : ''}`}
+                          aria-label={`${key}${stateLabel}`}
                           onClick={() => {
                             setSelected((prev) => (prev === key ? null : key));
                             const d = parseDateKey(key);
@@ -315,8 +367,8 @@ export function DataPage() {
                         >
                           {Number(key.slice(8))}
                         </button>
-                      ),
-                    )}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -328,7 +380,21 @@ export function DataPage() {
             <i aria-hidden="true" />
             有训练
           </span>
-          <span>{monthDays > 0 ? `本月 ${monthDays} 天` : '本月还没训练'}</span>
+          <span>
+            <i className="is-rest" aria-hidden="true" />
+            休息
+          </span>
+          <span>
+            <i className="is-unlogged" aria-hidden="true" />
+            练了没记
+          </span>
+          <span>
+            {calendarCounts.trained + calendarCounts.rest + calendarCounts.unlogged === 0
+              ? '本月还没记录'
+              : `本月 ${calendarCounts.trained} 练 · ${calendarCounts.rest} 休${
+                  calendarCounts.unlogged ? ` · ${calendarCounts.unlogged} 漏记` : ''
+                }${calendarCounts.unknown ? ` · ${calendarCounts.unknown} 天未知` : ''}`}
+          </span>
         </div>
       </section>
 

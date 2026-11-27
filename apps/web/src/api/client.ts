@@ -8,6 +8,7 @@ import type {
   ConversationDetail,
   ConversationListResponse,
   ConversationSummary,
+  DayStatesResponse,
   HistoryResponse,
   NudgeNextResponse,
   Profile,
@@ -228,6 +229,10 @@ export function getHistory(limit = 20): Promise<HistoryResponse> {
   return request(`/api/history?limit=${limit}`, { method: 'GET' });
 }
 
+export function getDayStates(from: string, to: string): Promise<DayStatesResponse> {
+  return request(`/api/day-states?from=${from}&to=${to}`, { method: 'GET' });
+}
+
 export function getStats(from: string, to: string): Promise<StatsRange> {
   return request(`/api/stats?from=${from}&to=${to}`, { method: 'GET' });
 }
@@ -246,8 +251,8 @@ export function postNudgeNext(): Promise<NudgeNextResponse> {
 
 export function postNudgeAction(
   id: string,
-  action: '补全' | '忽略' | '未响应',
-): Promise<{ ok: true }> {
+  action: '补全' | '补记' | '休息' | '忽略' | '未响应',
+): Promise<{ ok: true; prefill?: { target_date: string; split_label: string | null } }> {
   return request(`/api/nudges/${encodeURIComponent(id)}/action`, {
     method: 'POST',
     body: JSON.stringify({ action }),

@@ -175,8 +175,11 @@ export const ProfileInputSchema = z
 
 export const NudgeSchema = z.object({
   id: z.string().uuid(),
-  type: z.enum(['补全', '断流']),
-  session_id: z.string().uuid(),
+  type: z.enum(['补全', '断流', '补记']),
+  /** 补全 / 断流指向已有训练；补记没有 session */
+  session_id: z.string().uuid().nullable(),
+  /** 补记的目标日；其余为 null */
+  target_date: DateSchema.nullable(),
   message: z.string(),
 });
 
@@ -185,7 +188,7 @@ export const NudgeNextResponseSchema = z.object({
 });
 
 export const NudgeActionSchema = z.object({
-  action: z.enum(['补全', '忽略', '未响应']),
+  action: z.enum(['补全', '补记', '休息', '忽略', '未响应']),
 });
 
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;

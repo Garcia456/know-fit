@@ -64,6 +64,16 @@ export const WorkoutCardSchema = z.object({
   hook: VolumeHookSchema.nullable(),
 });
 
+/** 记录后补昨天的提示 —— 只带日期 / 枚举，文案由展示层模板拼。 */
+export const BackfillPromptSchema = z.object({
+  nudge_id: z.string().uuid(),
+  pending_id: z.string().uuid(),
+  target_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  split_label: z.string().nullable(),
+  source: z.enum(['mentioned', 'gap']),
+  message_code: z.enum(['mentioned', 'gap']),
+});
+
 /** 饮食卡片 —— 只回抽取结果，不落库（MVP 只要契约） */
 export const MealCardSchema = z.object({
   kind: z.literal('meal'),
@@ -188,6 +198,8 @@ export const TurnResponseSchema = z.object({
   assessment: AssessmentCardSchema.nullable(),
   /** 本轮要了评估时，带上查找结果；没要评估为 null */
   assessment_lookup: AssessmentLookupSchema.nullable(),
+  /** 记录完今天后，最多一个“补昨天”提示；其余轮次为 null */
+  backfill: BackfillPromptSchema.nullable().default(null),
   /** 补充提示，至多 1 条；后置、可选，不拦截录入 */
   notices: z.array(z.string()),
 });
@@ -201,6 +213,7 @@ export type RefusalReason = z.infer<typeof RefusalReasonSchema>;
 export type WorkoutCardSet = z.infer<typeof WorkoutCardSetSchema>;
 export type WorkoutCardExercise = z.infer<typeof WorkoutCardExerciseSchema>;
 export type WorkoutCard = z.infer<typeof WorkoutCardSchema>;
+export type BackfillPrompt = z.infer<typeof BackfillPromptSchema>;
 export type MealCard = z.infer<typeof MealCardSchema>;
 export type ChatCard = z.infer<typeof ChatCardSchema>;
 export type KnowledgeClaim = z.infer<typeof KnowledgeClaimSchema>;

@@ -86,6 +86,21 @@ describe('记录链路：走通 → 落库 → 出卡片', () => {
     expect(state.notices).toHaveLength(1);
   });
 
+  it('无日期补细节 → 绑定到待补记录的日期 / 部位', async () => {
+    const { graph, calls } = build();
+    const state = await graph.invoke({
+      message: '卧推做了四组，每组 8 个',
+      pending_context: { id: 'p1', target_date: '2026-10-12', split_label: '胸' },
+    });
+
+    expect(calls[0]?.date).toBe('2026-10-12');
+    expect(calls[0]?.split_label).toBe('胸');
+    const card = state.card;
+    if (card?.kind !== 'workout') throw new Error('卡片类型不对');
+    expect(card.date).toBe('2026-10-12');
+    expect(card.split_label).toBe('胸');
+  });
+
   it('只说部位：「今天练了背」—— 0 个动作不落库，引导补充动作与组数', async () => {
     const { graph, calls } = build();
     const state = await graph.invoke({ message: '今天练了背' });

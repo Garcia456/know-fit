@@ -25,6 +25,13 @@ export const TurnHistoryItemSchema = z.object({
   content: z.string(),
 });
 
+/** 待补记录上下文 —— 服务层在图前读库，图只拿它做日期绑定。 */
+export const PendingContextSchema = z.object({
+  id: z.string(),
+  target_date: z.string(),
+  split_label: z.string().nullable(),
+});
+
 export const TurnState = z.object({
   message: z.string(),
   user_id: z.string().default(SINGLE_USER_ID),
@@ -34,6 +41,8 @@ export const TurnState = z.object({
   /** 计划请求读档案用；图里不读库 */
   profile_training_frequency: TrainingFrequencySchema.default(null),
   profile_goal: z.enum(['增肌', '减脂', '维持', '增肌+减脂']).nullable().default(null),
+  /** 待补记录；无日期补细节时用它绑定日期 / 部位 */
+  pending_context: PendingContextSchema.nullable().default(null),
 
   guard_verdict: GuardVerdictSchema.default('pass'),
   intent: IntentSchema.default('chat'),
@@ -45,6 +54,8 @@ export const TurnState = z.object({
   record_status: RecordStatusSchema.nullable().default(null),
   missing_fields: z.array(MissingFieldSchema).default([]),
   session_date: z.string().nullable().default(null),
+  /** 落库后的部位 —— 无日期补细节时可能来自待补记录，不一定等于 extracted.split_label */
+  session_split_label: z.string().nullable().default(null),
   /** 规范化后的动作 —— 卡片与落库共用一份，避免两处各归一次 */
   card_exercises: z.array(WorkoutCardExerciseSchema).default([]),
 

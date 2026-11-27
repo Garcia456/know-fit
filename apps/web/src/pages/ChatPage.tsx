@@ -10,12 +10,15 @@ import {
 } from '../api/client';
 import type {
   AssessmentCard,
+  BackfillPrompt,
   ConversationMessage,
   Nudge,
   TurnResponse,
 } from '../api/types';
 import { writeConversationId } from '../lib/conversation';
+import { formatRelativeDay } from '../lib/format';
 import { AssessmentCardView } from '../components/AssessmentCardView';
+import { BackfillPromptView } from '../components/BackfillPrompt';
 import { CardView } from '../components/CardView';
 import { Composer } from '../components/Composer';
 import { CompletionPanel } from '../components/CompletionPanel';
@@ -40,6 +43,8 @@ interface Entry {
   assessmentError: string | null;
   /** 判定算不出时缺的项；null 表示不缺 */
   lowData: string[] | null;
+  /** 从库恢复的历史轮：不重放补记提示，提示只对刚发生的记录出现 */
+  fromHistory?: boolean;
 }
 
 function readDraft(): string {
@@ -86,6 +91,7 @@ function entriesFromMessages(messages: ConversationMessage[]): Entry[] {
         message.response.assessment_lookup?.status === 'insufficient'
           ? message.response.assessment_lookup.missing
           : null,
+      fromHistory: true,
     });
     user = null;
   }
@@ -121,6 +127,12 @@ export function ChatPage({
   const [nudge, setNudge] = useState<Nudge | null>(null);
   const [nudgeDone, setNudgeDone] = useState(false);
   const [nudgeBusy, setNudgeBusy] = useState(false);
+  const [backfillBusy, setBackfillBusy] = useState<string | null>(null);
+  const [hiddenBackfills, setHiddenBackfills] = useState<string[]>([]);
+  const [backfillChip, setBackfillChip] = useState<{
+    target_date: string;
+    split_label: string | null;
+  } | null>(null);
   const [params, setParams] = useSearchParams();
   const nudgeRequested = useRef(false);
   const lastReset = useRef(resetToken);
@@ -163,6 +175,9 @@ export function ChatPage({
     setFailedMessage(null);
     setQuotaBlocked(false);
     setParams({});
+    setBackfillChip(null);
+    setHiddenBackfills([]);
+    setBackfillBusy(null);
   }, [resetToken, setParams, onConversationChange]);
 
   // 选中 / 刷新恢复：从库里把消息与卡片画回来
@@ -212,8 +227,31 @@ export function ChatPage({
       setNudgeBusy(false);
       setNudgeDone(true);
     }
-    if (action === '补全' && nudge.type === '补全') {
+    if (action === '补全' && nudge.type === '补全' && nudge.session_id) {
       setParams({ complete: nudge.session_id });
+    }
+  }
+
+  async function handleBackfill(prompt: BackfillPrompt, action: '补记' | '休息' | '忽略') {
+    if (backfillBusy) return;
+    setBackfillBusy(prompt.nudge_id);
+    try {
+      const result = await postNudgeAction(prompt.nudge_id, action);
+      setHiddenBackfills((prev) =>
+        prev.includes(prompt.nudge_id) ? prev : [...prev, prompt.nudge_id],
+      );
+      if (action === '补记') {
+        setBackfillChip(
+          result.prefill ?? {
+            target_date: prompt.target_date,
+            split_label: prompt.split_label,
+          },
+        );
+      }
+    } catch {
+      setSendError('补记提示没处理成功，稍后再试');
+    } finally {
+      setBackfillBusy(null);
     }
   }
 
@@ -263,6 +301,14 @@ export function ChatPage({
               : null,
         },
       ]);
+      setBackfillChip((chip) => {
+        if (!chip) return null;
+        // 只有真的补到目标日才收起 chip；发别的话时保留，别让提示悄悄消失
+        if (response.card?.kind === 'workout' && response.card.date === chip.target_date) {
+          return null;
+        }
+        return chip;
+      });
       setPending(null);
     } catch (error) {
       // 失败时文字不丢：输入框还空着才放回去，别盖掉用户新打的字
@@ -375,6 +421,9 @@ export function ChatPage({
         {entries.map((entry) => {
           const card = entry.response.card;
           const sessionId = card?.kind === 'workout' ? card.session_id : null;
+          // 历史轮不重放补记提示；提示只对刚发生的记录出现
+          const backfill = entry.fromHistory ? null : entry.response.backfill;
+          const showBackfill = backfill && !hiddenBackfills.includes(backfill.nudge_id);
           return (
             <div key={entry.id} className="turn">
               <div className="msg-user">
@@ -388,6 +437,14 @@ export function ChatPage({
                   assessingSessionId={assessingSessionId}
                   onComplete={(id) => setParams({ complete: id })}
                   onQuickAsk={(message) => void send(message)}
+                />
+              ) : null}
+
+              {backfill && showBackfill ? (
+                <BackfillPromptView
+                  prompt={backfill}
+                  busy={backfillBusy === backfill.nudge_id}
+                  onAction={(action) => void handleBackfill(backfill, action)}
                 />
               ) : null}
 
@@ -469,6 +526,19 @@ export function ChatPage({
           onSend={() => void send(draft)}
           sending={sending}
           inputRef={inputRef}
+          hint={
+            backfillChip ? (
+              <div className="composer-chip">
+                <span>
+                  补记 {formatRelativeDay(backfillChip.target_date)}
+                  {backfillChip.split_label ? ` · ${backfillChip.split_label}` : ''}
+                </span>
+                <button type="button" onClick={() => setBackfillChip(null)}>
+                  取消
+                </button>
+              </div>
+            ) : undefined
+          }
         />
       ) : null}
     </>

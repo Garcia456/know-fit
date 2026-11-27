@@ -235,6 +235,45 @@ try {
   } else {
     ok('registration_verification 表与注册验证码列都在');
   }
+
+  // 11. 休息日 / 待补记录 / 补记提示 —— 0021
+  const dev028Cols = await client.query(
+    `SELECT table_name, column_name FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name IN ('day_status', 'pending_record', 'recovery_nudge')`,
+  );
+  const dev028Have = new Set(dev028Cols.rows.map((r) => `${r.table_name}.${r.column_name}`));
+  const needDev028 = [
+    'day_status.user_id',
+    'day_status.date',
+    'day_status.status',
+    'day_status.reason',
+    'pending_record.target_date',
+    'pending_record.source',
+    'pending_record.status',
+    'pending_record.session_id',
+    'recovery_nudge.target_date',
+  ];
+  const missingDev028 = needDev028.filter((c) => !dev028Have.has(c));
+  if (missingDev028.length > 0) {
+    bad(`休息日 / 待补记录缺表或列：${missingDev028.join('、')} —— 0021 迁移没跑：pnpm db:migrate`);
+  } else {
+    ok('day_status / pending_record / recovery_nudge.target_date 都在');
+  }
+
+  const dev028Idx = await client.query(
+    `SELECT indexname FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename = 'recovery_nudge'
+        AND indexname IN (
+          'recovery_nudge_user_type_session_unique',
+          'recovery_nudge_user_type_target_unique'
+        )`,
+  );
+  if (dev028Idx.rowCount === 2) {
+    ok('recovery_nudge 的两个部分唯一索引都在（补全/断流按 session，补记按 target_date）');
+  } else {
+    bad('recovery_nudge 缺部分唯一索引 —— 0021 迁移没跑：pnpm db:migrate');
+  }
 } finally {
   await client.end();
 }

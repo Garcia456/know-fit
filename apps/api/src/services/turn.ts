@@ -1,10 +1,12 @@
-import { TurnResponseSchema, type TurnResponse } from '../contracts/turn.js';
+import { TurnResponseSchema, type BackfillPrompt, type TurnResponse } from '../contracts/turn.js';
 import { buildTurnGraph } from '../graph/turn.js';
 import { TurnState } from '../graph/state.js';
 import { createLlmClient } from '../llm/index.js';
 import { bindSignal, type LlmClient } from '../llm/client.js';
 import { answerKnowledge } from '../knowledge/service.js';
 import { assessRecord, withDeadline } from './assessment.js';
+import { backfillFor } from './backfill.js';
+import { resolveDate, toLocalDate } from '../extraction/dates.js';
 import {
   assistantSummary,
   deleteConversation,
@@ -19,6 +21,7 @@ import { answerPlan } from './plan.js';
 import { loadTrainingBand, logTurn, persistWorkout } from './record.js';
 import { bodyweightOn, getProfile, saveWeight } from './profile.js';
 import { volumeHookFor } from './metrics.js';
+import { pendingContextForExtraction, rememberMention } from './pending-record.js';
 
 /**
  * 一轮对话的入口 —— 路由只调它，它来组装图与依赖。
@@ -44,7 +47,7 @@ export const TURN_DEADLINE_MS = Number(process.env.TURN_DEADLINE_MS) || 120_000;
  * 按请求组装图 —— 🔴 不能进程级缓存：客户端可能带用户自己的 Key，
  * 缓存一次就会把第一个用户的客户端冻结给所有人。
  */
-function turnGraph(llm: LlmClient) {
+function turnGraph(llm: LlmClient, now: () => Date = () => new Date()) {
   return buildTurnGraph({
     llm,
     persistWorkout,
@@ -57,7 +60,7 @@ function turnGraph(llm: LlmClient) {
     recordWeight: (input) => saveWeight(input),
     applyEdit: (input) => applyEdit(input),
     answerQuery: (input) => answerQuery(input),
-    now: () => new Date(),
+    now,
   });
 }
 
@@ -137,17 +140,52 @@ async function runTurn(input: TurnInput, llm: LlmClient): Promise<TurnResponse> 
     const training_years_band = await loadTrainingBand(user_id);
     const profile = await getProfile(user_id);
 
-    const final = await turnGraph(llm).invoke({
+    const now = new Date();
+    const today = toLocalDate(now);
+    const pending_context = await pendingContextForExtraction({ user_id, today });
+
+    const final = await turnGraph(llm, () => now).invoke({
       message: input.message,
       user_id,
       history,
       training_years_band,
       profile_training_frequency: profile.training_frequency,
       profile_goal: profile.goal,
+      pending_context,
     });
 
     // 出口校验：图交出来的状态必须满足对外契约
     const state = TurnState.parse(final);
+
+    // 空抽取但说了日期 / 部位 —— 先记成待补槽，别把这句话丢掉
+    if (state.empty_extraction && state.extracted?.kind === 'workout') {
+      const extracted = state.extracted;
+      if (extracted.split_label || extracted.day_hint) {
+        try {
+          await rememberMention({
+            user_id,
+            target_date: resolveDate(extracted.day_hint, now),
+            split_label: extracted.split_label,
+          });
+        } catch {
+          // 待补槽写失败不挡本轮录入；下一轮还能从卡片 / 日历补
+        }
+      }
+    }
+
+    // 记录完今天后，最多挂一个「补昨天」提示；失败不挡录入
+    let backfill: BackfillPrompt | null = null;
+    if (state.card?.kind === 'workout' && state.session_date) {
+      try {
+        backfill = await backfillFor({
+          user_id,
+          session_date: state.session_date,
+          today,
+        });
+      } catch {
+        backfill = null;
+      }
+    }
 
     const conversation_id = await conversationId();
     const response = TurnResponseSchema.parse({
@@ -163,6 +201,7 @@ async function runTurn(input: TurnInput, llm: LlmClient): Promise<TurnResponse> 
       card: state.card,
       assessment: state.assessment,
       assessment_lookup: state.assessment_lookup,
+      backfill,
       notices: state.notices,
     });
 
