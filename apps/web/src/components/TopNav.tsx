@@ -1,6 +1,7 @@
 import { m, useReducedMotion } from 'motion/react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router';
+import { spring } from '../lib/motion';
 import { HistoryIcon, NewConversationIcon } from './Icons';
 
 interface Props {
@@ -80,11 +81,7 @@ export function TopNav({ onOpenHistory, onNewConversation }: Props) {
             aria-hidden="true"
             initial={false}
             animate={{ x: pill.x, width: pill.w }}
-            transition={
-              reduced
-                ? { duration: 0 }
-                : { type: 'spring', stiffness: 520, damping: 40 }
-            }
+            transition={reduced ? { duration: 0 } : spring.snappy}
           />
         ) : null}
         {TABS.map((tab) => (

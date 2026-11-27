@@ -2,7 +2,14 @@ import { animate, m, useMotionValue, useReducedMotion, type AnimationPlaybackCon
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { isSubpage, pageIndexOf, decideSwipe, PAGE_ORDER } from '../lib/swipe';
+import { spring } from '../lib/motion';
+import {
+  isSubpage,
+  pageIndexOf,
+  decideSwipe,
+  PAGE_ORDER,
+  SWIPE_INTENT_PX,
+} from '../lib/swipe';
 
 interface Gesture {
   startX: number;
@@ -15,6 +22,9 @@ interface Gesture {
 }
 
 const IGNORE = '[data-swipe-ignore], input, textarea, select, [contenteditable="true"]';
+
+/** 换页时新页面从对应一侧轻轻贴进来，不整屏横移。 */
+const ENTER_OFFSET = 28;
 
 /** 四页左右滑；起点在日历、横向图表、输入框时不抢手势。 */
 export function PageSwipe({ children }: { children: ReactNode }) {
@@ -40,8 +50,8 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       return;
     }
     if (direction !== 0) {
-      dragX.set(direction * 32);
-      anim.current = animate(dragX, 0, { type: 'spring', stiffness: 520, damping: 42 });
+      dragX.set(direction * ENTER_OFFSET);
+      anim.current = animate(dragX, 0, spring.snappy);
     } else {
       dragX.set(0);
     }
@@ -56,6 +66,8 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       const touch = e.touches[0];
       if (!touch) return;
       anim.current?.stop();
+      // 只在真正拖动期间提示合成层，静止时不占常驻 GPU 资源
+      host!.style.willChange = 'transform';
       gesture.current = {
         startX: touch.clientX,
         startY: touch.clientY,
@@ -70,20 +82,28 @@ export function PageSwipe({ children }: { children: ReactNode }) {
     function onMove(e: TouchEvent) {
       const g = gesture.current;
       const touch = e.touches[0];
-      if (!g || !touch || g.ignored) return;
+      if (!g || !touch) return;
 
       const dx = touch.clientX - g.startX;
       const dy = touch.clientY - g.startY;
+
+      // 方向没定之前先不动。横向优先，但必须明确压过纵向 ——
+      // 斜着滚动页面时不该把整页横着带歪。
       if (g.axis === null) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        // 纵向优先，避免抢页面滚动
-        g.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        g.axis = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'x' : 'y';
       }
-      if (g.axis !== 'x') return;
+      if (g.axis !== 'x' || g.ignored) return;
 
       if (e.cancelable) e.preventDefault();
-      const atEdge = (index === 0 && dx > 0) || (index === PAGE_ORDER.length - 1 && dx < 0);
-      dragX.set(atEdge ? dx * 0.2 : dx * 0.9);
+
+      const travel = Math.max(0, Math.abs(dx) - SWIPE_INTENT_PX);
+      if (travel === 0) {
+        dragX.set(0);
+      } else {
+        const atEdge = (index === 0 && dx > 0) || (index === PAGE_ORDER.length - 1 && dx < 0);
+        dragX.set(Math.sign(dx) * travel * (atEdge ? 0.16 : 0.92));
+      }
 
       const now = performance.now();
       const dt = now - g.lastT;
@@ -95,16 +115,22 @@ export function PageSwipe({ children }: { children: ReactNode }) {
     function onEnd() {
       const g = gesture.current;
       gesture.current = null;
-      if (!g || g.ignored || g.axis !== 'x') return;
+      host!.style.willChange = '';
+      if (!g) return;
 
-      const dx = dragX.get();
-      const step = decideSwipe({ dx, dy: 0, vx: g.vx });
+      if (g.ignored || g.axis !== 'x') {
+        anim.current = animate(dragX, 0, spring.snappy);
+        return;
+      }
+
+      // 用原始位移判定，不用带死区和边缘阻尼的视觉位移
+      const step = decideSwipe({ dx: g.lastX - g.startX, dy: 0, vx: g.vx });
       const target = step === 0 ? undefined : PAGE_ORDER[index + step];
       if (target) {
         navigate(target);
         return;
       }
-      anim.current = animate(dragX, 0, { type: 'spring', stiffness: 520, damping: 42 });
+      anim.current = animate(dragX, 0, spring.snappy);
     }
 
     host.addEventListener('touchstart', onStart, { passive: true });
@@ -116,6 +142,7 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       host.removeEventListener('touchmove', onMove);
       host.removeEventListener('touchend', onEnd);
       host.removeEventListener('touchcancel', onEnd);
+      host.style.willChange = '';
     };
   }, [index, subpage, navigate, reduced, dragX]);
 

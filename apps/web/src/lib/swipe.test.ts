@@ -18,6 +18,18 @@ describe('decideSwipe', () => {
   it('短距离快速甩也算', () => {
     expect(decideSwipe({ dx: -60, dy: 4, vx: -500 })).toBe(1);
   });
+
+  it('很短的轻甩也能翻页 —— 不再要求拖满半个屏幕', () => {
+    expect(decideSwipe({ dx: -30, dy: 3, vx: -600 })).toBe(1);
+  });
+
+  it('松手前往回拉，不按原来的方向翻页', () => {
+    expect(decideSwipe({ dx: -70, dy: 2, vx: 450 })).toBe(0);
+  });
+
+  it('太短的距离即使快也不翻页', () => {
+    expect(decideSwipe({ dx: -12, dy: 1, vx: -900 })).toBe(0);
+  });
 });
 
 describe('pageIndexOf', () => {

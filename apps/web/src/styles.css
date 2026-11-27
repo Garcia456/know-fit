@@ -1806,7 +1806,8 @@ select:active,
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  will-change: transform;
+  /* 纵向滚动交给浏览器，横向交给 PageSwipe —— 少一层手势竞争 */
+  touch-action: pan-y;
 }
 
 /* 常驻页面占位：会话页切走后隐藏但保留状态 */
