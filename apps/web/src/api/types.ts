@@ -209,6 +209,15 @@ export interface AssessmentLookup {
   missing: string[];
 }
 
+export interface BackfillPrompt {
+  nudge_id: string;
+  pending_id: string;
+  target_date: string;
+  split_label: string | null;
+  source: 'mentioned' | 'gap';
+  message_code: 'mentioned' | 'gap';
+}
+
 export interface TurnResponse {
   turn_id: string;
   conversation_id: string;
@@ -216,6 +225,7 @@ export interface TurnResponse {
   card: TurnCard | null;
   assessment: AssessmentCard | null;
   assessment_lookup: AssessmentLookup | null;
+  backfill?: BackfillPrompt | null;
   notices: string[];
 }
 
@@ -370,6 +380,19 @@ export interface HistoryResponse {
   items: HistoryItem[];
 }
 
+export type DayStateValue = 'trained' | 'rest' | 'unlogged';
+export type DayReason = 'planned_rest' | 'deload' | 'sick' | 'travel' | 'busy' | 'other';
+
+export interface DayStateItem {
+  date: string;
+  state: DayStateValue;
+  reason: DayReason | null;
+}
+
+export interface DayStatesResponse {
+  days: DayStateItem[];
+}
+
 export interface SessionDetail {
   session_id: string;
   date: string;
@@ -455,12 +478,13 @@ export interface Profile {
 
 export type ProfileInput = Omit<Profile, 'updated_at' | 'weight_date'>;
 
-export type NudgeType = '补全' | '断流';
+export type NudgeType = '补全' | '断流' | '补记';
 
 export interface Nudge {
   id: string;
   type: NudgeType;
-  session_id: string;
+  session_id: string | null;
+  target_date: string | null;
   message: string;
 }
 

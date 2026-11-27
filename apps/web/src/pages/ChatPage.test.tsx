@@ -37,6 +37,36 @@ const lowDataTurn: TurnResponse = {
   notices: [],
 };
 
+const backfillTurn: TurnResponse = {
+  turn_id: 't-3',
+  conversation_id: 'c-3',
+  intent: 'record',
+  card: {
+    kind: 'workout',
+    session_id: 's-2',
+    date: '2026-10-26',
+    split_label: '背日',
+    status: 'complete',
+    missing_fields: [],
+    exercises: [],
+    volume_kg: 0,
+    working_sets: 0,
+    note: null,
+    hook: null,
+  },
+  assessment: null,
+  assessment_lookup: null,
+  backfill: {
+    nudge_id: '00000000-0000-4000-8000-000000000123',
+    pending_id: '00000000-0000-4000-8000-000000000124',
+    target_date: '2026-10-20',
+    split_label: null,
+    source: 'gap',
+    message_code: 'gap',
+  },
+  notices: [],
+};
+
 function mockFetchOnce(body: unknown, ok = true) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok,
@@ -84,6 +114,31 @@ describe('聊天页', () => {
     );
     expect((input as HTMLInputElement).value).toBe('');
     expect(localStorage.getItem('know-fit:chat-draft')).toBeNull();
+  });
+
+  it('记录后显示补昨天提示；点「练了没记」后出现日期 chip', async () => {
+    mockFetchOnce(backfillTurn);
+    renderChat();
+
+    fireEvent.change(screen.getByLabelText('训练、饮食或提问'), {
+      target: { value: '今天练了背' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(
+      () =>
+        expect(
+          screen.getByText('10 月 20 日没有训练记录。是休息，还是练了没记？'),
+        ).toBeDefined(),
+      { timeout: 3000 },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '练了没记' }));
+
+    await waitFor(() => expect(screen.getByText(/补记 10 月 20 日/)).toBeDefined(), {
+      timeout: 3000,
+    });
+    expect(screen.queryByText('10 月 20 日没有训练记录。是休息，还是练了没记？')).toBeNull();
   });
 
   it('点发送立刻上屏、清空输入，并显示思考中', async () => {

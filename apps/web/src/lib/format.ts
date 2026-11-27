@@ -1,4 +1,4 @@
-import { parseDateKey } from './calendar';
+import { parseDateKey, toDateKey } from './calendar';
 
 /** 秒 → mm:ss；无效值显示破折号，不编造 0:00。 */
 export function formatMmSs(seconds: number | null | undefined): string {
@@ -37,6 +37,19 @@ export function formatMonthDay(key: string): string {
   const d = parseDateKey(key);
   if (!d) return key;
   return `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+}
+
+/** 补记提示里的日期词：今天 / 昨天 / 前天 / 10 月 8 日。 */
+export function formatRelativeDay(key: string, now: Date = new Date()): string {
+  const d = parseDateKey(key);
+  if (!d) return key;
+  const today = parseDateKey(toDateKey(now));
+  if (!today) return formatMonthDay(key);
+  const diff = Math.round((today.getTime() - d.getTime()) / 86_400_000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '昨天';
+  if (diff === 2) return '前天';
+  return formatMonthDay(key);
 }
 
 /** '2026-10-08' → '10/8'（图表轴标签） */

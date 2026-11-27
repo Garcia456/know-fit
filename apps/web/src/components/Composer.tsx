@@ -4,6 +4,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
   type RefObject,
 } from 'react';
 import { SendIcon } from './Icons';
@@ -20,6 +21,8 @@ interface Props {
   sending?: boolean;
   placeholder?: string;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
+  /** 输入框上方的提示，如补记日期 chip */
+  hint?: ReactNode;
 }
 
 export function Composer({
@@ -29,6 +32,7 @@ export function Composer({
   sending = false,
   placeholder = '记录训练，或问我动作和练法',
   inputRef,
+  hint,
 }: Props) {
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
   const [multiline, setMultiline] = useState(false);
@@ -71,6 +75,7 @@ export function Composer({
 
   return (
     <form className="composer" onSubmit={handleSubmit}>
+      {hint}
       <div className={multiline ? 'pill pill--multi' : 'pill'}>
         <textarea
           ref={(el) => {
