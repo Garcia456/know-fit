@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { boolean, date, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid, vector } from 'drizzle-orm/pg-core';
 
 /** 探针表 —— 证明 vector 扩展与 HNSW 索引建得起来。不要删。 */
@@ -153,6 +154,28 @@ export const bodyMetric = pgTable(
   (t) => [uniqueIndex('body_metric_user_date_unique').on(t.userId, t.date)],
 );
 
+/**
+ * 非训练日状态 —— 只存用户明确说过的「休息 / 练了没记」。
+ * `trained` 由 workout_session 推导，`unknown` 不落行；不要给每个空白日写一行。
+ */
+export const dayStatus = pgTable(
+  'day_status',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(), // 'YYYY-MM-DD'
+    status: text('status').notNull(), // 'rest' | 'unlogged'
+    /** 休息原因，可选；不存自由文本 */
+    reason: text('reason'), // 'planned_rest' | 'deload' | 'sick' | 'travel' | 'busy' | 'other'
+    source: text('source').notNull(), // 'user' | 'plan' | 'import'
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('day_status_user_date_unique').on(t.userId, t.date)],
+);
+
 /** F7 提示留痕 —— 同一断点只出现一次。 */
 export const recoveryNudge = pgTable(
   'recovery_nudge',
@@ -162,13 +185,21 @@ export const recoveryNudge = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     sessionId: uuid('session_id').references(() => workoutSession.id, { onDelete: 'cascade' }),
-    type: text('type').notNull(), // '补全' | '断流'
+    /** 补记提示的目标日；补全 / 断流为 null */
+    targetDate: date('target_date'),
+    type: text('type').notNull(), // '补全' | '断流' | '补记'
     shownAt: timestamp('shown_at', { withTimezone: true }).notNull().defaultNow(),
-    action: text('action'), // '补全' | '忽略' | '未响应'
+    action: text('action'), // '补全' | '补记' | '休息' | '忽略' | '未响应'
   },
   (t) => [
     index('recovery_nudge_user_shown_index').on(t.userId, t.shownAt),
-    uniqueIndex('recovery_nudge_user_type_session_unique').on(t.userId, t.type, t.sessionId),
+    // Postgres 唯一索引把 NULL 当不同值：两类断点各用一个部分唯一索引
+    uniqueIndex('recovery_nudge_user_type_session_unique')
+      .on(t.userId, t.type, t.sessionId)
+      .where(sql`${t.sessionId} is not null`),
+    uniqueIndex('recovery_nudge_user_type_target_unique')
+      .on(t.userId, t.type, t.targetDate)
+      .where(sql`${t.targetDate} is not null`),
   ],
 );
 
@@ -223,6 +254,31 @@ export const workoutSession = pgTable('workout_session', {
   notes: text('notes'), // 用户顺口说的备注，原文
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * 待补记录槽 —— 用户提到「昨天练了胸」但还没给动作/组数，或记录后发现的空白日。
+ * 一天最多一条；补出训练 / 标休息 / 用户忽略都会把它收敛。
+ */
+export const pendingRecord = pgTable(
+  'pending_record',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    targetDate: date('target_date').notNull(),
+    splitLabel: text('split_label'), // 用户原话的部位，如「胸」
+    source: text('source').notNull(), // 'mentioned' | 'gap'
+    status: text('status').notNull(), // 'open' | 'filled' | 'rest' | 'dismissed'
+    sessionId: uuid('session_id').references(() => workoutSession.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('pending_record_user_date_unique').on(t.userId, t.targetDate),
+    index('pending_record_user_status_index').on(t.userId, t.status, t.targetDate),
+  ],
+);
 
 /** 一次训练里的一个动作。raw_name 与 exercise_id 都存：前者才能回溯是谁错了。 */
 export const exerciseEntry = pgTable('exercise_entry', {
