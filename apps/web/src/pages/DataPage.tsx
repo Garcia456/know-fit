@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { Link, useSearchParams } from 'react-router';
 import {
   deleteSession,
@@ -38,10 +39,12 @@ import {
   TrashIcon,
 } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
+import { Reveal } from '../components/Reveal';
 import { Tip } from '../components/Tip';
 import { VolumeHookView } from '../components/VolumeHookView';
 import { addMonths, monthGrid, monthRange, parseDateKey, startOfMonth, toDateKey } from '../lib/calendar';
 import { formatKg, formatMonthDay, formatNumber } from '../lib/format';
+import { spring } from '../lib/motion';
 
 const MISSING_LABELS: Record<string, string> = {
   exercises: '动作',
@@ -201,7 +204,6 @@ export function DataPage() {
     let trained = 0;
     let rest = 0;
     let unlogged = 0;
-    let unknown = 0;
 
     for (let day = 1; day <= daysInMonth; day++) {
       const key = toDateKey(new Date(year, m, day));
@@ -209,10 +211,9 @@ export function DataPage() {
       if (state === 'trained') trained += 1;
       else if (state === 'rest') rest += 1;
       else if (state === 'unlogged') unlogged += 1;
-      else if (key < today) unknown += 1;
     }
-    return { trained, rest, unlogged, unknown };
-  }, [byDate, dayStates, month, today]);
+    return { trained, rest, unlogged };
+  }, [byDate, dayStates, month]);
 
   const visible = useMemo(() => {
     const rows = selected ? (byDate.get(selected) ?? []) : (history ?? []);
@@ -295,7 +296,7 @@ export function DataPage() {
 
       <section className="sec data-calendar" aria-label="日历">
         <div className="sec-hd">
-          <h2>{monthTitle}</h2>
+          <h2 key={monthTitle} className="month-title">{monthTitle}</h2>
           <span className="hint">左右滑动换月</span>
         </div>
 
@@ -393,7 +394,7 @@ export function DataPage() {
               ? '本月还没记录'
               : `本月 ${calendarCounts.trained} 练 · ${calendarCounts.rest} 休${
                   calendarCounts.unlogged ? ` · ${calendarCounts.unlogged} 漏记` : ''
-                }${calendarCounts.unknown ? ` · ${calendarCounts.unknown} 天未知` : ''}`}
+                }`}
           </span>
         </div>
       </section>
@@ -442,7 +443,7 @@ export function DataPage() {
             />
           ))
         ) : (
-          <div className="list-card">
+          <div className="list-card list-swap" key={order}>
             {visible.map((item) => (
               <button
                 key={item.session_id}
@@ -638,6 +639,7 @@ function unrecognizedHint(draft: DraftExercise[]) {
 }
 
 function DayCard({ item, detail, onSaved, onDeleted }: Props) {
+  const reduced = useReducedMotion();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<DraftExercise[]>([]);
   const [confirming, setConfirming] = useState(false);
@@ -1057,14 +1059,14 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
           <b>{detail?.exercises.length ?? item.exercise_count}</b> 个动作
         </span>
         <span>
-          <b>{detail?.volume.working_sets ?? item.working_sets}</b> 个正式组
+          <b>{detail?.volume.working_sets ?? item.working_sets}</b> 个有效组
         </span>
         <span>
           <b>{formatNumber(detail?.volume.total_volume_kg ?? item.volume_kg)}</b> kg
         </span>
       </div>
 
-      {confirming ? (
+      <Reveal open={confirming}>
         <div className="danger-box" role="alertdialog" aria-label="确认删除这次训练">
           <p>删掉这次训练？训练记录和评估会一起删除，不能恢复。</p>
           <div className="danger-actions">
@@ -1086,7 +1088,7 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
             </button>
           </div>
         </div>
-      ) : null}
+      </Reveal>
 
       {error ? (
         <p className="error-text" role="alert">
@@ -1233,34 +1235,45 @@ function DayCard({ item, detail, onSaved, onDeleted }: Props) {
                                 <EllipsisIcon size={16} />
                               </button>
                             </Tip>
-                            {menu?.key === set.key ? (
-                              <div className="set-menu__panel" role="menu" ref={menuRef}>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    duplicateSet(exIndex, setIndex);
-                                    setMenu(null);
-                                  }}
+                            <AnimatePresence>
+                              {menu?.key === set.key ? (
+                                <m.div
+                                  className="set-menu__panel"
+                                  role="menu"
+                                  ref={menuRef}
+                                  style={{ transformOrigin: 'top right' }}
+                                  initial={reduced ? false : { opacity: 0, scale: 0.96, y: -4 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: -2 }}
+                                  transition={reduced ? { duration: 0 } : spring.panel}
                                 >
-                                  <CopyIcon />
-                                  复制组
-                                </button>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="is-danger"
-                                  disabled={ex.sets.length <= 1}
-                                  onClick={() => {
-                                    removeSet(exIndex, setIndex);
-                                    setMenu(null);
-                                  }}
-                                >
-                                  <TrashIcon size={14} />
-                                  删除组
-                                </button>
-                              </div>
-                            ) : null}
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      duplicateSet(exIndex, setIndex);
+                                      setMenu(null);
+                                    }}
+                                  >
+                                    <CopyIcon />
+                                    复制组
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="is-danger"
+                                    disabled={ex.sets.length <= 1}
+                                    onClick={() => {
+                                      removeSet(exIndex, setIndex);
+                                      setMenu(null);
+                                    }}
+                                  >
+                                    <TrashIcon size={14} />
+                                    删除组
+                                  </button>
+                                </m.div>
+                              ) : null}
+                            </AnimatePresence>
                           </span>
                           <Tip text="拖动排序" align="end">
                             <button

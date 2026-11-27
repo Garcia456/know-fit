@@ -1,7 +1,7 @@
 import { ChartIcon, InfoIcon } from './Icons';
 
 const MISSING_ROW: Record<string, { name: string; hint: string }> = {
-  sets: { name: '有效组', hint: '这次还没记录正式组' },
+  sets: { name: '有效组', hint: '这次还没记录有效组' },
   split_label: { name: '训练部位', hint: '这次没标推日 / 背日' },
   baseline: { name: '上一次同类训练', hint: '还没有可对比的基准' },
 };

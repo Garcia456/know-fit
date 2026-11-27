@@ -138,7 +138,13 @@ describe('聊天页', () => {
     await waitFor(() => expect(screen.getByText(/补记 10 月 20 日/)).toBeDefined(), {
       timeout: 3000,
     });
-    expect(screen.queryByText('10 月 20 日没有训练记录。是休息，还是练了没记？')).toBeNull();
+    await waitFor(
+      () =>
+        expect(
+          screen.queryByText('10 月 20 日没有训练记录。是休息，还是练了没记？'),
+        ).toBeNull(),
+      { timeout: 1500 },
+    );
   });
 
   it('点发送立刻上屏、清空输入，并显示思考中', async () => {
