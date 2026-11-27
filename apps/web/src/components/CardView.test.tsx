@@ -47,7 +47,7 @@ describe('训练 / 饮食 / 闲聊 / 拒答卡片', () => {
       <CardView card={workout} onAssess={() => undefined} onComplete={() => undefined} />,
     );
     expect(screen.getByText('训练已记录')).toBeDefined();
-    expect(screen.getByText('信息不全')).toBeDefined();
+    expect(screen.getByText('待补全')).toBeDefined();
     expect(screen.getByText(/还缺：次数/)).toBeDefined();
     expect(screen.getByText(/第一次记录这个部位，暂无对比/)).toBeDefined();
     expect(screen.queryByText(/%/)).toBeNull();
@@ -81,9 +81,10 @@ describe('训练 / 饮食 / 闲聊 / 拒答卡片', () => {
     expect(screen.getByText('午餐已记下')).toBeDefined();
     expect(screen.getByText('份量按估算')).toBeDefined();
     expect(screen.getByText(/仅展示，未入库/)).toBeDefined();
-    expect(screen.getByText('kcal 合计')).toBeDefined();
+    // 不估算就不摆一排「—」占位：界面只出现此刻有用的信息
+    expect(screen.queryByText('kcal 合计')).toBeNull();
+    expect(screen.queryByText('蛋白')).toBeNull();
     expect(screen.queryByText(/\d+\s*kcal/)).toBeNull();
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3);
   });
 
   it('chat / refusal / boundary 原样显示后端文案', () => {

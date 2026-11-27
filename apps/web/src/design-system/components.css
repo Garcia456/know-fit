@@ -23,7 +23,7 @@
   padding-right: max(16px, env(safe-area-inset-right));
   border-bottom: 1px solid transparent;
   background: var(--canvas);
-  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
 .topnav.is-scrolled {
   border-bottom-color: var(--glass-line);
@@ -45,7 +45,7 @@
   );
   opacity: 0;
   pointer-events: none;
-  transition: opacity .2s ease;
+  transition: opacity var(--dur-1) var(--ease-out);
 }
 .topnav.is-scrolled::after {
   opacity: 1;
@@ -63,7 +63,7 @@
   border: 1px solid var(--glass-line); border-radius: var(--r-full);
   background: color-mix(in srgb, var(--surface) 84%, transparent); color: var(--ink);
   cursor: pointer;
-  transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+  transition: transform var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
 .icon-btn:hover { background: var(--surface); transform: translateY(-1px); }
 .icon-btn--dark {
@@ -170,7 +170,7 @@
   border-radius: var(--r-full); padding: 10px 17px;
   font-size: 13px; font-weight: 600; background: var(--brand); color: var(--surface);
   box-shadow: 0 10px 22px -16px color-mix(in srgb, var(--ink) 70%, transparent);
-  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+  transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
 }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 14px 28px -16px color-mix(in srgb, var(--ink) 75%, transparent); }
 .btn--ghost { background: transparent; color: var(--muted); font-weight: 500; padding: 9px 10px; }
@@ -224,7 +224,7 @@
   border: 1px solid var(--glass-line); background: var(--surface); border-radius: var(--r-full);
   padding: 10px 15px; font-family: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer;
   box-shadow: 0 1px 1px color-mix(in srgb, var(--ink) 3%, transparent);
-  transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition: transform var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
 .chip:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--ink) 16%, transparent); box-shadow: 0 8px 18px -14px color-mix(in srgb, var(--ink) 50%, transparent); }
 .chip:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
@@ -239,20 +239,38 @@
   background: color-mix(in srgb, var(--canvas-2) 62%, var(--surface));
   box-shadow: inset 0 1px 2px color-mix(in srgb, var(--ink) 5%, transparent);
 }
+/* 白底滑块：跟着选中项走，而不是每一项各自闪一下 */
+.segmented__thumb {
+  position: absolute;
+  top: 4px; bottom: 4px; left: 0; z-index: 0;
+  border-radius: var(--r-full);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-line),
+    0 1px 2px color-mix(in srgb, var(--ink) 5%, transparent),
+    0 8px 16px -12px color-mix(in srgb, var(--ink) 42%, transparent);
+}
 .segmented .chip {
+  position: relative; z-index: 1;
   width: 100%; justify-content: center;
   min-height: 38px;
   padding: 8px 4px;
   border: 0; background: transparent; box-shadow: none;
   color: var(--ink-3); font-size: 13px; font-weight: 500;
-  transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+  transition: color var(--dur-2) var(--ease-out);
 }
 .segmented .chip:hover {
   transform: none; box-shadow: none;
-  background: color-mix(in srgb, var(--surface) 58%, transparent);
+  background: transparent;
+  color: var(--ink);
 }
 .segmented .chip.is-on {
-  background: var(--surface); color: var(--ink); font-weight: 600;
+  background: transparent; color: var(--ink); font-weight: 600;
+  box-shadow: none;
+}
+/* 旧标记（还没有滑块）保留实心选中态；Segmented 组件会带 data-enhanced */
+.segmented:not([data-enhanced]) .chip.is-on {
+  background: var(--surface);
   box-shadow:
     inset 0 0 0 1px var(--glass-line),
     0 1px 2px color-mix(in srgb, var(--ink) 5%, transparent),
@@ -278,7 +296,7 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-strong) 65%, transparent),
     0 10px 20px -12px color-mix(in srgb, var(--accent-strong) 90%, transparent);
   display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-  transition: transform .18s ease, background .18s ease;
+  transition: transform var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
 }
 .composer .send:hover { transform: translateY(-1px) scale(1.02); background: var(--accent-strong); }
 
@@ -302,7 +320,7 @@
 }
 .metric { display: flex; align-items: baseline; gap: var(--s-2); }
 .metric b { font-size: 40px; font-weight: 600; letter-spacing: -0.045em; line-height: 1; font-variant-numeric: tabular-nums; }
-.metric span { font-size: 12.5px; color: var(--muted); }
+.metric > span { font-size: 12.5px; color: var(--muted); }
 .bars { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); height: 112px; margin-top: 14px; }
 .bars > div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; }
 .bars i { display: block; width: 100%; max-width: 46px; border-radius: var(--r-2) var(--r-2) 3px 3px; background: linear-gradient(180deg, var(--accent), var(--accent-strong)); }

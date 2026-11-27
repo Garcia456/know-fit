@@ -300,47 +300,17 @@ export function ProfilePage() {
                 />
               </span>
             </div>
-            <button
-              type="button"
-              className="set-row is-disabled"
-              disabled
-              aria-label="自动换算磅（未开放）"
-            >
-              <span className="lbl">自动换算磅（lb）</span>
-              <span className="val">未开放</span>
-            </button>
           </div>
         </section>
 
-        
         <section className="sec" aria-label="隐私与数据">
           <p className="group-label icon-label">
             <FileTextIcon />
             隐私与数据
           </p>
-          <div className="list-card">
-            <button
-              type="button"
-              className="set-row is-disabled"
-              disabled
-              aria-label="导出我的数据（未开放）"
-            >
-              <span className="lbl">导出我的数据</span>
-              <span className="val">未开放</span>
-            </button>
-            <button
-              type="button"
-              className="set-row is-disabled"
-              disabled
-              aria-label="删除我的数据（未开放）"
-            >
-              <span className="lbl">删除我的数据</span>
-              <span className="val">未开放</span>
-            </button>
-          </div>
           <div className="note-inline">
             <InfoIcon />
-            <p>训练与身体数据只存在这套本地库里；导出与删除还没开放。</p>
+            <p>训练与身体数据只存在这套本地库里；导出与删除还没开放，开放后会出现在设置里。</p>
           </div>
         </section>
 

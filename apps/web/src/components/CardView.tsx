@@ -135,7 +135,7 @@ function WorkoutCardView({
         <CheckIcon />
         <h3>训练已记录</h3>
         <span className={incomplete ? 'tag tag--dashed' : 'tag'}>
-          {incomplete ? '信息不全' : '已记完'}
+          {incomplete ? '待补全' : '已记完'}
         </span>
       </div>
       <p className="card-meta">
@@ -148,7 +148,7 @@ function WorkoutCardView({
       <ExerciseRows exercises={card.exercises} />
 
       <div className="sum">
-        <span>合计（正式组）</span>
+        <span>合计（有效组）</span>
         <b>
           {card.working_sets} 组 · {formatKg(card.volume_kg)}
         </b>
@@ -220,25 +220,9 @@ function MealCardView({ card }: { card: MealCard }) {
                 <span className="meal-basis">（{item.estimation_basis}）</span>
               ) : null}
             </dd>
-            <span className="val">—</span>
           </div>
         ))}
       </dl>
-
-      <div className="stat-row" aria-label="营养估算">
-        <div className="stat">
-          <b>—</b>
-          <span>kcal 合计</span>
-        </div>
-        <div className="stat">
-          <b>—</b>
-          <span>蛋白</span>
-        </div>
-        <div className="stat">
-          <b>—</b>
-          <span>碳水</span>
-        </div>
-      </div>
 
       <p className="foot-note">
         本版不估算热量与营养素；份量按你给的说法原样记录。下次直接说克数，记账会更准。
@@ -395,14 +379,14 @@ function CorrectionCardView({ card }: { card: CorrectionCard }) {
       </dl>
 
       <div className="sum">
-        <span>合计（正式组）</span>
+        <span>合计（有效组）</span>
         <b>
           {card.working_sets} 组 · {formatKg(card.volume_kg)}
         </b>
       </div>
 
       <p className="foot-note">
-        容量按 Σ（重量 × 次数）重算，只算正式组 —— 数字由代码出，不由模型估。
+        容量按 Σ（重量 × 次数）重算，只算有效组 —— 数字由代码出，不由模型估。
       </p>
     </article>
   );

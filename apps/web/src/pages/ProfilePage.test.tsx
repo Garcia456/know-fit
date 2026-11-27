@@ -114,19 +114,15 @@ describe('个人信息页', () => {
     expect(screen.queryByText('体重需在 30–300kg 之间')).toBeNull();
   });
 
-  it('未实现的项画行、标未开放、不可点', async () => {
+  it('未开放的能力不再摆成点不动的入口', async () => {
     stubFetch({ ok: true, body: emptyProfile });
     render(<ProfilePage />);
 
-    for (const name of [
-      '自动换算磅（未开放）',
-      '导出我的数据（未开放）',
-      '删除我的数据（未开放）',
-    ]) {
-      const row = (await screen.findByRole('button', { name })) as HTMLButtonElement;
-      expect(row.disabled).toBe(true);
-      expect(row.textContent).toContain('未开放');
-    }
+    await screen.findByLabelText('身高（cm）');
+    expect(screen.queryByRole('button', { name: /自动换算磅/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /导出我的数据/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /删除我的数据/ })).toBeNull();
+    expect(screen.getByText(/导出与删除还没开放/)).toBeDefined();
   });
 
   it('体重保存后显示日期', async () => {

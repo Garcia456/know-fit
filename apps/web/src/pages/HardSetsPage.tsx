@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { getStats } from '../api/client';
 import type { ExerciseHardSet, MuscleGroupHardSet, StatsRange } from '../api/types';
+import { AnimatedNumber } from '../components/AnimatedNumber';
 import { DateField } from '../components/DateField';
 import {
   ArrowDownIcon,
@@ -10,6 +11,8 @@ import {
   ChevronDownIcon,
 } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
+import { Reveal } from '../components/Reveal';
+import { Segmented } from '../components/Segmented';
 import { startOfWeekKey, toDateKey } from '../lib/calendar';
 import { formatDeltaPct, formatMonthDay, formatNumber } from '../lib/format';
 
@@ -38,6 +41,11 @@ function spanDays(from: string, to: string): number {
 
 function isDateKey(value: string | null): value is string {
   return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/** 从某个日期键加减几天，仍返回日期键 */
+function addDaysKey(key: string, days: number): string {
+  return toDateKey(addDays(new Date(`${key}T00:00:00`), days));
 }
 
 function presetRange(key: Exclude<RangeKey, 'custom'>, today: Date, todayKey: string) {
@@ -118,8 +126,7 @@ export function HardSetsPage() {
       return;
     }
     let alive = true;
-    // 换区间先清掉旧数字，避免短暂把上一段范围的数读成当前范围
-    setStats(null);
+    // 换区间时保留上一组数字，只做减淡，避免整页塌掉再长回来
     setLoading(true);
     setError(null);
     getStats(range.from, range.to)
@@ -160,22 +167,18 @@ export function HardSetsPage() {
         <span className="hard-sets-hd__spacer" aria-hidden="true" />
       </header>
 
-      <div className="body page-body hard-sets-page">
+      <div
+        className={`body page-body hard-sets-page${loading && stats ? ' is-updating' : ''}`}
+        aria-busy={loading || undefined}
+      >
         <section className="sec stats-range" aria-label="统计范围">
           <div className="range-bar">
-            <div className="segmented" role="group" aria-label="统计范围">
-              {RANGES.map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`chip${rangeKey === key ? ' is-on' : ''}`}
-                  aria-pressed={rangeKey === key}
-                  onClick={() => chooseRange(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              options={RANGES}
+              value={rangeKey}
+              onChange={(key) => chooseRange(key as RangeKey)}
+              ariaLabel="统计范围"
+            />
             <p className="range-summary">
               <b>
                 {formatMonthDay(range.from)}
@@ -186,17 +189,42 @@ export function HardSetsPage() {
                   ? '范围需要调整'
                   : error
                     ? '这个范围没读出来'
-                    : stats
-                      ? `${stats.training_days} 天有训练 · ${stats.hard_sets} 组有效`
-                      : '正在读取区间…'}
+                    : loading
+                      ? '正在更新…'
+                      : stats
+                        ? `${stats.training_days} 天有训练 · ${stats.hard_sets} 组有效`
+                        : '正在读取区间…'}
               </span>
             </p>
           </div>
 
           {rangeKey === 'custom' ? (
             <div className="range-inputs">
-              <DateField label="开始" value={customFrom} max={todayKey} onChange={setCustomFrom} />
-              <DateField label="结束" value={customTo} max={todayKey} onChange={setCustomTo} />
+              <DateField
+                label="开始"
+                value={customFrom}
+                max={todayKey}
+                onChange={(value) => {
+                  setCustomFrom(value);
+                  // 起止由系统跟着调，不把矛盾留给用户
+                  if (value > customTo) setCustomTo(value);
+                  else if (spanDays(value, customTo) > MAX_SPAN_DAYS) {
+                    setCustomTo(addDaysKey(value, MAX_SPAN_DAYS));
+                  }
+                }}
+              />
+              <DateField
+                label="结束"
+                value={customTo}
+                max={todayKey}
+                onChange={(value) => {
+                  setCustomTo(value);
+                  if (value < customFrom) setCustomFrom(value);
+                  else if (spanDays(customFrom, value) > MAX_SPAN_DAYS) {
+                    setCustomFrom(addDaysKey(value, -MAX_SPAN_DAYS));
+                  }
+                }}
+              />
             </div>
           ) : null}
 
@@ -264,7 +292,9 @@ function Overview({ stats }: { stats: StatsRange }) {
       </div>
       <div className="chart-card">
         <div className="metric">
-          <b>{stats.hard_sets}</b>
+          <b>
+            <AnimatedNumber value={stats.hard_sets} />
+          </b>
           <span>有效组</span>
           <span className={`hard-sets-delta${previous.hard_sets === 0 ? ' is-empty' : ''}`}>
             {previous.hard_sets === 0 ? null : previous.delta > 0 ? (
@@ -385,7 +415,7 @@ function GroupRow({
           <ChevronDownIcon size={14} />
         </span>
       </button>
-      {open ? (
+      <Reveal open={open}>
         <div className="group-detail" id={detailId}>
           {trained.length === 0 ? (
             <p className="page-hint">这个范围没有练到。</p>
@@ -417,7 +447,7 @@ function GroupRow({
             })
           )}
         </div>
-      ) : null}
+      </Reveal>
     </div>
   );
 }
@@ -498,10 +528,12 @@ function Tonnage({ stats }: { stats: StatsRange }) {
       </div>
       <div className="chart-card">
         <div className="metric">
-          <b>{formatNumber(stats.total_volume_kg)}</b>
+          <b>
+            <AnimatedNumber value={stats.total_volume_kg} format={formatNumber} />
+          </b>
           <span>kg · 本范围</span>
         </div>
-        <p className="page-hint">正式组 Σ 重量 × 次数；与上面的有效组数不是同一个口径。</p>
+        <p className="page-hint">有效组 Σ 重量 × 次数；与上面的有效组数不是同一个口径。</p>
       </div>
     </section>
   );
