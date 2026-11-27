@@ -59,15 +59,15 @@ export function PageSwipe({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const host = hostRef.current;
-    // 二级页不做左右翻页
-    if (!host || reduced || index < 0 || subpage) return;
+    // 二级页不做左右翻页；「减少动态效果」只去掉位移动画，不拿走翻页功能
+    if (!host || index < 0 || subpage) return;
 
     function onStart(e: TouchEvent) {
       const touch = e.touches[0];
       if (!touch) return;
       anim.current?.stop();
       // 只在真正拖动期间提示合成层，静止时不占常驻 GPU 资源
-      host!.style.willChange = 'transform';
+      if (!reduced) host!.style.willChange = 'transform';
       gesture.current = {
         startX: touch.clientX,
         startY: touch.clientY,
@@ -98,7 +98,7 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       if (e.cancelable) e.preventDefault();
 
       const travel = Math.max(0, Math.abs(dx) - SWIPE_INTENT_PX);
-      if (travel === 0) {
+      if (reduced || travel === 0) {
         dragX.set(0);
       } else {
         const atEdge = (index === 0 && dx > 0) || (index === PAGE_ORDER.length - 1 && dx < 0);
@@ -119,7 +119,7 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       if (!g) return;
 
       if (g.ignored || g.axis !== 'x') {
-        anim.current = animate(dragX, 0, spring.snappy);
+        if (!reduced) anim.current = animate(dragX, 0, spring.snappy);
         return;
       }
 
@@ -130,7 +130,7 @@ export function PageSwipe({ children }: { children: ReactNode }) {
         navigate(target);
         return;
       }
-      anim.current = animate(dragX, 0, spring.snappy);
+      if (!reduced) anim.current = animate(dragX, 0, spring.snappy);
     }
 
     host.addEventListener('touchstart', onStart, { passive: true });
