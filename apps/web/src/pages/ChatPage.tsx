@@ -34,7 +34,7 @@ const DRAFT_KEY = 'know-fit:chat-draft';
 const MIN_THINKING_MS = 1000;
 
 /** 只放不需要上下文、不读任何数据的知识问题 —— 点了直接发 */
-const QUICK_ASKS = ['练胸有什么推荐动作', '深蹲怎么练才标准', '增肌一周练几次', '训练后要不要拉伸'];
+const QUICK_ASKS = ['练胸有什么推荐动作', '深蹲怎么练才标准', '增肌一周练几次', '卧推加不上去怎么办'];
 
 interface Entry {
   id: string;
@@ -413,7 +413,10 @@ export function ChatPage({
                 再练狠一点。
               </h1>
               <p className="agent-text">
-                今天练了什么？直接说就行 —— 比如「<strong>卧推 70kg×8 四组</strong>」。
+                今天练了什么？直接说就行
+                <span className="chat-hero__example">
+                  比如「<strong>杠铃卧推 70kg×8 四组</strong>」。
+                </span>
                 <br />
                 动作怎么练、要不要加重量，也能直接问我。
               </p>
