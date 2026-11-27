@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { createPortal } from 'react-dom';
+import { spring } from '../lib/motion';
 import { CheckIcon, ChevronDownIcon } from './Icons';
 
 export interface SelectOption {
@@ -32,6 +34,7 @@ export function SelectField({ label, value, options, onChange, disabled }: Props
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [position, setPosition] = useState<MenuPosition | null>(null);
+  const reduced = useReducedMotion();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -71,7 +74,7 @@ export function SelectField({ label, value, options, onChange, disabled }: Props
 
   useLayoutEffect(() => {
     if (!open) {
-      setPosition(null);
+      // 保留最后一次位置：关闭动画还在用，不要让它跳回屏幕外
       return;
     }
     updatePosition();
@@ -144,54 +147,67 @@ export function SelectField({ label, value, options, onChange, disabled }: Props
     }
   }
 
-  const menu = open && typeof document !== 'undefined'
+  const menu = typeof document !== 'undefined'
     ? createPortal(
-        <div
-          ref={menuRef}
-          id={listId}
-          role="listbox"
-          aria-label={label}
-          className={`select-field__menu${position?.above ? ' select-field__menu--above' : ''}`}
-          style={
-            position
-              ? { top: position.top, left: position.left, width: position.width }
-              : { top: -9999, left: -9999, width: MENU_WIDTH }
-          }
-        >
-          {options.map((option, index) => {
-            const selected = option.value === value;
-            return (
-              <div
-                key={option.value}
-                id={`${listId}-option-${index}`}
-                role="option"
-                aria-selected={selected}
-                data-index={index}
-                className={[
-                  'select-field__option',
-                  selected ? 'is-selected' : '',
-                  activeIndex === index ? 'is-active' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => commit(index)}
-              >
-                <span className="select-field__option-copy">
-                  <span className="select-field__option-label">{option.label}</span>
-                  {option.description ? (
-                    <span className="select-field__option-description">{option.description}</span>
-                  ) : null}
-                </span>
-                {selected ? (
-                  <span className="select-field__check" aria-hidden="true">
-                    <CheckIcon size={15} />
-                  </span>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>,
+        <AnimatePresence>
+          {open ? (
+            <m.div
+              ref={menuRef}
+              id={listId}
+              role="listbox"
+              aria-label={label}
+              className="select-field__menu"
+              initial={reduced ? false : { opacity: 0, scale: 0.97, y: position?.above ? 4 : -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 2 }}
+              transition={reduced ? { duration: 0 } : spring.snappy}
+              style={
+                position
+                  ? {
+                      top: position.top,
+                      left: position.left,
+                      width: position.width,
+                      transformOrigin: position.above ? 'bottom right' : 'top right',
+                    }
+                  : { top: -9999, left: -9999, width: MENU_WIDTH }
+              }
+            >
+              {options.map((option, index) => {
+                const selected = option.value === value;
+                return (
+                  <div
+                    key={option.value}
+                    id={`${listId}-option-${index}`}
+                    role="option"
+                    aria-selected={selected}
+                    data-index={index}
+                    className={[
+                      'select-field__option',
+                      selected ? 'is-selected' : '',
+                      activeIndex === index ? 'is-active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => commit(index)}
+                  >
+                    <span className="select-field__option-copy">
+                      <span className="select-field__option-label">{option.label}</span>
+                      {option.description ? (
+                        <span className="select-field__option-description">{option.description}</span>
+                      ) : null}
+                    </span>
+                    {selected ? (
+                      <span className="select-field__check" aria-hidden="true">
+                        <CheckIcon size={15} />
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </m.div>
+          ) : null}
+        </AnimatePresence>,
         document.body,
       )
     : null;

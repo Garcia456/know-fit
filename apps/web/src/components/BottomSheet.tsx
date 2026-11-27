@@ -2,6 +2,7 @@ import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
+import { duration, spring } from '../lib/motion';
 import { CloseIcon } from './Icons';
 
 interface Props {
@@ -25,8 +26,8 @@ export function BottomSheet({ open, title, onClose, children }: Props) {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
-    const first = panelRef.current?.querySelector<HTMLElement>('button, [tabindex="0"]');
-    first?.focus({ preventScroll: true });
+    // 焦点落到弹层本身，而不是碰巧排在前面的关闭按钮
+    panelRef.current?.focus({ preventScroll: true });
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.classList.remove('sheet-open');
@@ -44,6 +45,7 @@ export function BottomSheet({ open, title, onClose, children }: Props) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={{ duration: reduced ? 0 : duration.base }}
         >
           <button type="button" className="sheet-mask" aria-label="关闭" onClick={onClose} />
           <m.div
@@ -52,10 +54,11 @@ export function BottomSheet({ open, title, onClose, children }: Props) {
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            initial={reduced ? false : { opacity: 0, y: 12, scale: 0.94 }}
+            tabIndex={-1}
+            initial={reduced ? false : { opacity: 0, y: 16, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.96 }}
-            transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 460, damping: 38 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.97 }}
+            transition={reduced ? { duration: 0 } : spring.panel}
           >
             <div className="sheet-hd">
               <h2>{title}</h2>

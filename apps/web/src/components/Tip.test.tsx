@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Tip } from './Tip';
 
@@ -18,15 +18,16 @@ function wrap() {
 }
 
 describe('Tip', () => {
-  it('鼠标悬停浮出白底提示，移开就收起', () => {
+  it('鼠标悬停一拍后浮出白底提示，移开就收起', async () => {
     mount();
     expect(screen.queryByRole('tooltip')).toBeNull();
 
     fireEvent.pointerEnter(wrap(), { pointerType: 'mouse' });
-    expect(screen.getByRole('tooltip').textContent).toBe('删除动作');
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect((await screen.findByRole('tooltip')).textContent).toBe('删除动作');
 
     fireEvent.pointerLeave(wrap());
-    expect(screen.queryByRole('tooltip')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
   });
 
   it('触屏悬停不弹提示', () => {
