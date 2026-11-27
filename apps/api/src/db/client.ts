@@ -14,7 +14,12 @@ export function databaseUrl(): string {
 }
 
 export function createPool(connectionString = databaseUrl()): Pool {
-  return new Pool({ connectionString, connectionTimeoutMillis: 3000 });
+  return new Pool({
+    connectionString,
+    connectionTimeoutMillis: 3000,
+    // 测试并行跑很多文件，每个文件一个池；不封顶会撞 Postgres 的 max_connections
+    max: process.env.NODE_ENV === 'test' ? 2 : 10,
+  });
 }
 
 export function createDb(pool: Pool) {
