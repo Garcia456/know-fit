@@ -163,19 +163,19 @@ export function DataPage() {
     setMonth(startOfMonth(d));
   }, [paramDate]);
 
-  // 换月：等惯性停了（settle）再换内容。
-  // select 在松手算出目标页时就发，此时惯性动画还在跑；这时换 key 重挂三页，
-  // 动画会被打断重来，看起来就是「快滑到下一月时卡一下」。
+  // 换月：松手算出目标页就换，标题紧跟手指。
+  // 内容换好后在同一帧跳回中间页，用户看到的仍是刚滑到的那一月；
+  // 这样连续快滑时，下一次手势总是从中间页开始，不会卡在边缘。
   useEffect(() => {
     if (!emblaApi) return;
-    const onSettle = () => {
+    const onSelect = () => {
       const at = emblaApi.selectedScrollSnap();
       if (at === 1) return;
       setMonth((m) => addMonths(m, at - 1));
     };
-    emblaApi.on('settle', onSettle);
+    emblaApi.on('select', onSelect);
     return () => {
-      emblaApi.off('settle', onSettle);
+      emblaApi.off('select', onSelect);
     };
   }, [emblaApi]);
 
