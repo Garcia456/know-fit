@@ -7,8 +7,10 @@ import {
   isSubpage,
   pageIndexOf,
   decideSwipe,
+  swipeVelocity,
   PAGE_ORDER,
   SWIPE_INTENT_PX,
+  type SwipeSample,
 } from '../lib/swipe';
 
 interface Gesture {
@@ -17,8 +19,7 @@ interface Gesture {
   axis: 'x' | 'y' | null;
   ignored: boolean;
   lastX: number;
-  lastT: number;
-  vx: number;
+  samples: SwipeSample[];
 }
 
 const IGNORE = '[data-swipe-ignore], input, textarea, select, [contenteditable="true"]';
@@ -68,14 +69,14 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       anim.current?.stop();
       // 只在真正拖动期间提示合成层，静止时不占常驻 GPU 资源
       if (!reduced) host!.style.willChange = 'transform';
+      const now = performance.now();
       gesture.current = {
         startX: touch.clientX,
         startY: touch.clientY,
         axis: null,
         ignored: Boolean((e.target as Element | null)?.closest?.(IGNORE)),
         lastX: touch.clientX,
-        lastT: performance.now(),
-        vx: 0,
+        samples: [{ x: touch.clientX, t: now }],
       };
     }
 
@@ -87,15 +88,27 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       const dx = touch.clientX - g.startX;
       const dy = touch.clientY - g.startY;
 
-      // 方向没定之前先不动。横向优先，但必须明确压过纵向 ——
-      // 斜着滚动页面时不该把整页横着带歪。
+      // 方向没定之前先不动。等横向明确越过意图距离再锁 x ——
+      // 10px 的斜向移动就把轴锁成横向，会吞掉后面的纵向滚动。
       if (g.axis === null) {
-        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-        g.axis = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'x' : 'y';
+        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+        if (Math.abs(dx) >= SWIPE_INTENT_PX && Math.abs(dx) > Math.abs(dy) * 1.3) {
+          g.axis = 'x';
+        } else if (Math.abs(dy) >= 12 && Math.abs(dy) >= Math.abs(dx)) {
+          g.axis = 'y';
+        } else {
+          return;
+        }
       }
       if (g.axis !== 'x' || g.ignored) return;
 
       if (e.cancelable) e.preventDefault();
+
+      const now = performance.now();
+      g.samples.push({ x: touch.clientX, t: now });
+      // 只留最近 120ms 的采样，松手速度不受更早的拖动影响
+      g.samples = g.samples.filter((sample) => now - sample.t <= 120);
+      g.lastX = touch.clientX;
 
       const travel = Math.max(0, Math.abs(dx) - SWIPE_INTENT_PX);
       if (reduced || travel === 0) {
@@ -104,12 +117,6 @@ export function PageSwipe({ children }: { children: ReactNode }) {
         const atEdge = (index === 0 && dx > 0) || (index === PAGE_ORDER.length - 1 && dx < 0);
         dragX.set(Math.sign(dx) * travel * (atEdge ? 0.16 : 0.92));
       }
-
-      const now = performance.now();
-      const dt = now - g.lastT;
-      if (dt > 0) g.vx = ((touch.clientX - g.lastX) / dt) * 1000;
-      g.lastX = touch.clientX;
-      g.lastT = now;
     }
 
     function onEnd() {
@@ -124,7 +131,11 @@ export function PageSwipe({ children }: { children: ReactNode }) {
       }
 
       // 用原始位移判定，不用带死区和边缘阻尼的视觉位移
-      const step = decideSwipe({ dx: g.lastX - g.startX, dy: 0, vx: g.vx });
+      const step = decideSwipe({
+        dx: g.lastX - g.startX,
+        dy: 0,
+        vx: swipeVelocity(g.samples, performance.now()),
+      });
       const target = step === 0 ? undefined : PAGE_ORDER[index + step];
       if (target) {
         navigate(target);

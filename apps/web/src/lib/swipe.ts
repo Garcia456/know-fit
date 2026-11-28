@@ -31,6 +31,25 @@ export function isSubpage(pathname: string): boolean {
 
 export type SwipeDecision = -1 | 0 | 1;
 
+export interface SwipeSample {
+  x: number;
+  t: number;
+}
+
+/** 只认最近 120ms 的移动；松手前停住，旧速度必须作废 */
+const VELOCITY_WINDOW_MS = 120;
+
+/** 松手速度（px/s）：取最近时间窗内首尾两点的差，停住再松手就是 0。 */
+export function swipeVelocity(samples: SwipeSample[], now: number): number {
+  const recent = samples.filter((sample) => now - sample.t <= VELOCITY_WINDOW_MS);
+  if (recent.length < 2) return 0;
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  if (!first || !last) return 0;
+  const dt = last.t - first.t;
+  return dt > 0 ? ((last.x - first.x) / dt) * 1000 : 0;
+}
+
 /**
  * 横向滑动是否要换页：-1 上一页 / 1 下一页 / 0 不动。
  *

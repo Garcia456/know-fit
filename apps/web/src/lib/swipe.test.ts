@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideSwipe, isSubpage, pageIndexOf } from './swipe';
+import { decideSwipe, isSubpage, pageIndexOf, swipeVelocity } from './swipe';
 
 describe('decideSwipe', () => {
   it('短距离慢滑不换页', () => {
@@ -29,6 +29,26 @@ describe('decideSwipe', () => {
 
   it('太短的距离即使快也不翻页', () => {
     expect(decideSwipe({ dx: -12, dy: 1, vx: -900 })).toBe(0);
+  });
+
+  it('拖到位置后停住再松手，不算轻甩', () => {
+    expect(decideSwipe({ dx: -30, dy: 2, vx: 0 })).toBe(0);
+  });
+});
+
+describe('swipeVelocity', () => {
+  it('只认最近 120ms 的移动', () => {
+    // 这两次移动发生在 400–500ms 前，松手时已经过期
+    expect(swipeVelocity([{ x: 100, t: 0 }, { x: 60, t: 100 }], 500)).toBe(0);
+    expect(swipeVelocity([{ x: 100, t: 400 }, { x: 60, t: 480 }], 500)).toBe(-500);
+  });
+
+  it('停住再松手速度为 0', () => {
+    expect(swipeVelocity([{ x: 100, t: 0 }, { x: 20, t: 20 }], 500)).toBe(0);
+  });
+
+  it('单点采样没有速度', () => {
+    expect(swipeVelocity([{ x: 100, t: 490 }], 500)).toBe(0);
   });
 });
 

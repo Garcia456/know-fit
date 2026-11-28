@@ -261,7 +261,7 @@ function PlanCardView({ card }: { card: PlanCard }) {
       </p>
       <hr className="hr" />
 
-      <div className="plan-wrap">
+      <div className="plan-wrap" data-swipe-ignore>
         <table className="plan-table">
           <thead>
             <tr>
