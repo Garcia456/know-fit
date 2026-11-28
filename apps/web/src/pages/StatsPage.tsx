@@ -9,7 +9,7 @@ import { ChevronRightIcon } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
 import { Segmented } from '../components/Segmented';
 import { WeightChart } from '../components/WeightChart';
-import { startOfMonth, startOfWeekKey, toDateKey } from '../lib/calendar';
+import { startOfMonth, startOfWeekKey, parseDateKey, toDateKey } from '../lib/calendar';
 import { formatMonthDay, formatNumber, formatSignedKg } from '../lib/format';
 
 type RangeKey = 'day' | 'week' | 'month' | 'custom';
@@ -22,6 +22,8 @@ const RANGES: { key: RangeKey; label: string }[] = [
 ];
 
 const MAX_SPAN_DAYS = 366;
+/** 与 DateField 的默认最早年份保持一致，自动调整时不把日期推到滚轮范围外 */
+const MIN_DATE_KEY = '2000-01-01';
 
 function addDays(d: Date, days: number): Date {
   const c = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -36,12 +38,24 @@ function spanDays(from: string, to: string): number {
 }
 
 function isDateKey(value: string | null): value is string {
-  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return !!value && parseDateKey(value) !== null;
 }
 
 /** 从某个日期键加减几天，仍返回日期键 */
 function addDaysKey(key: string, days: number): string {
   return toDateKey(addDays(new Date(`${key}T00:00:00`), days));
+}
+
+/** 开始日越过 366 天窗口时，把结束日收回到窗口内，且不越过今天 */
+function clampEnd(start: string, today: string): string {
+  const capped = addDaysKey(start, MAX_SPAN_DAYS);
+  return capped > today ? today : capped;
+}
+
+/** 结束日越过 366 天窗口时，把开始日收回到窗口内，且不越过滚轮最早一年 */
+function clampStart(end: string): string {
+  const candidate = addDaysKey(end, -MAX_SPAN_DAYS);
+  return candidate < MIN_DATE_KEY ? MIN_DATE_KEY : candidate;
 }
 
 /** URL 里的区间能对上预设时，芯片仍显示「今天 / 本周 / 本月」，否则是自定义 */
@@ -63,7 +77,7 @@ export function StatsPage() {
     const qFrom = searchParams.get('from');
     const qTo = searchParams.get('to');
     if (!isDateKey(qFrom) || !isDateKey(qTo)) return null;
-    if (qFrom > qTo || spanDays(qFrom, qTo) > MAX_SPAN_DAYS) return null;
+    if (qFrom > qTo || qTo > todayKey || spanDays(qFrom, qTo) > MAX_SPAN_DAYS) return null;
     return { from: qFrom, to: qTo, key: rangeKeyFor(qFrom, qTo, today, todayKey) };
   }, [searchParams, today, todayKey]);
 
@@ -86,10 +100,12 @@ export function StatsPage() {
 
   const rangeProblem = useMemo(() => {
     if (!range.from || !range.to) return '请选择完整的起止日期';
+    if (!parseDateKey(range.from) || !parseDateKey(range.to)) return '日期无效';
+    if (range.to > todayKey) return '结束日期不能晚于今天';
     if (range.from > range.to) return '开始日期不能晚于结束日期';
     if (spanDays(range.from, range.to) > MAX_SPAN_DAYS) return '范围最长 366 天';
     return null;
-  }, [range]);
+  }, [range, todayKey]);
 
   // 区间写回 URL，供二级页与刷新复用；replace 不堆历史
   useEffect(() => {
@@ -179,7 +195,7 @@ export function StatsPage() {
                 // 起止由系统跟着调：开始晚于结束就把结束一起推到同一天
                 if (value > customTo) setCustomTo(value);
                 else if (spanDays(value, customTo) > MAX_SPAN_DAYS) {
-                  setCustomTo(addDaysKey(value, MAX_SPAN_DAYS));
+                  setCustomTo(clampEnd(value, todayKey));
                 }
               }}
             />
@@ -191,7 +207,7 @@ export function StatsPage() {
                 setCustomTo(value);
                 if (value < customFrom) setCustomFrom(value);
                 else if (spanDays(customFrom, value) > MAX_SPAN_DAYS) {
-                  setCustomFrom(addDaysKey(value, -MAX_SPAN_DAYS));
+                  setCustomFrom(clampStart(value));
                 }
               }}
             />

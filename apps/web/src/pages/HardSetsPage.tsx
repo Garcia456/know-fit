@@ -13,10 +13,12 @@ import {
 import { LoadError } from '../components/LoadError';
 import { Reveal } from '../components/Reveal';
 import { Segmented } from '../components/Segmented';
-import { startOfWeekKey, toDateKey } from '../lib/calendar';
+import { startOfWeekKey, parseDateKey, toDateKey } from '../lib/calendar';
 import { formatDeltaPct, formatMonthDay, formatNumber } from '../lib/format';
 
 const MAX_SPAN_DAYS = 366;
+/** 与 DateField 的默认最早年份保持一致，自动调整时不把日期推到滚轮范围外 */
+const MIN_DATE_KEY = '2000-01-01';
 
 type RangeKey = 'week' | '4w' | '12w' | 'custom';
 
@@ -40,12 +42,24 @@ function spanDays(from: string, to: string): number {
 }
 
 function isDateKey(value: string | null): value is string {
-  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return !!value && parseDateKey(value) !== null;
 }
 
 /** 从某个日期键加减几天，仍返回日期键 */
 function addDaysKey(key: string, days: number): string {
   return toDateKey(addDays(new Date(`${key}T00:00:00`), days));
+}
+
+/** 开始日越过 366 天窗口时，把结束日收回到窗口内，且不越过今天 */
+function clampEnd(start: string, today: string): string {
+  const capped = addDaysKey(start, MAX_SPAN_DAYS);
+  return capped > today ? today : capped;
+}
+
+/** 结束日越过 366 天窗口时，把开始日收回到窗口内，且不越过滚轮最早一年 */
+function clampStart(end: string): string {
+  const candidate = addDaysKey(end, -MAX_SPAN_DAYS);
+  return candidate < MIN_DATE_KEY ? MIN_DATE_KEY : candidate;
 }
 
 function presetRange(key: Exclude<RangeKey, 'custom'>, today: Date, todayKey: string) {
@@ -81,7 +95,7 @@ export function HardSetsPage() {
     if (!isDateKey(from) || !isDateKey(to)) {
       return { from: startOfWeekKey(today), to: todayKey, key: 'week' as RangeKey };
     }
-    if (from > to || spanDays(from, to) > MAX_SPAN_DAYS) {
+    if (from > to || to > todayKey || spanDays(from, to) > MAX_SPAN_DAYS) {
       return { from: startOfWeekKey(today), to: todayKey, key: 'week' as RangeKey };
     }
     return { from, to, key: rangeKeyFor(from, to, today, todayKey) };
@@ -98,10 +112,12 @@ export function HardSetsPage() {
 
   const rangeProblem = useMemo(() => {
     if (!range.from || !range.to) return '请选择完整的起止日期';
+    if (!parseDateKey(range.from) || !parseDateKey(range.to)) return '日期无效';
+    if (range.to > todayKey) return '结束日期不能晚于今天';
     if (range.from > range.to) return '开始日期不能晚于结束日期';
     if (spanDays(range.from, range.to) > MAX_SPAN_DAYS) return '范围最长 366 天';
     return null;
-  }, [range]);
+  }, [range, todayKey]);
 
   // 区间写回 URL，供返回统计页与刷新复用；replace 不堆历史
   useEffect(() => {
@@ -209,7 +225,7 @@ export function HardSetsPage() {
                   // 起止由系统跟着调，不把矛盾留给用户
                   if (value > customTo) setCustomTo(value);
                   else if (spanDays(value, customTo) > MAX_SPAN_DAYS) {
-                    setCustomTo(addDaysKey(value, MAX_SPAN_DAYS));
+                    setCustomTo(clampEnd(value, todayKey));
                   }
                 }}
               />
@@ -221,7 +237,7 @@ export function HardSetsPage() {
                   setCustomTo(value);
                   if (value < customFrom) setCustomFrom(value);
                   else if (spanDays(customFrom, value) > MAX_SPAN_DAYS) {
-                    setCustomFrom(addDaysKey(value, -MAX_SPAN_DAYS));
+                    setCustomFrom(clampStart(value));
                   }
                 }}
               />
@@ -314,6 +330,8 @@ function Overview({ stats }: { stats: StatsRange }) {
 
 function Distribution({ stats }: { stats: StatsRange }) {
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
+  /** 全部展开 / 全部收起是一次批量布局，不走逐块高度动画 */
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   if (stats.days.length === 0) {
     return (
@@ -335,6 +353,7 @@ function Distribution({ stats }: { stats: StatsRange }) {
   const allOpen = rows.length > 0 && rows.every((group) => openIds.has(group.id));
 
   function toggle(id: string) {
+    setBulkOpen(false);
     setOpenIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -344,7 +363,9 @@ function Distribution({ stats }: { stats: StatsRange }) {
   }
 
   function toggleAll() {
-    setOpenIds(allOpen ? new Set() : new Set(rows.map((group) => group.id)));
+    const next = !allOpen;
+    setBulkOpen(next);
+    setOpenIds(next ? new Set(rows.map((group) => group.id)) : new Set());
   }
 
   return (
@@ -373,6 +394,7 @@ function Distribution({ stats }: { stats: StatsRange }) {
             group={group}
             scale={scale}
             open={openIds.has(group.id)}
+            instant={bulkOpen}
             onToggle={() => toggle(group.id)}
           />
         ))}
@@ -385,11 +407,13 @@ function GroupRow({
   group,
   scale,
   open,
+  instant,
   onToggle,
 }: {
   group: MuscleGroupHardSet;
   scale: number;
   open: boolean;
+  instant: boolean;
   onToggle: () => void;
 }) {
   const width =
@@ -415,7 +439,7 @@ function GroupRow({
           <ChevronDownIcon size={14} />
         </span>
       </button>
-      <Reveal open={open}>
+      <Reveal open={open} instant={instant}>
         <div className="group-detail" id={detailId}>
           {trained.length === 0 ? (
             <p className="page-hint">这个范围没有练到。</p>
