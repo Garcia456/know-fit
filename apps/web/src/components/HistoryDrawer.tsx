@@ -8,7 +8,9 @@ import {
 } from '../api/client';
 import type { ConversationSummary } from '../api/types';
 import { toDateKey } from '../lib/calendar';
+import { duration, spring } from '../lib/motion';
 import { CheckIcon, CloseIcon, ListChecksIcon, PencilIcon, PinIcon, PlusIcon, TrashIcon } from './Icons';
+import { Modal } from './Modal';
 
 interface Props {
   open: boolean;
@@ -336,7 +338,7 @@ export function HistoryDrawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: reduced ? 0 : 0.18 }}
+            transition={{ duration: reduced ? 0 : duration.base }}
             onClick={onClose}
           />
         ) : null}
@@ -354,7 +356,7 @@ export function HistoryDrawer({
             transition={
               reduced
                 ? { duration: 0 }
-                : { type: 'spring', stiffness: 420, damping: 42, mass: 0.9 }
+                : spring.drawer
             }
           >
             <div className="drawer-hd">
@@ -419,7 +421,9 @@ export function HistoryDrawer({
                                 animate={{ width: 16, opacity: 1 }}
                                 exit={reduced ? { opacity: 0 } : { width: 0, opacity: 0 }}
                                 transition={
-                                  reduced ? { duration: 0 } : { duration: 0.18, ease: 'easeOut' }
+                                  reduced
+                                    ? { duration: 0 }
+                                    : { duration: duration.base, ease: 'easeOut' }
                                 }
                               >
                                 <span className="conv-check">
@@ -468,48 +472,59 @@ export function HistoryDrawer({
               )}
             </div>
 
-           {menu && menuItem ? (
-              <div
-                className="conv-menu"
-                role="menu"
-                aria-label="会话操作"
-                ref={menuRef}
-                style={{ top: menu.top, left: menu.left }}
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={busy}
-                  onClick={() => void togglePin(menuItem.id, menu.pinned)}
-                >
-                  <PinIcon off={menu.pinned} />
-                  {menu.pinned ? '取消置顶' : '置顶'}
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={busy}
-                  onClick={() => startRename(menuItem)}
-                >
-                  <PencilIcon />
-                  重命名
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="is-danger"
-                  disabled={busy}
-                  onClick={() => {
-                    setMenu(null);
-                    setConfirmId(menuItem.id);
-                    setActionError(null);
+            <AnimatePresence>
+              {menu && menuItem ? (
+                <m.div
+                  key={menu.id}
+                  className="conv-menu"
+                  role="menu"
+                  aria-label="会话操作"
+                  ref={menuRef}
+                  style={{
+                    top: menu.top,
+                    left: menu.left,
+                    transformOrigin: menu.top < 48 ? 'top right' : 'bottom right',
                   }}
+                  initial={reduced ? false : { opacity: 0, scale: 0.96, y: menu.top < 48 ? -4 : 4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: 2 }}
+                  transition={reduced ? { duration: 0 } : spring.panel}
                 >
-                  <TrashIcon />
-                  删除
-                </button>
-              </div>
-            ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={busy}
+                    onClick={() => void togglePin(menuItem.id, menu.pinned)}
+                  >
+                    <PinIcon off={menu.pinned} />
+                    {menu.pinned ? '取消置顶' : '置顶'}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={busy}
+                    onClick={() => startRename(menuItem)}
+                  >
+                    <PencilIcon />
+                    重命名
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="is-danger"
+                    disabled={busy}
+                    onClick={() => {
+                      setMenu(null);
+                      setConfirmId(menuItem.id);
+                      setActionError(null);
+                    }}
+                  >
+                    <TrashIcon />
+                    删除
+                  </button>
+                </m.div>
+              ) : null}
+            </AnimatePresence>
 
             {selecting ? (
               <div className="drawer-ft drawer-ft--select">
@@ -546,62 +561,26 @@ export function HistoryDrawer({
         ) : null}
       </AnimatePresence>
 
-      {open && editingItem ? (
-        <div
-          className="modal-layer"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setEditingId(null);
-          }}
-        >
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="rename-title">
-            <h2 id="rename-title">重命名会话</h2>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void saveRename(editingItem.id);
-              }}
-            >
-              <input
-                className="modal-input"
-                aria-label="会话标题"
-                value={editTitle}
-                maxLength={40}
-                autoFocus
-                onChange={(e) => setEditTitle(e.target.value)}
-              />
-              {actionError ? (
-                <p className="error-text" role="alert">
-                  {actionError}
-                </p>
-              ) : null}
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  disabled={busy}
-                  onClick={() => setEditingId(null)}
-                >
-                  取消
-                </button>
-                <button type="submit" className="btn" disabled={busy}>
-                  保存
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      {open && bulkConfirm ? (
-        <div
-          className="modal-layer"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !busy) setBulkConfirm(false);
-          }}
-        >
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-title">
-            <h2 id="bulk-delete-title">删除 {selected.size} 个会话</h2>
-            <p className="modal-text">删除后不可恢复；训练记录不受影响。</p>
+      <Modal
+        open={open && Boolean(editingItem)}
+        title="重命名会话"
+        onClose={() => setEditingId(null)}
+      >
+        {editingItem ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void saveRename(editingItem.id);
+            }}
+          >
+            <input
+              className="modal-input"
+              aria-label="会话标题"
+              value={editTitle}
+              maxLength={40}
+              autoFocus
+              onChange={(e) => setEditTitle(e.target.value)}
+            />
             {actionError ? (
               <p className="error-text" role="alert">
                 {actionError}
@@ -612,66 +591,91 @@ export function HistoryDrawer({
                 type="button"
                 className="btn btn--ghost"
                 disabled={busy}
-                onClick={() => setBulkConfirm(false)}
+                onClick={() => setEditingId(null)}
               >
                 取消
               </button>
-              <button
-                type="button"
-                className="btn btn--danger"
-                disabled={busy || selectedItems.length === 0}
-                onClick={() => void bulkRemove()}
-              >
-                {busy ? '删除中…' : '确认删除'}
+              <button type="submit" className="btn" disabled={busy}>
+                保存
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+          </form>
+        ) : null}
+      </Modal>
 
-      {open && confirmId ? (
-        <div
-          className="modal-layer"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setConfirmId(null);
-          }}
-        >
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-            <h2 id="delete-title">删除会话</h2>
-            <p className="modal-text">删除后不可恢复；训练记录不受影响。</p>
-            {actionError ? (
-              <p className="error-text" role="alert">
-                {actionError}
-              </p>
-            ) : null}
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn--ghost"
-                disabled={busy}
-                onClick={() => setConfirmId(null)}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="btn btn--danger"
-                disabled={busy}
-                onClick={() => void remove(confirmId)}
-              >
-                确认删除
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={open && bulkConfirm}
+        title={`删除 ${selected.size} 个会话`}
+        onClose={() => {
+          if (!busy) setBulkConfirm(false);
+        }}
+      >
+        <p className="modal-text">删除后不可恢复；训练记录不受影响。</p>
+        {actionError ? (
+          <p className="error-text" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={busy}
+            onClick={() => setBulkConfirm(false)}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger"
+            disabled={busy || selectedItems.length === 0}
+            onClick={() => void bulkRemove()}
+          >
+            {busy ? '删除中…' : '确认删除'}
+          </button>
         </div>
-      ) : null}
+      </Modal>
+
+      <Modal
+        open={open && Boolean(confirmId)}
+        title="删除会话"
+        onClose={() => {
+          if (!busy) setConfirmId(null);
+        }}
+      >
+        <p className="modal-text">删除后不可恢复；训练记录不受影响。</p>
+        {actionError ? (
+          <p className="error-text" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={busy}
+            onClick={() => setConfirmId(null)}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger"
+            disabled={busy}
+            onClick={() => confirmId && void remove(confirmId)}
+          >
+            {busy ? '删除中…' : '确认删除'}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }
 
 function previewText(item: ConversationSummary): string {
   const preview = item.last_message?.replace(/\s+/g, ' ').trim() ?? '';
-  return [...preview].slice(0, 30).join('');
+  const chars = [...preview];
+  return chars.length > 30 ? `${chars.slice(0, 30).join('')}…` : preview;
 }
 
 /** 置顶在前，其余按最后更新时间分组：今天 / 昨天 / 前天 / 7天内 / 具体月份 */
