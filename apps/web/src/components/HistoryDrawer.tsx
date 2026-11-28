@@ -60,6 +60,8 @@ export function HistoryDrawer({
   const reduced = useReducedMotion();
   const drawerRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  /** 长按菜单的触发行：弹窗关闭后把焦点还给它，而不是已经卸载的菜单项 */
+  const menuTriggerRef = useRef<HTMLElement | null>(null);
   const pressRef = useRef<{ timer: number; x: number; y: number } | null>(null);
   const skipClickRef = useRef(false);
 
@@ -162,6 +164,7 @@ export function HistoryDrawer({
   }
 
   function openMenu(item: ConversationSummary, el: HTMLElement) {
+    menuTriggerRef.current = el;
     const drawer = drawerRef.current;
     if (!drawer) return;
     const drawerRect = drawer.getBoundingClientRect();
@@ -417,9 +420,10 @@ export function HistoryDrawer({
                                 key="check"
                                 className="conv-check-slot"
                                 aria-hidden="true"
-                                initial={reduced ? false : { width: 0, opacity: 0 }}
-                                animate={{ width: 16, opacity: 1 }}
-                                exit={reduced ? { opacity: 0 } : { width: 0, opacity: 0 }}
+                                style={{ width: 16 }}
+                                initial={reduced ? false : { opacity: 0, scale: 0.7 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.7 }}
                                 transition={
                                   reduced
                                     ? { duration: 0 }
@@ -565,6 +569,8 @@ export function HistoryDrawer({
         open={open && Boolean(editingItem)}
         title="重命名会话"
         onClose={() => setEditingId(null)}
+        returnFocus={menuTriggerRef.current}
+        busy={busy}
       >
         {editingItem ? (
           <form
@@ -609,6 +615,7 @@ export function HistoryDrawer({
         onClose={() => {
           if (!busy) setBulkConfirm(false);
         }}
+        busy={busy}
       >
         <p className="modal-text">删除后不可恢复；训练记录不受影响。</p>
         {actionError ? (
@@ -642,6 +649,8 @@ export function HistoryDrawer({
         onClose={() => {
           if (!busy) setConfirmId(null);
         }}
+        returnFocus={menuTriggerRef.current}
+        busy={busy}
       >
         <p className="modal-text">删除后不可恢复；训练记录不受影响。</p>
         {actionError ? (
