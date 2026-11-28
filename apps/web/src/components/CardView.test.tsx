@@ -225,6 +225,8 @@ describe('训练 / 饮食 / 闲聊 / 拒答卡片', () => {
     expect(screen.getByText('第2天')).toBeDefined();
     expect(screen.getByText('高位下拉')).toBeDefined();
     expect(screen.getAllByText('4 组 × 8-12')).toHaveLength(2);
+    // 表格可横向滚动：PageSwipe 不能把这个手势抢去换页
+    expect(document.querySelector('.plan-wrap')?.hasAttribute('data-swipe-ignore')).toBe(true);
     expect(screen.queryByText('休息')).toBeNull();
     expect(screen.getByText('测试博主')).toBeDefined();
     expect(screen.getByText('可用器械按「健身房」默认。')).toBeDefined();
