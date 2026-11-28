@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { getStats } from '../api/client';
 import type { StatsRange } from '../api/types';
+import { AnimatedNumber } from '../components/AnimatedNumber';
 import { BodyHeatMap } from '../components/BodyHeatMap';
 import { DateField } from '../components/DateField';
 import { ChevronRightIcon } from '../components/Icons';
 import { LoadError } from '../components/LoadError';
+import { Segmented } from '../components/Segmented';
 import { WeightChart } from '../components/WeightChart';
 import { startOfMonth, startOfWeekKey, toDateKey } from '../lib/calendar';
 import { formatMonthDay, formatNumber, formatSignedKg } from '../lib/format';
@@ -35,6 +37,11 @@ function spanDays(from: string, to: string): number {
 
 function isDateKey(value: string | null): value is string {
   return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/** 从某个日期键加减几天，仍返回日期键 */
+function addDaysKey(key: string, days: number): string {
+  return toDateKey(addDays(new Date(`${key}T00:00:00`), days));
 }
 
 /** URL 里的区间能对上预设时，芯片仍显示「今天 / 本周 / 本月」，否则是自定义 */
@@ -95,8 +102,13 @@ export function StatsPage() {
   }, [range.from, range.to, rangeProblem, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (rangeProblem) return;
+    if (rangeProblem) {
+      setStats(null);
+      setLoading(false);
+      return;
+    }
     let alive = true;
+    // 换区间时保留上一组数字，只做减淡；直接清空会让整页塌掉再长回来。
     setLoading(true);
     setError(null);
     getStats(range.from, range.to)
@@ -119,7 +131,10 @@ export function StatsPage() {
   }, [range.from, range.to, rangeProblem, reloadTick]);
 
   return (
-    <div className="body page-body stats-page">
+    <div
+      className={`body page-body stats-page${loading && stats ? ' is-updating' : ''}`}
+      aria-busy={loading || undefined}
+    >
       <header className="page-head">
         <div>
           <p className="page-head__eyebrow">训练数据</p>
@@ -130,19 +145,12 @@ export function StatsPage() {
 
       <section className="sec stats-range" aria-label="统计范围">
         <div className="range-bar">
-          <div className="segmented" role="group" aria-label="统计范围">
-            {RANGES.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                className={`chip${rangeKey === key ? ' is-on' : ''}`}
-                aria-pressed={rangeKey === key}
-                onClick={() => setRangeKey(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            options={RANGES}
+            value={rangeKey}
+            onChange={(key) => setRangeKey(key as RangeKey)}
+            ariaLabel="统计范围"
+          />
           <p className="range-summary">
             <b>
               {formatMonthDay(range.from)}
@@ -151,17 +159,42 @@ export function StatsPage() {
             <span>
               {rangeProblem
                 ? '范围需要调整'
-                : stats
-                  ? `${stats.training_days} 天有训练 · ${stats.hard_sets} 组有效`
-                  : '正在读取区间…'}
+                : loading
+                  ? '正在更新…'
+                  : stats
+                    ? `${stats.training_days} 天有训练 · ${stats.hard_sets} 组有效`
+                    : '正在读取区间…'}
             </span>
           </p>
         </div>
 
         {rangeKey === 'custom' ? (
           <div className="range-inputs">
-            <DateField label="开始" value={customFrom} max={todayKey} onChange={setCustomFrom} />
-            <DateField label="结束" value={customTo} max={todayKey} onChange={setCustomTo} />
+            <DateField
+              label="开始"
+              value={customFrom}
+              max={todayKey}
+              onChange={(value) => {
+                setCustomFrom(value);
+                // 起止由系统跟着调：开始晚于结束就把结束一起推到同一天
+                if (value > customTo) setCustomTo(value);
+                else if (spanDays(value, customTo) > MAX_SPAN_DAYS) {
+                  setCustomTo(addDaysKey(value, MAX_SPAN_DAYS));
+                }
+              }}
+            />
+            <DateField
+              label="结束"
+              value={customTo}
+              max={todayKey}
+              onChange={(value) => {
+                setCustomTo(value);
+                if (value < customFrom) setCustomFrom(value);
+                else if (spanDays(customFrom, value) > MAX_SPAN_DAYS) {
+                  setCustomFrom(addDaysKey(value, -MAX_SPAN_DAYS));
+                }
+              }}
+            />
           </div>
         ) : null}
 
@@ -190,7 +223,7 @@ export function StatsPage() {
         ) : null
       ) : (
         <>
-          <HardSetsCard stats={stats} />
+          <HardSetsCard stats={stats} range={range} />
           <WeightSection stats={stats} />
           {stats.total_volume_kg > 0 ? (
             <section className="sec stats-heat" aria-label="肌肉热力图">
@@ -225,34 +258,49 @@ function FailedSection({ label }: { label: string }) {
 }
 
 /** 主卡片只给一个数：总有效组数。肌群分布与明细进二级页。 */
-function HardSetsCard({ stats }: { stats: StatsRange }) {
-  const href = `/stats/hard-sets?from=${stats.from}&to=${stats.to}`;
+function HardSetsCard({ stats, range }: { stats: StatsRange; range: { from: string; to: string } }) {
+  const href = `/stats/hard-sets?from=${range.from}&to=${range.to}`;
+  const empty = stats.days.length === 0;
+
+  const body = (
+    <>
+      <div className="metric">
+        <b>
+          <AnimatedNumber value={stats.hard_sets} />
+        </b>
+        <span>有效组 · 本范围</span>
+        {empty ? null : (
+          <span className="hard-sets-card__more">
+            查看肌群分布
+            <ChevronRightIcon />
+          </span>
+        )}
+      </div>
+      <p className="page-hint">
+        {empty
+          ? '这个范围还没有训练记录。'
+          : `训练 ${stats.training_days} 天 · 热身 ${stats.warmup_sets} 组不计`}
+      </p>
+    </>
+  );
 
   return (
     <section className="sec" aria-label="训练容量">
       <div className="sec-hd">
         <h2>训练容量</h2>
-        <span className="hint">正式组 · 热身不计</span>
+        <span className="hint">有效组 · 热身不计</span>
       </div>
-      <Link
-        className="chart-card hard-sets-card"
-        to={href}
-        aria-label={`总有效组数 ${stats.hard_sets} 组，查看肌群分布`}
-      >
-        <div className="metric">
-          <b>{stats.hard_sets}</b>
-          <span>有效组 · 本范围</span>
-          <span className="hard-sets-card__more">
-            查看肌群分布
-            <ChevronRightIcon />
-          </span>
-        </div>
-        <p className="page-hint">
-          {stats.days.length === 0
-            ? '这个范围还没有训练记录。'
-            : `训练 ${stats.training_days} 天 · 热身 ${stats.warmup_sets} 组不计`}
-        </p>
-      </Link>
+      {empty ? (
+        <div className="chart-card">{body}</div>
+      ) : (
+        <Link
+          className="chart-card hard-sets-card"
+          to={href}
+          aria-label={`总有效组数 ${stats.hard_sets} 组，查看肌群分布`}
+        >
+          {body}
+        </Link>
+      )}
     </section>
   );
 }
@@ -280,7 +328,9 @@ function WeightSection({ stats }: { stats: StatsRange }) {
       <div className="chart-card">
         {latest ? (
           <div className="metric">
-            <b>{formatNumber(latest.weight_kg)}</b>
+            <b>
+              <AnimatedNumber value={latest.weight_kg} format={formatNumber} />
+            </b>
             <span>kg</span>
             {deltaText ? (
               <span className={`delta ${deltaClass}`} style={{ marginLeft: 'auto' }}>

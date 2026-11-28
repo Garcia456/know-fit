@@ -109,7 +109,9 @@ describe('统计页', () => {
     await screen.findByText('训练容量');
 
     const link = screen.getByRole('link', { name: /查看肌群分布/ });
-    expect(link.getAttribute('href')).toBe(`/stats/hard-sets?from=${prevKey}&to=${todayKey}`);
+    expect(link.getAttribute('href')).toBe(
+      `/stats/hard-sets?from=${startOfWeekKey(today)}&to=${todayKey}`,
+    );
   });
 
   it('从 URL 恢复区间：刷新 / 二级页返回不丢范围', async () => {
@@ -140,7 +142,7 @@ describe('统计页', () => {
     );
   });
 
-  it('自定义起止日期；开始晚于结束时报错且不请求', async () => {
+  it('自定义起止日期；开始晚于结束时系统把结束日一起推到同一天', async () => {
     const urls = stubStats();
     renderPage();
     await screen.findByText('训练容量');
@@ -157,10 +159,12 @@ describe('统计页', () => {
     await pickDate('结束', mid);
     await waitFor(() => expect(urls.at(-1)).toBe(`/api/stats?from=${from}&to=${mid}`));
 
-    const before = urls.length;
+    // 开始日选到结束日之后：系统跟着把结束日推同一天，不把矛盾留给用户
     await pickDate('开始', todayKey);
-    expect(await screen.findByText('开始日期不能晚于结束日期')).toBeDefined();
-    expect(urls.length).toBe(before);
+    await waitFor(() =>
+      expect(urls.at(-1)).toBe(`/api/stats?from=${todayKey}&to=${todayKey}`),
+    );
+    expect(screen.queryByText('开始日期不能晚于结束日期')).toBeNull();
   });
 
   it('空范围不画 0 值图，也不出热力图', async () => {
