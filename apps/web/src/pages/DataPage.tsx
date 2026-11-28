@@ -443,7 +443,7 @@ export function DataPage() {
             />
           ))
         ) : (
-          <div className="list-card list-swap" key={order}>
+          <div className="list-card list-swap">
             {visible.map((item) => (
               <button
                 key={item.session_id}

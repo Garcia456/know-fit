@@ -168,6 +168,7 @@ export function ChatPage({
   useEffect(() => {
     if (lastReset.current === resetToken) return;
     lastReset.current = resetToken;
+    stickToBottom.current = true;
     setEntries([]);
     setPending(null);
     draftRef.current = '';
@@ -194,6 +195,8 @@ export function ChatPage({
       .then((detail) => {
         if (!alive) return;
         loadedConversation.current = id;
+        // 换会话要回到新会话的底部，不能沿用上一个会话「用户正在往上翻」的状态
+        stickToBottom.current = true;
         setEntries(entriesFromMessages(detail.messages));
         setSendError(null);
         setFailedMessage(null);
@@ -215,15 +218,28 @@ export function ChatPage({
   }, [activeConversationId, onConversationChange]);
 
   useEffect(() => {
+    if (!active) return;
     const el = bodyRef.current;
-    if (!el || !stickToBottom.current) return;
-    if (typeof el.scrollTo === 'function') {
-      el.scrollTo({ top: el.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
-    } else {
-      // 测试环境（jsdom）没有 scrollTo
-      el.scrollTop = el.scrollHeight;
+    if (!el) return;
+
+    function scrollToBottom() {
+      if (!el || !stickToBottom.current) return;
+      if (typeof el.scrollTo === 'function') {
+        el.scrollTo({ top: el.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
+      } else {
+        // 测试环境（jsdom）没有 scrollTo
+        el.scrollTop = el.scrollHeight;
+      }
     }
-  }, [entries, pending, reduced]);
+
+    // 立刻滚一次；Reveal 的高度动画结束后再补一次，错误条 / 补记提示才不会落在视口外
+    const frame = requestAnimationFrame(scrollToBottom);
+    const timer = window.setTimeout(scrollToBottom, 320);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [entries, pending, sendError, active, reduced]);
 
   function handleScroll(event: React.UIEvent<HTMLDivElement>) {
     const el = event.currentTarget;

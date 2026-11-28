@@ -237,6 +237,29 @@ describe('统计页', () => {
     expect(screen.getByRole('region', { name: '体重趋势' })).toBeDefined();
     expect(screen.getByRole('button', { name: '重试' })).toBeDefined();
   });
+
+  it('URL 里的未来日期回退到默认本周，不发无效请求', async () => {
+    const urls = stubStats();
+    renderPage('/stats?from=2030-01-01&to=2030-01-10');
+
+    await screen.findByText('训练容量');
+    await waitFor(() =>
+      expect(urls[0]).toBe(`/api/stats?from=${startOfWeekKey(today)}&to=${todayKey}`),
+    );
+    expect(screen.getByTestId('location').textContent).toBe(
+      `/stats?from=${startOfWeekKey(today)}&to=${todayKey}`,
+    );
+  });
+
+  it('URL 里不存在的日期回退到默认本周', async () => {
+    const urls = stubStats();
+    renderPage('/stats?from=2026-02-31&to=2026-03-02');
+
+    await screen.findByText('训练容量');
+    await waitFor(() =>
+      expect(urls[0]).toBe(`/api/stats?from=${startOfWeekKey(today)}&to=${todayKey}`),
+    );
+  });
 });
 
 function stubStatsAndRender() {

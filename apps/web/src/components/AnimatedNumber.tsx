@@ -45,7 +45,7 @@ export function AnimatedNumber({ value, format = defaultFormat, className }: Pro
 
   return (
     <span className={className} aria-live="off">
-      {format(display)}
+      {format(reduced ? value : display)}
     </span>
   );
 }
