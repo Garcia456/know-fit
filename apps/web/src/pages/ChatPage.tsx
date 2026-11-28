@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useReducedMotion } from 'motion/react';
 import { useSearchParams, Link } from 'react-router';
 import {
   ApiError,
@@ -23,6 +24,7 @@ import { CardView } from '../components/CardView';
 import { Composer } from '../components/Composer';
 import { CompletionPanel } from '../components/CompletionPanel';
 import { LowDataCard } from '../components/LowDataCard';
+import { Reveal } from '../components/Reveal';
 import { ThinkingIndicator } from '../components/ThinkingIndicator';
 import { VerifyEmailBanner } from '../components/VerifyEmailBanner';
 import { ChevronRightIcon } from '../components/Icons';
@@ -32,7 +34,7 @@ const DRAFT_KEY = 'know-fit:chat-draft';
 const MIN_THINKING_MS = 1000;
 
 /** 只放不需要上下文、不读任何数据的知识问题 —— 点了直接发 */
-const QUICK_ASKS = ['练胸有什么推荐动作', '深蹲怎么练才标准', '增肌一周练几次', '训练后要不要拉伸'];
+const QUICK_ASKS = ['练胸有什么推荐动作', '深蹲怎么练才标准', '增肌一周练几次', '卧推加不上去怎么办'];
 
 interface Entry {
   id: string;
@@ -134,7 +136,10 @@ export function ChatPage({
     split_label: string | null;
   } | null>(null);
   const [params, setParams] = useSearchParams();
+  const reduced = useReducedMotion();
   const nudgeRequested = useRef(false);
+  /** 用户没主动往上翻时，新消息才把视图带到最下面 */
+  const stickToBottom = useRef(true);
   const lastReset = useRef(resetToken);
   /** 已经画出来的会话 —— 发送后自己写进来的响应不必再拉一次 */
   const loadedConversation = useRef<string | null>(null);
@@ -211,8 +216,19 @@ export function ChatPage({
 
   useEffect(() => {
     const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [entries, pending]);
+    if (!el || !stickToBottom.current) return;
+    if (typeof el.scrollTo === 'function') {
+      el.scrollTo({ top: el.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
+    } else {
+      // 测试环境（jsdom）没有 scrollTo
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [entries, pending, reduced]);
+
+  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
+    const el = event.currentTarget;
+    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+  }
 
   const completeId = params.get('complete');
 
@@ -267,6 +283,7 @@ export function ChatPage({
 
     const entryId = makeId();
     const startedAt = Date.now();
+    stickToBottom.current = true;
     setSending(true);
     setSendError(null);
     setFailedMessage(null);
@@ -363,26 +380,28 @@ export function ChatPage({
 
   return (
     <>
-      <div className="body page-body chat-page" ref={bodyRef}>
+      <div className="body page-body chat-page" ref={bodyRef} onScroll={handleScroll}>
         <VerifyEmailBanner />
-        {nudge && !nudgeDone ? (
-          <div className="strip" role="status">
-            <p>{nudge.message}</p>
-            {nudge.type === '补全' ? (
-              <button type="button" disabled={nudgeBusy} onClick={() => void handleNudge('补全')}>
-                补上
-                <ChevronRightIcon />
+        <Reveal open={Boolean(nudge && !nudgeDone)}>
+          {nudge ? (
+            <div className="strip" role="status">
+              <p>{nudge.message}</p>
+              {nudge.type === '补全' ? (
+                <button type="button" disabled={nudgeBusy} onClick={() => void handleNudge('补全')}>
+                  补上
+                  <ChevronRightIcon />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={nudgeBusy}
+                onClick={() => void handleNudge('忽略')}
+              >
+                {nudge.type === '补全' ? '忽略' : '知道了'}
               </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={nudgeBusy}
-              onClick={() => void handleNudge('忽略')}
-            >
-              {nudge.type === '补全' ? '忽略' : '知道了'}
-            </button>
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+        </Reveal>
 
         {entries.length === 0 && !completeId ? (
           <div className="chat-empty">
@@ -394,7 +413,10 @@ export function ChatPage({
                 再练狠一点。
               </h1>
               <p className="agent-text">
-                今天练了什么？直接说就行 —— 比如「<strong>卧推 70kg×8 四组</strong>」。
+                今天练了什么？直接说就行
+                <span className="chat-hero__example">
+                  比如「<strong>杠铃卧推 70kg×8 四组</strong>」。
+                </span>
                 <br />
                 动作怎么练、要不要加重量，也能直接问我。
               </p>
@@ -440,12 +462,14 @@ export function ChatPage({
                 />
               ) : null}
 
-              {backfill && showBackfill ? (
-                <BackfillPromptView
-                  prompt={backfill}
-                  busy={backfillBusy === backfill.nudge_id}
-                  onAction={(action) => void handleBackfill(backfill, action)}
-                />
+              {backfill ? (
+                <Reveal open={Boolean(showBackfill)}>
+                  <BackfillPromptView
+                    prompt={backfill}
+                    busy={backfillBusy === backfill.nudge_id}
+                    onAction={(action) => void handleBackfill(backfill, action)}
+                  />
+                </Reveal>
               ) : null}
 
               {entry.lowData ? (
@@ -497,26 +521,28 @@ export function ChatPage({
           <CompletionPanel sessionId={completeId} onDone={() => setParams({})} />
         ) : null}
 
-        {sendError ? (
-          <div className="error-bar" role="alert">
-            <span>{sendError}</span>
-            {failedMessage && !quotaBlocked ? (
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => void send(failedMessage)}
-                disabled={sending}
-              >
-                重试
-              </button>
-            ) : null}
-            {quotaBlocked ? (
-              <Link to="/settings" className="btn btn--ghost btn--sm">
-                去设置
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
+        <Reveal open={Boolean(sendError)}>
+          {sendError ? (
+            <div className="error-bar" role="alert">
+              <span>{sendError}</span>
+              {failedMessage && !quotaBlocked ? (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => void send(failedMessage)}
+                  disabled={sending}
+                >
+                  重试
+                </button>
+              ) : null}
+              {quotaBlocked ? (
+                <Link to="/settings" className="btn btn--ghost btn--sm">
+                  去设置
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+        </Reveal>
       </div>
 
       {active ? (

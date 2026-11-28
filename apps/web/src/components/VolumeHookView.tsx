@@ -13,7 +13,7 @@ export function VolumeHookView({ hook, onAssess, assessing }: Props) {
     <section className="hook" aria-label="数据钩子">
       <div className="hook-hd">
         <div className="grow">
-          <p className="eyebrow">数据钩子</p>
+          <p className="eyebrow">本次判定</p>
           <p className="hook-claim">{verdictSentence(hook)}</p>
           <p className="hook-sub">判定由确定性代码算出，不经模型改写</p>
         </div>

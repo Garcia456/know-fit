@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from 'react';
 import { SendIcon } from './Icons';
+import { Reveal } from './Reveal';
 
 /** 输入框最高高度；超过后框内滚动 */
 const MAX_HEIGHT = 132;
@@ -75,7 +76,7 @@ export function Composer({
 
   return (
     <form className="composer" onSubmit={handleSubmit}>
-      {hint}
+      <Reveal open={Boolean(hint)}>{hint}</Reveal>
       <div className={multiline ? 'pill pill--multi' : 'pill'}>
         <textarea
           ref={(el) => {

@@ -226,6 +226,11 @@ select:active,
   margin-top: 2px;
 }
 
+/* 示例整体换行，不在「杠铃卧推 / 70kg×8」中间断开 */
+.chat-hero__example {
+  white-space: nowrap;
+}
+
 .chat-quick__label {
   margin: 0 0 10px 2px;
   color: var(--ink-3);

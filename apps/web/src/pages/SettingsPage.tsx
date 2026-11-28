@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
 import {
   clearTrainingRecords,
@@ -20,8 +21,10 @@ import { useAuth } from '../auth/AuthContext';
 import { AvatarCropDialog } from '../components/AvatarCropDialog';
 import { DateField } from '../components/DateField';
 import { ArrowLeftIcon, InfoIcon, WarnIcon } from '../components/Icons';
+import { Reveal } from '../components/Reveal';
 import { SelectField } from '../components/SelectField';
 import { loadAvatarImage, type AvatarImage } from '../lib/avatar';
+import { duration, spring } from '../lib/motion';
 
 const GENDER_OPTIONS = [
   { value: '男', label: '男' },
@@ -62,6 +65,7 @@ export function SettingsPage() {
 function SettingsForm({ user }: { user: Account }) {
   const { setUser, signOut } = useAuth();
   const navigate = useNavigate();
+  const reduced = useReducedMotion();
 
   const [values, setValues] = useState<AccountInput>({
     nickname: user.nickname,
@@ -570,7 +574,7 @@ function SettingsForm({ user }: { user: Account }) {
             </button>
           </div>
 
-          {confirmClear ? (
+          <Reveal open={confirmClear}>
             <div className="danger-box" role="alertdialog" aria-label="确认清空训练记录">
               <p>
                 会删除全部训练、动作、对话、评估与提示记录；身体档案和体重历史保留。
@@ -593,7 +597,7 @@ function SettingsForm({ user }: { user: Account }) {
                 </button>
               </div>
             </div>
-          ) : null}
+          </Reveal>
 
           {clearError ? (
             <p className="error-text" role="alert">
@@ -634,7 +638,7 @@ function SettingsForm({ user }: { user: Account }) {
             </button>
           </div>
 
-          {confirmDelete ? (
+          <Reveal open={confirmDelete}>
             <div className="danger-box" role="alertdialog" aria-label="确认注销账号">
               <p>
                 <WarnIcon />
@@ -671,38 +675,50 @@ function SettingsForm({ user }: { user: Account }) {
                 </button>
               </div>
             </div>
-          ) : null}
+          </Reveal>
         </section>
       </div>
 
-      {avatarPreview ? (
-        <div
-          className="dialog-mask dialog-mask--avatar"
-          role="presentation"
-          onClick={() => setAvatarPreview(false)}
-        >
-          <div className="avatar-preview-wrap">
-            <div className="avatar-preview" role="img" aria-label="头像大图">
-              {values.avatar ? (
-                <img src={values.avatar} alt="当前头像" />
-              ) : (
-                <span>{initialOf(values.nickname)}</span>
-              )}
-            </div>
-            <button
-              type="button"
-              className="avatar-preview__change"
-              disabled={avatarBusy}
-              onClick={(e) => {
-                e.stopPropagation();
-                fileRef.current?.click();
-              }}
+      <AnimatePresence>
+        {avatarPreview ? (
+          <m.div
+            className="dialog-mask dialog-mask--avatar"
+            role="presentation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0 : duration.base }}
+            onClick={() => setAvatarPreview(false)}
+          >
+            <m.div
+              className="avatar-preview-wrap"
+              initial={reduced ? false : { opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
+              transition={reduced ? { duration: 0 } : spring.panel}
             >
-              {avatarBusy ? '处理中…' : '更换头像'}
-            </button>
-          </div>
-        </div>
-      ) : null}
+              <div className="avatar-preview" role="img" aria-label="头像大图">
+                {values.avatar ? (
+                  <img src={values.avatar} alt="当前头像" />
+                ) : (
+                  <span>{initialOf(values.nickname)}</span>
+                )}
+              </div>
+              <button
+                type="button"
+                className="avatar-preview__change"
+                disabled={avatarBusy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileRef.current?.click();
+                }}
+              >
+                {avatarBusy ? '处理中…' : '更换头像'}
+              </button>
+            </m.div>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       {cropSource ? (
         <AvatarCropDialog source={cropSource} onCancel={closeCrop} onConfirm={applyCrop} />
