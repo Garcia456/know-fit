@@ -28,10 +28,18 @@
 }
 
 :root {
+  color-scheme: light;
   --font:
     "KnowFit Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans GB",
     "Microsoft YaHei", sans-serif;
   --nav-h: 60px;
+  /* 一套动效语言：同类状态变化共用同一条曲线和同一档时长 */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 240ms;
+  --dur-4: 320ms;
   /* 热力图 5 档：0 = 未练，1–4 由浅到深（暖色，一眼看出练没练） */
   --heat-0: #ecece6; /* 未练 = 头部/身体底色，整块一个色 */
   --heat-1: #e2e2da;
@@ -59,7 +67,6 @@ body {
     radial-gradient(60% 45% at 8% -8%, color-mix(in srgb, var(--accent-soft) 58%, transparent), transparent 70%),
     radial-gradient(50% 40% at 100% 0%, color-mix(in srgb, var(--accent-soft) 80%, transparent), transparent 72%),
     var(--canvas);
-  background-attachment: fixed;
 }
 
 button,
@@ -609,7 +616,7 @@ select:active,
   color: var(--faint);
   cursor: pointer;
   opacity: 0.75;
-  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), opacity var(--dur-2) var(--ease-out);
 }
 
 .conv-select-toggle:hover,
@@ -658,7 +665,7 @@ select:active,
   border-radius: var(--r-full);
   background: var(--surface);
   color: var(--surface);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
 }
 
 .conv-row.is-checked .conv-check {
@@ -721,7 +728,7 @@ select:active,
 
 /* 居中弹窗：重命名 / 删除确认 */
 .modal-layer {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 50;
   display: flex;
@@ -821,6 +828,11 @@ select:active,
   background: transparent;
 }
 
+/* 倒序 / 正序切换：整列换一次，淡入交代「顺序变了」，而不是原地跳一下 */
+.list-swap {
+  animation: kf-fade var(--dur-2) var(--ease-out) both;
+}
+
 /* ---------- 训练卡细节 ---------- */
 
 /* 动作名列：至少 104px、不折行，名字再长也能自己撑开；饮食行仍用固定列宽 */
@@ -882,6 +894,11 @@ select:active,
   gap: 6px;
 }
 
+/* 换月时标题跟上新的月份：旧标题直接消失，新标题淡入，不整块跳字 */
+.month-title {
+  animation: kf-fade var(--dur-2) var(--ease-out) both;
+}
+
 .calendar-nav .icon-btn {
   width: 30px;
   height: 30px;
@@ -927,7 +944,7 @@ select:active,
   font-size: 14px;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
 
 .calendar__day:hover {
@@ -935,8 +952,25 @@ select:active,
 }
 
 .calendar__day.is-today {
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 26%, transparent);
   font-weight: 600;
+}
+
+/* 今天用贴着数字的小圆环保留，不跟「选中」抢同一块实心面积 */
+.calendar__day.is-today::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent);
+  pointer-events: none;
+}
+
+.calendar__day.is-today.is-selected::before {
+  display: none;
 }
 
 .calendar__day.is-selected {
@@ -1043,6 +1077,18 @@ select:active,
 
 /* ---------- 统计范围 / 排序 ---------- */
 
+/* 换区间时旧数字先减淡，新数字原地换上来 —— 不把整页拆掉再拼回去 */
+.stats-page .sec,
+.hard-sets-page .sec {
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+.stats-page.is-updating .sec:not(.stats-range),
+.hard-sets-page.is-updating .sec:not(.stats-range) {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .sec-hd__actions {
   display: inline-flex;
   align-items: center;
@@ -1148,7 +1194,7 @@ select:active,
   display: block;
   color: inherit;
   text-decoration: none;
-  transition: transform .18s ease, box-shadow .18s ease;
+  transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
 
 .hard-sets-card:hover {
@@ -1274,6 +1320,7 @@ select:active,
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  transition: width var(--dur-4) var(--ease-out);
 }
 
 .group-row__num {
@@ -1290,7 +1337,7 @@ select:active,
   justify-self: end;
   display: inline-flex;
   color: var(--faint);
-  transition: transform .16s ease, color .16s ease;
+  transition: transform var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 
 .group-row__chevron.is-open {
@@ -1335,6 +1382,7 @@ select:active,
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  transition: width var(--dur-4) var(--ease-out);
 }
 
 .muscle-line ul,
@@ -1383,6 +1431,7 @@ select:active,
   height: 100%;
   border-radius: inherit;
   background: color-mix(in srgb, var(--ink) 28%, transparent);
+  transition: width var(--dur-4) var(--ease-out);
 }
 
 .unclassified-list + .unclassified-list { margin-top: 8px; }
@@ -1738,6 +1787,11 @@ select:active,
   stroke-linecap: round;
 }
 
+/* 区间一变，肌群颜色跟着过渡，不是整块闪一下 */
+.body-region {
+  transition: fill var(--dur-4) var(--ease-out);
+}
+
 /* 股四头三块并成一块：去掉内部分割线 */
 .body-region--merged path {
   stroke: none;
@@ -1913,7 +1967,7 @@ body::-webkit-scrollbar,
   font: inherit;
   font-size: 14px;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
 .field--select {
   flex: 0 1 auto;
@@ -1944,7 +1998,7 @@ body::-webkit-scrollbar,
   display: inline-flex;
   flex: none;
   color: var(--muted);
-  transition: transform 0.15s ease, color 0.15s ease;
+  transition: transform var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 .field--select[aria-expanded="true"] .field__chevron,
 .select-field__trigger[aria-expanded="true"] .select-field__chevron {
@@ -1984,13 +2038,8 @@ body::-webkit-scrollbar,
   box-shadow:
     0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent),
     0 18px 38px -22px color-mix(in srgb, var(--ink) 48%, transparent);
-  transform-origin: top right;
-  animation: select-menu-in 0.14s ease-out both;
 }
-.select-field__menu--above {
-  transform-origin: bottom right;
-  animation-name: select-menu-in-above;
-}
+
 .select-field__option {
   display: flex;
   align-items: center;
@@ -2049,19 +2098,11 @@ body::-webkit-scrollbar,
   color: var(--accent-strong);
 }
 
-@keyframes select-menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@keyframes select-menu-in-above { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-
 @media (prefers-reduced-motion: reduce) {
   .field__chevron,
   .select-field__trigger,
   .select-field__chevron {
     transition: none;
-  }
-
-  .select-field__menu,
-  .select-field__menu--above {
-    animation: none;
   }
 }
 
@@ -2216,7 +2257,7 @@ body.sheet-open .page-body {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  transition: background-color var(--dur-1) var(--ease-out);
 }
 
 .sheet-option:hover {
@@ -2334,7 +2375,7 @@ body.sheet-open .page-body {
   color: var(--ink);
   font-size: 15px;
   font-weight: 400;
-  transition: border-color .16s ease, box-shadow .16s ease;
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
 
 .auth-field input:focus-visible {
@@ -3178,8 +3219,142 @@ body.sheet-open .page-body {
   line-height: 1.6;
 }
 
-/* ---------- 响应式：平板 / 桌面 ---------- */
+/* ---------- 动效语言 ---------- *
+ * 页面出现、卡片落位、按下回弹共用同一组时长与曲线。
+ * 只动 transform / opacity；高度动画交给 Reveal，仅用于几十像素的小块。
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .body.page-body {
+    animation: kf-page-in var(--dur-3) var(--ease-out) both;
+  }
 
+  .card,
+  .thinking,
+  .turn > .agent-text,
+  .turn > .notice,
+  .turn > .backfill,
+  .auth-card {
+    animation: kf-rise var(--dur-3) var(--ease-out) both;
+  }
+
+  .auth-card {
+    animation-duration: var(--dur-4);
+  }
+
+  .error-text,
+  .auth-field__error,
+  .auth-field__hint,
+  .notice,
+  .saved-note {
+    animation: kf-fade var(--dur-2) var(--ease-out) both;
+  }
+}
+
+@keyframes kf-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kf-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* 按下要有回应：所有可点元素共用同一档回弹 */
+.btn,
+.icon-btn,
+.chip,
+.send,
+.tab,
+.sort-toggle,
+.calendar__day,
+.sheet-option,
+.select-field__option,
+.field--select,
+.select-field__trigger,
+.conv,
+.row-button,
+.set-row--button {
+  transition:
+    transform var(--dur-2) var(--ease-out),
+    background-color var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
+}
+
+.btn:active,
+.icon-btn:active,
+.chip:active,
+.send:active,
+.sort-toggle:active,
+.calendar__day:active,
+.sheet-option:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled,
+.icon-btn:disabled,
+.chip:disabled,
+.send:disabled,
+.sort-toggle:disabled {
+  transform: none;
+}
+
+/* 触屏上没有真正的悬停：别让点过之后的 :hover 留在屏幕上 */
+@media (hover: none) {
+  .btn:hover,
+  .icon-btn:hover,
+  .chip:hover,
+  .send:hover,
+  .hard-sets-card:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* 加载指示器例外：完全静止会被误读成「卡住了」 */
+  .spinner,
+  .spin {
+    animation-duration: 2.4s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+/* ---------- 响应式：平板 / 桌面 ---------- */
 /* 窄屏：导航四 tab 收一档，别把左右两个按钮挤到贴边 */
 @media (max-width: 389px) {
   .topnav {
